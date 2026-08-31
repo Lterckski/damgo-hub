@@ -1,0 +1,14 @@
+model CalendarEvent {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  startAt     DateTime
+  // Optional — an event can be a single point in time.
+  endAt       DateTime?
+  createdById String
+  createdBy   Member    @relation(fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([startAt])
+}

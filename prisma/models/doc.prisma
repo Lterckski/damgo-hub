@@ -1,0 +1,42 @@
+model Doc {
+  id                String   @id @default(cuid())
+  title             String
+  // Markdown, stored directly — docs are plain text, not large generated
+  // artifacts, so they don't need Vercel Blob (see code-standards.md's
+  // Data and Storage section). Still populated even for a Drive-linked doc
+  // (below) — a place for our own notes alongside the embedded file, not
+  // replaced by it.
+  content           String
+  authorId          String
+  author            Member   @relation(fields: [authorId], references: [id])
+  // Optional — a doc doesn't have to belong to a project. Was a plain
+  // nullable column until 11-project-proposals.md; now a real relation.
+  projectId         String?
+  project           Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  // Google Drive link — picked via the Google Picker, per
+  // 09-documentation.md's Google Drive Integration section. All four are
+  // set together or not at all. driveFileMimeType decides how the doc page
+  // renders it: a native Google Docs/Sheets/Slides mime type gets a live
+  // embedded editor iframe; anything else just gets an "Open in Drive" link
+  // (Drive has no generic live editor for arbitrary file types).
+  driveFileId       String?
+  driveFileName     String?
+  driveFileMimeType String?
+  driveFileUrl      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  attachments  DocAttachment[]
+  relatedTasks TaskDocument[]
+
+  @@index([projectId])
+}
+
+model DocAttachment {
+  id        String   @id @default(cuid())
+  docId     String
+  doc       Doc      @relation(fields: [docId], references: [id], onDelete: Cascade)
+  fileName  String
+  filePath  String
+  createdAt DateTime @default(now())
+}

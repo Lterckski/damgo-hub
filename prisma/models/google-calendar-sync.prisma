@@ -1,0 +1,27 @@
+// Tracks the mapping between a Damgo Hub task/event and the corresponding
+// event Trigger.dev has pushed into one member's own Google Calendar — see
+// 10-calendar.md's Google Calendar Sync section. One row per
+// (member, source item), since a group-wide item syncs to every member's
+// calendar as a separate remote event with its own id.
+enum SyncedEventSourceType {
+  TASK
+  CALENDAR_EVENT
+}
+
+model GoogleCalendarSyncedEvent {
+  id            String                @id @default(cuid())
+  memberId      String
+  member        Member                @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  sourceType    SyncedEventSourceType
+  // Task.id or CalendarEvent.id — not a formal relation since it points at
+  // either model depending on sourceType.
+  sourceId      String
+  // The event id Google assigned in that member's own calendar; needed to
+  // PATCH/DELETE the right remote event on later updates.
+  googleEventId String
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@unique([memberId, sourceType, sourceId])
+  @@index([sourceType, sourceId])
+}

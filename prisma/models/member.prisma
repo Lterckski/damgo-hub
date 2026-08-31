@@ -1,0 +1,67 @@
+enum MemberStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum FunctionalRole {
+  PITCHING
+  DOCUMENTS
+  CREATIVES
+  PRODUCTION
+  QUALITY_ASSURANCE
+  MARKETING
+  MODEL
+}
+
+enum WorkDistributionRole {
+  HACKATHON_HUNTER
+  PROJECT_SCAVENGER_CREATOR
+}
+
+model Member {
+  id          String       @id @default(cuid())
+  clerkUserId String       @unique
+  email       String
+  displayName String
+  avatarUrl   String?
+  status      MemberStatus @default(ACTIVE)
+  // True for exactly one member (the org's Leader). Not editable through any
+  // app UI — see architecture-context.md's Auth and Roles Model. Admin/member
+  // permission itself is Clerk's org:admin/org:member, never stored here.
+  isLeader    Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  functionalRoles       MemberFunctionalRole[]
+  workDistributionRoles MemberWorkDistributionRole[]
+  createdTasks          Task[]                       @relation("TaskCreatedBy")
+  taskAssignments       TaskAssignee[]               @relation("TaskAssignments")
+  transactions          Transaction[]
+  docs                  Doc[]
+  calendarEvents        CalendarEvent[]
+  googleCalendarSyncs   GoogleCalendarSyncedEvent[]
+  ownedProjects         Project[]                    @relation("ProjectOwner")
+  projectMemberships    ProjectMember[]
+
+  @@index([clerkUserId])
+}
+
+model MemberFunctionalRole {
+  id       String         @id @default(cuid())
+  memberId String
+  member   Member         @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  role     FunctionalRole
+
+  @@unique([memberId, role])
+  @@index([role])
+}
+
+model MemberWorkDistributionRole {
+  id       String               @id @default(cuid())
+  memberId String
+  member   Member               @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  role     WorkDistributionRole
+
+  @@unique([memberId, role])
+  @@index([role])
+}

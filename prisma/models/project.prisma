@@ -1,0 +1,96 @@
+enum ProjectStatus {
+  PROPOSED
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum ProjectPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// "Category/Type" from the proposal form — adjusted to fit a hackathon
+// team's actual proposal shapes rather than a generic project-management
+// taxonomy, per the user's explicit "adjust options to fit our use case."
+enum ProjectCategory {
+  FEATURE
+  RESEARCH
+  INTERNAL_TOOL
+  HACKATHON_ENTRY
+  OTHER
+}
+
+model Project {
+  id                      String           @id @default(cuid())
+  // "Team Lead" in the proposal form is this same field, relabeled — not a
+  // separate concept. Owner is also what lib/project-access.ts uses to
+  // decide who can edit/delete the project and manage collaborators, so
+  // picking a Team Lead other than yourself at creation hands them that
+  // access too. Confirmed as the intended design, not a shortcut.
+  ownerId                 String
+  owner                   Member           @relation("ProjectOwner", fields: [ownerId], references: [id])
+  name                    String
+  description             String?
+  // Short text describing what the project aims to achieve — plain text,
+  // same as description, not a structured list (no bullet-list content
+  // type exists anywhere else in the app either).
+  objectives              String?
+  status                  ProjectStatus    @default(PROPOSED)
+  priority                ProjectPriority  @default(MEDIUM)
+  category                ProjectCategory?
+  // Both optional — a proposal's timeline might not be fixed yet. Date-only
+  // (no time component): this is coarse planning, not a scheduled event
+  // like Task.startDate/dueDate.
+  startDate               DateTime?
+  targetEndDate           DateTime?
+  // PHP, integer centavos — same convention as Transaction.amount, per
+  // architecture-context.md invariant 8. Ties into the Financial Tracker
+  // if the project is approved and actually spends money.
+  estimatedBudgetCentavos Int?
+  // Vercel Blob URL for the roadmap board's saved snapshot — unused until
+  // 15-board-autosave.md, nullable until then.
+  roadmapSnapshotPath     String?
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+
+  members ProjectMember[]
+  tasks   Task[]
+  docs    Doc[]
+  links   ProjectLink[]
+
+  @@index([ownerId])
+  @@index([status])
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  memberId  String
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, memberId])
+  @@index([memberId])
+  @@index([projectId])
+}
+
+// "Supporting Links/Attachments" — reference docs/mockups/links relevant to
+// the proposal. Plain URL + label, not a file upload: the project doesn't
+// exist yet when the New Proposal form is filled out, so there's no id to
+// upload a real file (Vercel Blob) against yet — same chicken-and-egg
+// problem 09-documentation.md's doc-upload extraction ran into, solved
+// there by creating the doc first. A future pass could do the same here if
+// real file attachments (not just links) turn out to be needed.
+model ProjectLink {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  label     String
+  url       String
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+}

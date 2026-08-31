@@ -1,0 +1,34 @@
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum TransactionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// All amounts are integer centavos, PHP — see 07-financial-tracker.md's
+// Currency section and architecture-context.md invariant 8. Never a float.
+model Transaction {
+  id          String            @id @default(cuid())
+  memberId    String
+  member      Member            @relation(fields: [memberId], references: [id])
+  type        TransactionType
+  category    String
+  amount      Int
+  description String?
+  receiptPath String?
+  status      TransactionStatus @default(PENDING)
+  // Penalty doesn't exist until 18-penalty-tracker.md — nullable plain
+  // column now, becomes a formal relation once Penalty exists. Set only on
+  // the Transaction auto-created when an Admin resolves a monetary penalty;
+  // never set by the manual POST /api/finance/transactions flow.
+  penaltyId   String?           @unique
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([memberId])
+  @@index([type])
+}

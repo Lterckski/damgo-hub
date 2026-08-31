@@ -1,8 +1,88 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Damgo Hub palette — light (cool off-white), navy + teal theme. See
+     context/ui-context.md. */
+  --bg-base: #f5f7fb;
+  --bg-surface: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-subtle: #e9edf5;
+  --border-default: #d7deea;
+  --border-subtle: #e3e8f1;
+  --text-primary: #0f172a;
+  --text-secondary: #3f4c63;
+  --text-muted: #64748b;
+  --text-faint: #9aa6bc;
+  --accent-primary: #0f9488;
+  --accent-primary-dim: rgba(15, 148, 136, 0.12);
+  --accent-collab: #3e6fa3;
+  --accent-collab-text: #2c557f;
+  --state-error: #c0392e;
+  --state-success: #2f8f5b;
+  --state-warning: #a97417;
+
+  /* shadcn component tokens — driven by the palette above. Component
+     files under components/ui/* reference these names directly and are
+     never edited, so only the values change per theme, not the names. */
+  --background: var(--bg-base);
+  --foreground: var(--text-primary);
+  --card: var(--bg-surface);
+  --card-foreground: var(--text-primary);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--accent-primary);
+  --primary-foreground: var(--bg-elevated);
+  --secondary: var(--bg-subtle);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--bg-subtle);
+  --muted-foreground: var(--text-muted);
+  --accent: var(--accent-primary-dim);
+  --accent-foreground: var(--accent-primary);
+  --destructive: var(--state-error);
+  --border: var(--border-default);
+  --input: var(--border-default);
+  --ring: var(--accent-primary);
+  --radius: 0.625rem;
+  --sidebar: var(--bg-surface);
+  --sidebar-foreground: var(--text-primary);
+  --sidebar-primary: var(--accent-primary);
+  --sidebar-primary-foreground: var(--bg-elevated);
+  --sidebar-accent: var(--bg-subtle);
+  --sidebar-accent-foreground: var(--text-primary);
+  --sidebar-border: var(--border-default);
+  --sidebar-ring: var(--accent-primary);
+  --chart-1: var(--accent-primary);
+  --chart-2: var(--accent-collab);
+  --chart-3: var(--state-warning);
+  --chart-4: var(--state-success);
+  --chart-5: var(--state-error);
+}
+
+/* Dark (deep navy) — system preference only, no manual toggle. Only the
+   base palette is redefined; every shadcn token above references it via
+   var(), so it flips automatically. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-base: #0b0f1a;
+    --bg-surface: #121a2b;
+    --bg-elevated: #182238;
+    --bg-subtle: #1e293b;
+    --border-default: #2a3650;
+    --border-subtle: #1c2740;
+    --text-primary: #f3f6fb;
+    --text-secondary: #b4c0d4;
+    --text-muted: #8592ac;
+    --text-faint: #55617c;
+    --accent-primary: #45d9c5;
+    --accent-primary-dim: rgba(69, 217, 197, 0.16);
+    --accent-collab: #5a8dc4;
+    --accent-collab-text: #8fb4de;
+    --state-error: #f0655c;
+    --state-success: #52c77d;
+    --state-warning: #e8b84b;
+  }
 }
 
 @theme inline {
@@ -10,17 +90,73 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-geist-sans);
+  --font-display: var(--font-playfair-display);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Damgo Hub semantic tokens — for app-level components, per
+     context/ui-context.md's "Tailwind utility names" list. */
+  --color-base: var(--bg-base);
+  --color-surface: var(--bg-surface);
+  --color-elevated: var(--bg-elevated);
+  --color-subtle: var(--bg-subtle);
+  --color-surface-border: var(--border-default);
+  --color-surface-border-subtle: var(--border-subtle);
+  --color-copy-primary: var(--text-primary);
+  --color-copy-secondary: var(--text-secondary);
+  --color-copy-muted: var(--text-muted);
+  --color-copy-faint: var(--text-faint);
+  --color-brand: var(--accent-primary);
+  --color-accent-dim: var(--accent-primary-dim);
+  --color-collab: var(--accent-collab-text);
+  --color-error: var(--state-error);
+  --color-success: var(--state-success);
+  --color-warning: var(--state-warning);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
   }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
 }

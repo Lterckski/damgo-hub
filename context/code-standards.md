@@ -36,15 +36,15 @@
 
 ## Data and Storage
 
-- Project metadata and relationships belong in PostgreSQL via Prisma.
-- Canvas snapshots and generated specs belong in Vercel Blob; Prisma stores only the blob URL reference.
-- Do not store large generated content directly in the database.
-- Task run records are first-class relational data — treat ownership and run IDs as verified before any token issuance.
+- Member, project, task, financial, penalty, calendar, meeting, and idea records belong in PostgreSQL via Prisma.
+- Collaborative board snapshots (roadmap, meeting agenda, ideas board), receipts, and document attachments belong in Vercel Blob; Prisma stores only the blob URL reference.
+- Do not store large generated or uploaded content directly in the database.
+- Financial transactions and penalties are corrected via new adjustment records, not edits to settled records — treat ownership and role checks as verified before any mutation.
 
 ## File Organization
 
-- `lib/` — shared infrastructure: Prisma client, auth helpers, utilities.
-- `trigger/` — all durable background tasks and AI workflows.
+- `lib/` — shared infrastructure: Prisma client, auth helpers, role/permission checks, Liveblocks room helpers, utilities.
+- `trigger/` — all durable background jobs (reminders, notifications, recurring checks).
 - `components/` — UI composition only; no business logic.
-- `app/api/` — route handlers for auth, triggering, and persistence.
+- `app/api/` — route handlers for auth, triggering, and persistence, organized by domain.
 - Name files after the responsibility they contain, not the technology.

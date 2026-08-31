@@ -1,0 +1,62 @@
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+model Task {
+  id          String         @id @default(cuid())
+  title       String
+  description String?
+  status      TaskStatus     @default(TODO)
+  // Reuses FunctionalRole (member.prisma) rather than a separate enum —
+  // one taxonomy for "what kind of work is this," shared between task
+  // types and Member Roles. See 08-task-assignment.md.
+  type        FunctionalRole
+  // Both mandatory, per the user's explicit request — a task always has a
+  // defined start and a deadline. startDate is date-only (no time
+  // component expected in the UI); dueDate carries the actual time, since
+  // that's what matters for reminders/calendar precision.
+  startDate   DateTime
+  dueDate     DateTime
+  createdById String
+  createdBy   Member         @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  // Optional — a task doesn't have to belong to a project. Was a plain
+  // nullable column until 11-project-proposals.md; now a real relation.
+  projectId   String?
+  project     Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  assignees        TaskAssignee[]
+  relatedDocuments TaskDocument[]
+
+  @@index([status])
+  @@index([type])
+  @@index([projectId])
+}
+
+model TaskAssignee {
+  id       String @id @default(cuid())
+  taskId   String
+  task     Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  memberId String
+  member   Member @relation("TaskAssignments", fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, memberId])
+}
+
+// Optional many-to-many link between a Task and any Doc referenced from it
+// — e.g. a task doing work described in a spec doc. Zero, one, or many per
+// task; a doc can be linked from more than one task too.
+model TaskDocument {
+  id     String @id @default(cuid())
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  docId  String
+  doc    Doc    @relation(fields: [docId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, docId])
+  @@index([taskId])
+  @@index([docId])
+}

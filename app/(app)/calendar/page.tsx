@@ -1,0 +1,81 @@
+import { prisma } from "@/lib/prisma";
+import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
+import { serializeCalendarEvent, type UnifiedCalendarItem } from "@/lib/calendar";
+import { serializeTask, TASK_INCLUDE } from "@/lib/tasks";
+import { TASK_LINKABLE_PROJECT_STATUSES } from "@/lib/projects";
+import { BackButton } from "@/components/shared/back-button";
+import { CalendarView } from "@/components/calendar/calendar-view";
+
+export default async function CalendarPage() {
+  const [eventRecords, taskRecords, memberRecords, linkableProjects, docs, currentMember, isAdmin] =
+    await Promise.all([
+      prisma.calendarEvent.findMany({
+        include: { createdBy: true },
+        orderBy: { startAt: "asc" },
+      }),
+      prisma.task.findMany({ include: TASK_INCLUDE, orderBy: { createdAt: "desc" } }),
+      prisma.member.findMany({ orderBy: { displayName: "asc" } }),
+      prisma.project.findMany({
+        where: { status: { in: [...TASK_LINKABLE_PROJECT_STATUSES] } },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+      prisma.doc.findMany({ select: { id: true, title: true, projectId: true }, orderBy: { title: "asc" } }),
+      getCurrentMember(),
+      isCurrentMemberAdmin(),
+    ]);
+
+  const events = eventRecords.map(serializeCalendarEvent);
+  const tasks = taskRecords.map(serializeTask);
+  const members = memberRecords.map((m) => ({
+    id: m.id,
+    displayName: m.displayName,
+    avatarUrl: m.avatarUrl,
+  }));
+
+  const items: UnifiedCalendarItem[] = [
+    ...events.map((event) => ({
+      id: event.id,
+      title: event.title,
+      type: "event" as const,
+      startAt: event.startAt,
+      endAt: event.endAt,
+      creatorId: event.createdById,
+    })),
+    // A task spans its full startDate -> dueDate range, not just its due
+    // day — see lib/calendar.ts's UnifiedCalendarItem.
+    ...tasks.map((task) => ({
+      id: task.id,
+      title: task.title,
+      type: "task" as const,
+      startAt: task.startDate,
+      endAt: task.dueDate,
+      creatorId: null,
+    })),
+  ];
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center gap-2">
+        <BackButton />
+        <h1 className="font-display text-3xl text-copy-primary">Calendar</h1>
+      </div>
+      <p className="mt-1 text-sm text-copy-secondary">
+        Team events and task deadlines — synced to your Google Calendar once it&apos;s connected.
+      </p>
+
+      <div className="mt-6">
+        <CalendarView
+          items={items}
+          events={events}
+          tasks={tasks}
+          members={members}
+          projects={linkableProjects}
+          docs={docs}
+          currentMemberId={currentMember.id}
+          isAdmin={isAdmin}
+        />
+      </div>
+    </div>
+  );
+}

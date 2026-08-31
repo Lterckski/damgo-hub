@@ -13,17 +13,24 @@ Add these shadcn components:
 - Tabs
 - Textarea
 - ScrollArea
+- Table
+- Select
+- Badge
+- Avatar
+- DropdownMenu
+- Calendar
 
 Do not modify the generated `components/ui/*` files after installation.
 
-Also Install `lucide-react`.
+Also install `lucide-react`.
 
 Create `lib/utils.ts` with a reusable `cn()` helper for merging Tailwind classes.
 
-Ensure all components match the existing dark theme in `globals.css`.
+Wire up the light (beige) and dark theme tokens from `context/ui-context.md` in `globals.css`: light values on `:root`, dark overrides under `@media (prefers-color-scheme: dark)`, mapped to Tailwind tokens via `@theme inline`. Ensure all installed components read colors through these tokens rather than shadcn's default palette.
 
 ### Check when done
 
 - All components import without errors
 - `cn()` works properly
-- No default light styling appears
+- No shadcn default color styling appears in either theme — every surface, border, and text color resolves to a token from `context/ui-context.md`
+- Switching the system color scheme between light and dark swaps the beige and muted-dark palettes correctly, with no near-black, pure-white, or neon accent colors
