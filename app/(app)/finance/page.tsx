@@ -35,7 +35,7 @@ function computeSummary(
 export default async function FinancePage() {
   const [transactions, isAdmin] = await Promise.all([
     prisma.transaction.findMany({
-      include: { member: true },
+      include: { member: { select: { displayName: true } } },
       orderBy: { createdAt: "desc" },
     }),
     isCurrentMemberAdmin(),

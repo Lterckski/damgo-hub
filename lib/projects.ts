@@ -30,9 +30,19 @@ export interface SerializedProject {
   updatedAt: string;
 }
 
+// select, not include — every caller only ever reads owner.displayName and
+// member.{id,displayName,avatarUrl} (see serializeProject below), but a
+// bare `true` include was pulling every column on Member (email, org
+// roles, functional roles, work-distribution roles, ...) for the owner and
+// every collaborator on every project fetched. This is on the hot path for
+// both /projects (many projects x many members) and the project detail
+// page, so trimming it cuts real payload/DB work on every load with zero
+// behavior change.
 export const PROJECT_INCLUDE = {
-  owner: true,
-  members: { include: { member: true } },
+  owner: { select: { displayName: true } },
+  members: {
+    include: { member: { select: { id: true, displayName: true, avatarUrl: true } } },
+  },
   links: { orderBy: { createdAt: "asc" } },
 } as const;
 

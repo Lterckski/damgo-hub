@@ -27,7 +27,7 @@ export async function GET(request: Request) {
 
   const transactions = await prisma.transaction.findMany({
     where: statusParam ? { status: statusParam as TransactionStatus } : undefined,
-    include: { member: true },
+    include: { member: { select: { displayName: true } } },
     orderBy: { createdAt: "desc" },
   });
 
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
       receiptPath,
       status: "PENDING",
     },
-    include: { member: true },
+    include: { member: { select: { displayName: true } } },
   });
 
   return NextResponse.json({ transaction: serializeTransaction(transaction) }, { status: 201 });

@@ -8,8 +8,17 @@ import { ImportFromDriveButton } from "@/components/docs/import-from-drive-butto
 import { NewDocDialog } from "@/components/docs/new-doc-dialog";
 
 export default async function DocsPage() {
+  // select, not include: true — the list only ever renders id/title/
+  // updatedAt/author.displayName, but this was pulling every doc's full
+  // `content` too (extracted PDFs/docx can run tens of KB each) plus the
+  // full author Member record, on every /docs visit.
   const docs = await prisma.doc.findMany({
-    include: { author: true },
+    select: {
+      id: true,
+      title: true,
+      updatedAt: true,
+      author: { select: { displayName: true } },
+    },
     orderBy: { updatedAt: "desc" },
   });
 

@@ -20,7 +20,10 @@ export default async function ProjectDetailPage({
 
   const [projectRecord, allMembers] = await Promise.all([
     prisma.project.findUnique({ where: { id: projectId }, include: PROJECT_INCLUDE }),
-    prisma.member.findMany({ orderBy: { displayName: "asc" } }),
+    prisma.member.findMany({
+      select: { id: true, displayName: true, avatarUrl: true },
+      orderBy: { displayName: "asc" },
+    }),
   ]);
 
   // Shouldn't happen — requireProjectAccess already confirmed the project

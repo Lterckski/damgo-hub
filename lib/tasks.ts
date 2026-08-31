@@ -51,8 +51,13 @@ export function serializeTask(task: {
   };
 }
 
+// select, not a bare `member: true` include — serializeTask only ever
+// reads id/displayName/avatarUrl off each assignee (same over-fetch as
+// PROJECT_INCLUDE in lib/projects.ts — see that file's comment).
 export const TASK_INCLUDE = {
-  assignees: { include: { member: true } },
+  assignees: {
+    include: { member: { select: { id: true, displayName: true, avatarUrl: true } } },
+  },
   project: { select: { name: true } },
   relatedDocuments: { include: { doc: { select: { id: true, title: true } } } },
 } as const;

@@ -8,7 +8,10 @@ import { TaskBoard } from "@/components/tasks/task-board";
 export default async function TasksPage() {
   const [tasks, members, linkableProjects, docs, currentMember, isAdmin] = await Promise.all([
     prisma.task.findMany({ include: TASK_INCLUDE, orderBy: { createdAt: "desc" } }),
-    prisma.member.findMany({ orderBy: { displayName: "asc" } }),
+    prisma.member.findMany({
+      select: { id: true, displayName: true, avatarUrl: true },
+      orderBy: { displayName: "asc" },
+    }),
     prisma.project.findMany({
       where: { status: { in: [...TASK_LINKABLE_PROJECT_STATUSES] } },
       select: { id: true, name: true },

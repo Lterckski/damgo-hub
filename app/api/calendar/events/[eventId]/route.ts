@@ -45,7 +45,7 @@ export async function PATCH(
         ? { endAt: typeof endAt === "string" && endAt !== "" ? new Date(endAt) : null }
         : {}),
     },
-    include: { createdBy: true },
+    include: { createdBy: { select: { displayName: true } } },
   });
 
   await enqueueGoogleCalendarSync("CALENDAR_EVENT", event.id);

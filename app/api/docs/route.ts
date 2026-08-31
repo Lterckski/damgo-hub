@@ -17,7 +17,7 @@ export async function GET(request: Request) {
 
   const docs = await prisma.doc.findMany({
     where: projectId ? { projectId } : undefined,
-    include: { author: true },
+    include: { author: { select: { displayName: true } } },
     orderBy: { updatedAt: "desc" },
   });
 
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
       driveFileMimeType: driveFile?.mimeType ?? null,
       driveFileUrl: driveFile?.url ?? null,
     },
-    include: { author: true },
+    include: { author: { select: { displayName: true } } },
   });
 
   return NextResponse.json({ doc: serializeDoc(doc) }, { status: 201 });

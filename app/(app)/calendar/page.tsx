@@ -10,11 +10,14 @@ export default async function CalendarPage() {
   const [eventRecords, taskRecords, memberRecords, linkableProjects, docs, currentMember, isAdmin] =
     await Promise.all([
       prisma.calendarEvent.findMany({
-        include: { createdBy: true },
+        include: { createdBy: { select: { displayName: true } } },
         orderBy: { startAt: "asc" },
       }),
       prisma.task.findMany({ include: TASK_INCLUDE, orderBy: { createdAt: "desc" } }),
-      prisma.member.findMany({ orderBy: { displayName: "asc" } }),
+      prisma.member.findMany({
+        select: { id: true, displayName: true, avatarUrl: true },
+        orderBy: { displayName: "asc" },
+      }),
       prisma.project.findMany({
         where: { status: { in: [...TASK_LINKABLE_PROJECT_STATUSES] } },
         select: { id: true, name: true },

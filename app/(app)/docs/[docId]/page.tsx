@@ -15,7 +15,10 @@ export default async function DocDetailPage({
   const [docRecord, currentMember, isAdmin] = await Promise.all([
     prisma.doc.findUnique({
       where: { id: docId },
-      include: { author: true, attachments: { orderBy: { createdAt: "asc" } } },
+      include: {
+        author: { select: { displayName: true } },
+        attachments: { orderBy: { createdAt: "asc" } },
+      },
     }),
     getCurrentMember(),
     isCurrentMemberAdmin(),

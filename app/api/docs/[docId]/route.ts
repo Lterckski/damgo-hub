@@ -18,7 +18,7 @@ export async function GET(
   const { docId } = await params;
   const doc = await prisma.doc.findUnique({
     where: { id: docId },
-    include: { author: true, attachments: true },
+    include: { author: { select: { displayName: true } }, attachments: true },
   });
 
   if (!doc) {
@@ -75,7 +75,7 @@ export async function PATCH(
           }
         : {}),
     },
-    include: { author: true },
+    include: { author: { select: { displayName: true } } },
   });
 
   return NextResponse.json({ doc: serializeDoc(doc) });

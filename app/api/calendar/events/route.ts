@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   const [events, tasksInRange] = await Promise.all([
     prisma.calendarEvent.findMany({
       where: range ? { startAt: range } : undefined,
-      include: { createdBy: true },
+      include: { createdBy: { select: { displayName: true } } },
       orderBy: { startAt: "asc" },
     }),
     // A task's *range* (startDate -> dueDate) overlaps the window, not
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
       endAt: typeof endAt === "string" && endAt !== "" ? new Date(endAt) : null,
       createdById: creator.id,
     },
-    include: { createdBy: true },
+    include: { createdBy: { select: { displayName: true } } },
   });
 
   await enqueueGoogleCalendarSync("CALENDAR_EVENT", event.id);

@@ -7,18 +7,26 @@ import { ProjectsList } from "@/components/projects/projects-list";
 export default async function ProjectsPage() {
   const member = await getCurrentMember();
 
-  const [myProjects, allProjects, memberRecords] = await Promise.all([
+  // myProjects is always a strict subset of allProjects (every project the
+  // member owns or collaborates on is, definitionally, also "all
+  // projects") — this used to run as two separate findMany calls with the
+  // same PROJECT_INCLUDE join, doubling this page's query cost for no
+  // reason. Fetch once, derive the subset in JS instead.
+  const [allProjectRecords, memberRecords] = await Promise.all([
     prisma.project.findMany({
-      where: { OR: [{ ownerId: member.id }, { members: { some: { memberId: member.id } } }] },
       include: PROJECT_INCLUDE,
       orderBy: { updatedAt: "desc" },
     }),
-    prisma.project.findMany({
-      include: PROJECT_INCLUDE,
-      orderBy: { updatedAt: "desc" },
+    prisma.member.findMany({
+      select: { id: true, displayName: true, avatarUrl: true },
+      orderBy: { displayName: "asc" },
     }),
-    prisma.member.findMany({ orderBy: { displayName: "asc" } }),
   ]);
+
+  const allProjects = allProjectRecords.map(serializeProject);
+  const myProjects = allProjects.filter(
+    (p) => p.ownerId === member.id || p.members.some((m) => m.id === member.id),
+  );
 
   return (
     <div className="p-6">
@@ -32,9 +40,9 @@ export default async function ProjectsPage() {
 
       <div className="mt-6">
         <ProjectsList
-          myProjects={myProjects.map(serializeProject)}
-          allProjects={allProjects.map(serializeProject)}
-          members={memberRecords.map((m) => ({ id: m.id, displayName: m.displayName, avatarUrl: m.avatarUrl }))}
+          myProjects={myProjects}
+          allProjects={allProjects}
+          members={memberRecords}
           currentMemberId={member.id}
         />
       </div>

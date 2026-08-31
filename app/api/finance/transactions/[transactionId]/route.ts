@@ -47,7 +47,7 @@ export async function PATCH(
   const transaction = await prisma.transaction.update({
     where: { id: transactionId },
     data: { status },
-    include: { member: true },
+    include: { member: { select: { displayName: true } } },
   });
 
   return NextResponse.json({ transaction: serializeTransaction(transaction) });
