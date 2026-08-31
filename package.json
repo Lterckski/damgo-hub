@@ -14,12 +14,16 @@
     "@clerk/ui": "^1.31.0",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
+    "@prisma/composer": "0.16.0",
+    "@prisma/composer-prisma-cloud": "0.16.0",
     "@trigger.dev/sdk": "^4.5.14",
     "@vercel/blob": "^2.8.0",
+    "alchemy": "2.0.0-beta.74",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "dotenv": "^17.4.2",
+    "effect": "4.0.0-rc.112",
     "lucide-react": "^1.37.0",
     "mammoth": "^1.12.2",
     "next": "16.3.3",
@@ -49,5 +53,14 @@
     "tailwindcss": "^4",
     "tsx": "^4.23.13",
     "typescript": "^5"
+  },
+  "overrides": {
+    "@effect/platform-bun": "4.0.0-rc.112",
+    "@effect/platform-node": "4.0.0-rc.112",
+    "@effect/platform-node-shared": "4.0.0-rc.112",
+    "@effect/sql-d1": "4.0.0-rc.112",
+    "@effect/sql-pg": "4.0.0-rc.112",
+    "@effect/vitest": "4.0.0-rc.112",
+    "effect": "4.0.0-rc.112"
   }
 }
