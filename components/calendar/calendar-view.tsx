@@ -126,6 +126,25 @@ function filtersFromSearchParams(params: URLSearchParams): CalendarFilterState {
   };
 }
 
+// Order doesn't carry meaning for any of these lists, so compare sorted —
+// two filter states built from equivalent-but-differently-ordered URLs
+// should count as equal, not trigger a redundant setFilters.
+function sameList(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sortedA = [...a].sort();
+  const sortedB = [...b].sort();
+  return sortedA.every((v, i) => v === sortedB[i]);
+}
+
+function calendarFiltersEqual(a: CalendarFilterState, b: CalendarFilterState): boolean {
+  return (
+    a.myTasksOnly === b.myTasksOnly &&
+    sameList(a.assigneeIds, b.assigneeIds) &&
+    sameList(a.projectKeys, b.projectKeys) &&
+    sameList(a.priorities, b.priorities)
+  );
+}
+
 export function CalendarView({
   items,
   events,
@@ -152,10 +171,36 @@ export function CalendarView({
   // "remember my last filters" across sessions, that's a deliberate
   // addition, not something this implementation does implicitly.
   const [filters, setFilters] = useState<CalendarFilterState>(() => filtersFromSearchParams(searchParams));
+  // Tracks the last searchParams string `filters` was derived from, so the
+  // render-time adjustment below can tell "the URL changed from outside"
+  // apart from "nothing changed" — see that block for why this isn't a
+  // useEffect.
+  const [syncedSearchParams, setSyncedSearchParams] = useState(() => searchParams.toString());
+
+  // URL -> filters, adjusted during render rather than in a useEffect —
+  // this is React's own recommended pattern for "sync state to a changed
+  // prop/external value" (react-hooks/set-state-in-effect flags the
+  // effect-based version: an extra render+commit+effect cycle where this
+  // needs none). CalendarView can stay mounted across a same-route
+  // navigation that only changes searchParams (Next.js preserves Client
+  // Component state across those), so reading the URL solely in the
+  // useState initializer above would leave `filters` stuck on stale
+  // values if something outside this component (a Link to
+  // "/calendar?priority=HIGH" while already on /calendar, browser back/
+  // forward) changes the query string without remounting the component.
+  const currentSearchParams = searchParams.toString();
+  if (currentSearchParams !== syncedSearchParams) {
+    setSyncedSearchParams(currentSearchParams);
+    const next = filtersFromSearchParams(searchParams);
+    if (!calendarFiltersEqual(filters, next)) setFilters(next);
+  }
 
   // Filters -> URL, not the other way after mount — replace (not push) so
   // tweaking a filter doesn't spam the back button with history entries,
-  // and scroll:false so it doesn't jump the page.
+  // and scroll:false so it doesn't jump the page. The write here also
+  // updates `syncedSearchParams` (once the resulting navigation lands and
+  // `searchParams` changes to match) so the render-time block above
+  // doesn't mistake this effect's own write for an external one and loop.
   useEffect(() => {
     const params = new URLSearchParams();
     if (filters.assigneeIds.length > 0) params.set("assignee", filters.assigneeIds.join(","));
