@@ -1,4 +1,5 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
+import { revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import type { Member } from "@/app/generated/prisma/client";
 
@@ -30,7 +31,7 @@ export async function getCurrentMember(): Promise<Member> {
     (address) => address.id === user.primaryEmailAddressId,
   )?.emailAddress;
 
-  return prisma.member.create({
+  const created = await prisma.member.create({
     data: {
       clerkUserId: userId,
       email: primaryEmail ?? "",
@@ -39,6 +40,18 @@ export async function getCurrentMember(): Promise<Member> {
       status: "ACTIVE",
     },
   });
+
+  // A new member changes the cached picker list (lib/members.ts) — the
+  // only other write path to displayName/avatarUrl, since nothing updates
+  // an existing member's name/avatar today. { expire: 0 } — Next 16's
+  // revalidateTag now requires this second argument; 0 means "gone
+  // immediately, no stale-while-revalidate window" since this can run
+  // from many call sites (not just Server Actions, where updateTag would
+  // be the alternative) and a just-created member should be pickable
+  // right away, not eventually.
+  revalidateTag("members", { expire: 0 });
+
+  return created;
 }
 
 /**

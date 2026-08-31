@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
+import { getMemberPickerOptions } from "@/lib/members";
 import { requireProjectAccess } from "@/lib/project-access";
 import { PROJECT_INCLUDE, serializeProject } from "@/lib/projects";
 import { AccessDenied } from "@/components/shared/access-denied";
@@ -20,10 +21,7 @@ export default async function ProjectDetailPage({
 
   const [projectRecord, allMembers] = await Promise.all([
     prisma.project.findUnique({ where: { id: projectId }, include: PROJECT_INCLUDE }),
-    prisma.member.findMany({
-      select: { id: true, displayName: true, avatarUrl: true },
-      orderBy: { displayName: "asc" },
-    }),
+    getMemberPickerOptions(),
   ]);
 
   // Shouldn't happen — requireProjectAccess already confirmed the project
@@ -35,7 +33,7 @@ export default async function ProjectDetailPage({
   return (
     <ProjectDetail
       project={serializeProject(projectRecord)}
-      allMembers={allMembers.map((m) => ({ id: m.id, displayName: m.displayName, avatarUrl: m.avatarUrl }))}
+      allMembers={allMembers}
       isOwner={access === "owner"}
     />
   );

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
+import { getMemberPickerOptions } from "@/lib/members";
 import { serializeCalendarEvent, type UnifiedCalendarItem } from "@/lib/calendar";
 import { serializeTask, TASK_INCLUDE } from "@/lib/tasks";
 import { TASK_LINKABLE_PROJECT_STATUSES } from "@/lib/projects";
@@ -14,10 +15,7 @@ export default async function CalendarPage() {
         orderBy: { startAt: "asc" },
       }),
       prisma.task.findMany({ include: TASK_INCLUDE, orderBy: { createdAt: "desc" } }),
-      prisma.member.findMany({
-        select: { id: true, displayName: true, avatarUrl: true },
-        orderBy: { displayName: "asc" },
-      }),
+      getMemberPickerOptions(),
       prisma.project.findMany({
         where: { status: { in: [...TASK_LINKABLE_PROJECT_STATUSES] } },
         select: { id: true, name: true },

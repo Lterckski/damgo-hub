@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
+import { getMemberPickerOptions } from "@/lib/members";
 import { PROJECT_INCLUDE, serializeProject } from "@/lib/projects";
 import { BackButton } from "@/components/shared/back-button";
 import { ProjectsList } from "@/components/projects/projects-list";
@@ -17,10 +18,7 @@ export default async function ProjectsPage() {
       include: PROJECT_INCLUDE,
       orderBy: { updatedAt: "desc" },
     }),
-    prisma.member.findMany({
-      select: { id: true, displayName: true, avatarUrl: true },
-      orderBy: { displayName: "asc" },
-    }),
+    getMemberPickerOptions(),
   ]);
 
   const allProjects = allProjectRecords.map(serializeProject);
