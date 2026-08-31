@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { listOrgRoles } from "@/lib/organization-roles";
-import { isCurrentMemberAdmin, isCurrentMemberLeader } from "@/lib/current-member";
+import { getCurrentMember, isCurrentMemberAdmin, isCurrentMemberLeader } from "@/lib/current-member";
 import { BackButton } from "@/components/shared/back-button";
 import {
   MemberDirectoryTable,
@@ -8,7 +8,7 @@ import {
 } from "@/components/members/member-directory-table";
 
 export default async function MembersPage() {
-  const [members, orgRoles, isAdmin, isLeader] = await Promise.all([
+  const [members, orgRoles, isAdmin, isLeader, currentMember] = await Promise.all([
     prisma.member.findMany({
       include: { functionalRoles: true, workDistributionRoles: true },
       orderBy: { createdAt: "asc" },
@@ -16,6 +16,7 @@ export default async function MembersPage() {
     listOrgRoles(),
     isCurrentMemberAdmin(),
     isCurrentMemberLeader(),
+    getCurrentMember(),
   ]);
 
   const rows: MemberRow[] = members.map((member) => ({
@@ -41,7 +42,12 @@ export default async function MembersPage() {
         The organization roster — roles, status, and contribution tags.
       </p>
       <div className="mt-6">
-        <MemberDirectoryTable members={rows} isAdmin={isAdmin} isLeader={isLeader} />
+        <MemberDirectoryTable
+          members={rows}
+          isAdmin={isAdmin}
+          isLeader={isLeader}
+          currentMemberId={currentMember.id}
+        />
       </div>
     </div>
   );

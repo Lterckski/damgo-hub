@@ -85,21 +85,25 @@ interface MemberDirectoryTableProps {
   members: MemberRow[];
   isAdmin: boolean;
   isLeader: boolean;
+  currentMemberId: string;
 }
 
 export function MemberDirectoryTable({
   members,
   isAdmin,
   isLeader,
+  currentMemberId,
 }: MemberDirectoryTableProps) {
   const router = useRouter();
   const [editingMember, setEditingMember] = useState<MemberRow | null>(null);
   const [assigningLeader, setAssigningLeader] = useState(false);
+  const [deletingMember, setDeletingMember] = useState<MemberRow | null>(null);
   const [pendingRoles, setPendingRoles] = useState<{
     functional: string[];
     workDistribution: string[];
   }>({ functional: [], workDistribution: [] });
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const currentAssistantLeader = members.find(
     (m) => !m.isLeader && m.orgRole === "org:admin",
@@ -180,6 +184,20 @@ export function MemberDirectoryTable({
       router.refresh();
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function deleteMember() {
+    if (!deletingMember) return;
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/members/${deletingMember.id}`, { method: "DELETE" });
+      if (response.ok) {
+        setDeletingMember(null);
+        router.refresh();
+      }
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -279,6 +297,17 @@ export function MemberDirectoryTable({
                             ? "Set inactive"
                             : "Set active"}
                         </DropdownMenuItem>
+                        {/* Not for the Leader (fixed seat) or yourself — same
+                            rule the API enforces, hidden here rather than
+                            shown and left to error. */}
+                        {!member.isLeader && member.id !== currentMemberId && (
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={() => setDeletingMember(member)}
+                          >
+                            Delete member
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -409,6 +438,31 @@ export function MemberDirectoryTable({
                 </div>
               ))}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete member — permanent; tasks/docs/transactions/events/projects
+          they created move to whoever's deleting them, per the confirmed
+          design (see 22-dashboard-data-wiring.md-adjacent progress-tracker
+          entry). */}
+      <Dialog open={deletingMember !== null} onOpenChange={(open) => !open && setDeletingMember(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-copy-primary">Delete member?</DialogTitle>
+            <DialogDescription>
+              This permanently removes {deletingMember?.displayName} from the org — they&apos;ll lose
+              access immediately. Anything they created (tasks, docs, transactions, events, projects)
+              stays, reassigned to you, so nothing is lost. This can&apos;t be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeletingMember(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" disabled={isDeleting} onClick={deleteMember}>
+              Delete member
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

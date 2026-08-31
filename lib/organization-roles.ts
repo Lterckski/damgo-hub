@@ -70,3 +70,22 @@ export async function revokeOrgAdmin(clerkUserId: string): Promise<void> {
     role: "org:member",
   });
 }
+
+/**
+ * Fully removes a member from the Clerk org (not just a role change) — the
+ * Clerk-side half of deleting a member (see DELETE /api/members/[memberId]).
+ * This has to happen: getCurrentMember() auto-creates a fresh Member row
+ * for any signed-in Clerk user it doesn't recognize, so deleting only the
+ * Postgres row while leaving them in the Clerk org would let them
+ * "resurrect" as a brand-new, tag-less Member the next time they load any
+ * page. Caller must have already verified isCurrentMemberAdmin().
+ */
+export async function removeMemberFromOrg(clerkUserId: string): Promise<void> {
+  const orgId = await getCurrentOrgId();
+  const client = await clerkClient();
+
+  await client.organizations.deleteOrganizationMembership({
+    organizationId: orgId,
+    userId: clerkUserId,
+  });
+}
