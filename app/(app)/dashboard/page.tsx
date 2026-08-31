@@ -35,7 +35,7 @@ export default async function DashboardPage() {
       <DashboardTabs
         myDashboard={
           <Suspense fallback={<PanelFallback />}>
-            <MyDashboardPanel memberName={member.displayName} />
+            <MyDashboardPanel memberId={member.id} />
           </Suspense>
         }
         teamOverview={

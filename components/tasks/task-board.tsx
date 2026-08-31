@@ -187,7 +187,13 @@ export function TaskBoard({ tasks, members, projects, docs, currentMemberId, isA
       </div>
 
       <div className="flex justify-end">
-        <NewTaskDialog members={members} projects={projects} docs={docs} />
+        <NewTaskDialog
+          members={members}
+          projects={projects}
+          docs={docs}
+          currentMemberId={currentMemberId}
+          isAdmin={isAdmin}
+        />
       </div>
 
       {selectedTask && (

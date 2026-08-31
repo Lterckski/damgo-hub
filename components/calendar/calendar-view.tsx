@@ -353,8 +353,14 @@ export function CalendarView({
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-bold tracking-wide text-copy-primary uppercase">Next 5 Days</p>
           <div className="flex items-center gap-2">
-            <NewTaskDialog members={members} projects={projects} docs={docs} />
-            <NewEventDialog />
+            <NewTaskDialog
+              members={members}
+              projects={projects}
+              docs={docs}
+              currentMemberId={currentMemberId}
+              isAdmin={isAdmin}
+            />
+            {isAdmin && <NewEventDialog />}
           </div>
         </div>
 

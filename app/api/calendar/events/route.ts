@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 import { prisma } from "@/lib/prisma";
-import { getCurrentMember } from "@/lib/current-member";
+import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
 import { enqueueGoogleCalendarSync } from "@/lib/sync-calendar";
 import { serializeCalendarEvent, type UnifiedCalendarItem } from "@/lib/calendar";
 
@@ -61,11 +61,16 @@ export async function GET(request: Request) {
   });
 }
 
-// POST /api/calendar/events — any authenticated member creates a standalone event.
+// POST /api/calendar/events — org:admin (Leader/Assistant Leader) only.
+// Regular members can't create standalone events — see the user's explicit
+// call in progress-tracker.md.
 export async function POST(request: Request) {
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!(await isCurrentMemberAdmin())) {
+    return NextResponse.json({ error: "Only Admins can create calendar events" }, { status: 403 });
   }
 
   const creator = await getCurrentMember();

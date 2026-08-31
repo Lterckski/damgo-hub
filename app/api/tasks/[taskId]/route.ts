@@ -26,6 +26,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const [member, isAdmin] = await Promise.all([getCurrentMember(), isCurrentMemberAdmin()]);
   const { taskId } = await params;
   const existing = await prisma.task.findUnique({ where: { id: taskId } });
   if (!existing) {
@@ -90,12 +91,31 @@ export async function PATCH(
     data.project = resolvedProjectId ? { connect: { id: resolvedProjectId } } : { disconnect: true };
   }
 
+  // A regular member (not org:admin) can only ever add/remove *themselves*
+  // as an assignee — never touch anyone else's assignment. Rather than
+  // trusting whatever the client sent (or flatly rejecting it), reconcile
+  // it against who's actually still assigned: every other existing
+  // assignee is kept no matter what the non-admin submitted, and the only
+  // thing their own submission can change is whether *they* are in the
+  // set. Matches the read-only-except-yourself checklist in
+  // task-detail-dialog.tsx.
+  let resolvedAssigneeIds: string[] | undefined = assigneeIds as string[] | undefined;
+  if (assigneeIds !== undefined && !isAdmin) {
+    const currentAssignees = await prisma.taskAssignee.findMany({
+      where: { taskId },
+      select: { memberId: true },
+    });
+    const otherMemberIds = currentAssignees.map((a) => a.memberId).filter((id) => id !== member.id);
+    const submittingSelf = (assigneeIds as string[]).includes(member.id);
+    resolvedAssigneeIds = submittingSelf ? [...otherMemberIds, member.id] : otherMemberIds;
+  }
+
   const task = await prisma.$transaction(async (tx) => {
-    if (assigneeIds !== undefined) {
+    if (resolvedAssigneeIds !== undefined) {
       await tx.taskAssignee.deleteMany({ where: { taskId } });
-      if ((assigneeIds as string[]).length > 0) {
+      if (resolvedAssigneeIds.length > 0) {
         await tx.taskAssignee.createMany({
-          data: (assigneeIds as string[]).map((memberId) => ({ taskId, memberId })),
+          data: resolvedAssigneeIds.map((memberId) => ({ taskId, memberId })),
         });
       }
     }

@@ -2,29 +2,40 @@ import { format } from "date-fns";
 import { CheckSquare, CalendarClock, Wallet, Lightbulb } from "lucide-react";
 
 import { DashboardWidget, WidgetEmptyState } from "@/components/dashboard/dashboard-widget";
-import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
+import { TaskStatusBadge, type TaskStatusValue } from "@/components/tasks/task-status-badge";
 import { formatPHP } from "@/lib/currency";
-import {
-  getMockFinancialSnapshot,
-  getMockMyTasks,
-  getMockRecentIdeas,
-  getMockUpcoming,
-} from "@/lib/mock-dashboard-data";
+import { getFinancialSnapshot } from "@/lib/finance";
+import { getUpcomingItems } from "@/lib/dashboard";
+import { prisma } from "@/lib/prisma";
 
 interface MyDashboardPanelProps {
-  memberName: string;
+  memberId: string;
 }
 
 /**
  * The member-scoped dashboard grid — My Tasks, Upcoming, Financial
- * Snapshot, Recent Ideas. Mock data only, per 06-dashboard-home.md; stays
- * a Server Component since nothing here is interactive.
+ * Snapshot, Recent Ideas. Real data as of 22-dashboard-data-wiring.md
+ * (previously mock — see lib/mock-dashboard-data.ts, now unused). Stays a
+ * Server Component doing its own fetching — this is one of two panels
+ * dashboard/page.tsx wraps in its own Suspense boundary, so a slow query
+ * here streams in independently of Team Overview rather than blocking it.
  */
-export function MyDashboardPanel({ memberName }: MyDashboardPanelProps) {
-  const myTasks = getMockMyTasks(memberName);
-  const upcoming = getMockUpcoming();
-  const finance = getMockFinancialSnapshot();
-  const ideas = getMockRecentIdeas();
+export async function MyDashboardPanel({ memberId }: MyDashboardPanelProps) {
+  const [myTasks, upcoming, finance] = await Promise.all([
+    prisma.task.findMany({
+      where: { assignees: { some: { memberId } } },
+      select: { id: true, title: true, status: true, dueDate: true },
+      orderBy: { dueDate: "asc" },
+      take: 5,
+    }),
+    getUpcomingItems(),
+    getFinancialSnapshot(),
+  ]);
+
+  // Ideas board doesn't exist yet (19-ideas-board.md) — no mock data
+  // pretending otherwise; this widget says so plainly instead, same as
+  // /ideas itself (components/shared/coming-soon.tsx).
+  const ideasAvailable = false;
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -37,13 +48,9 @@ export function MyDashboardPanel({ memberName }: MyDashboardPanelProps) {
               <li key={task.id} className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium text-copy-primary">{task.title}</p>
-                  {task.dueDate && (
-                    <p className="text-xs text-copy-secondary">
-                      Due {format(new Date(task.dueDate), "MMM d")}
-                    </p>
-                  )}
+                  <p className="text-xs text-copy-secondary">Due {format(task.dueDate, "MMM d")}</p>
                 </div>
-                <TaskStatusBadge status={task.status} />
+                <TaskStatusBadge status={task.status as TaskStatusValue} />
               </li>
             ))}
           </ul>
@@ -94,19 +101,8 @@ export function MyDashboardPanel({ memberName }: MyDashboardPanelProps) {
       </DashboardWidget>
 
       <DashboardWidget title="Recent Ideas" icon={Lightbulb} viewAllHref="/ideas" viewAllLabel="Open ideas board">
-        {ideas.length === 0 ? (
-          <WidgetEmptyState icon={Lightbulb} message="No ideas posted yet." />
-        ) : (
-          <ul className="space-y-3">
-            {ideas.map((idea) => (
-              <li key={idea.id}>
-                <p className="text-sm font-medium text-copy-primary">{idea.title}</p>
-                <p className="text-xs text-copy-secondary">
-                  {idea.authorName} · {format(new Date(idea.createdAt), "MMM d")}
-                </p>
-              </li>
-            ))}
-          </ul>
+        {ideasAvailable ? null : (
+          <WidgetEmptyState icon={Lightbulb} message="Ideas board isn't available yet." />
         )}
       </DashboardWidget>
     </div>

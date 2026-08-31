@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 import { prisma } from "@/lib/prisma";
-import { getCurrentMember } from "@/lib/current-member";
+import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
 import { serializeTask, TASK_INCLUDE, TASK_TYPE_OPTIONS } from "@/lib/tasks";
 import { TASK_LINKABLE_PROJECT_STATUSES } from "@/lib/projects";
 import { enqueueGoogleCalendarSync } from "@/lib/sync-calendar";
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const creator = await getCurrentMember();
+  const [creator, isAdmin] = await Promise.all([getCurrentMember(), isCurrentMemberAdmin()]);
   const body = await request.json();
   const { title, description, type, startDate, dueDate, assigneeIds, projectId, documentIds } = body;
 
@@ -96,6 +96,12 @@ export async function POST(request: Request) {
     resolvedProjectId = projectId;
   }
 
+  // A regular member (not org:admin) can only ever assign a task to
+  // themselves — never to anyone else. Enforced here regardless of what
+  // the client actually sent, not just hidden in the UI (see
+  // new-task-dialog.tsx for the matching UI restriction).
+  const resolvedAssigneeIds = isAdmin ? ((assigneeIds as string[]) ?? []) : [creator.id];
+
   const task = await prisma.task.create({
     data: {
       title: title.trim(),
@@ -106,7 +112,7 @@ export async function POST(request: Request) {
       createdById: creator.id,
       projectId: resolvedProjectId,
       assignees: {
-        create: ((assigneeIds as string[]) ?? []).map((memberId) => ({ memberId })),
+        create: resolvedAssigneeIds.map((memberId) => ({ memberId })),
       },
       relatedDocuments: {
         create: ((documentIds as string[]) ?? []).map((docId) => ({ docId })),

@@ -48,6 +48,8 @@ export interface NewTaskDialogProps {
   members: TaskMemberOption[];
   projects: TaskProjectOption[];
   docs: TaskDocOption[];
+  currentMemberId: string;
+  isAdmin: boolean;
 }
 
 /**
@@ -59,7 +61,7 @@ export interface NewTaskDialogProps {
  * Start/End, Project/Documents — rather than one long single-column stack,
  * per the user's explicit request to fit more on one screen.
  */
-export function NewTaskDialog({ members, projects, docs }: NewTaskDialogProps) {
+export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmin }: NewTaskDialogProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -67,7 +69,11 @@ export function NewTaskDialog({ members, projects, docs }: NewTaskDialogProps) {
   const [type, setType] = useState<string>(TASK_TYPE_OPTIONS[0].value);
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  // A regular member can only ever assign a task to themselves — never to
+  // anyone else (the server enforces this too, see app/api/tasks/route.ts;
+  // this is the matching UI so the control isn't misleading about what'll
+  // actually happen). Admins keep the full picker.
+  const [assigneeIds, setAssigneeIds] = useState<string[]>(isAdmin ? [] : [currentMemberId]);
   const [projectId, setProjectId] = useState<string>(NO_PROJECT);
   const [documentIds, setDocumentIds] = useState<string[]>([]);
 
@@ -81,7 +87,7 @@ export function NewTaskDialog({ members, projects, docs }: NewTaskDialogProps) {
     setType(TASK_TYPE_OPTIONS[0].value);
     setStartDate("");
     setDueDate("");
-    setAssigneeIds([]);
+    setAssigneeIds(isAdmin ? [] : [currentMemberId]);
     setProjectId(NO_PROJECT);
     setDocumentIds([]);
   }
@@ -227,26 +233,34 @@ export function NewTaskDialog({ members, projects, docs }: NewTaskDialogProps) {
 
             <div>
               <p className="mb-2 text-xs font-bold tracking-wide text-copy-primary uppercase">Assignees</p>
-              <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-copy-primary">
-                <Checkbox
-                  checked={members.length > 0 && assigneeIds.length === members.length}
-                  onCheckedChange={() =>
-                    setAssigneeIds(assigneeIds.length === members.length ? [] : members.map((m) => m.id))
-                  }
-                />
-                Select All (whole team — group task)
-              </label>
-              <div className="grid max-h-32 grid-cols-3 gap-2 overflow-y-auto border-t border-surface-border-subtle pt-2">
-                {members.map((m) => (
-                  <label key={m.id} className="flex items-center gap-2 text-sm text-copy-primary">
+              {isAdmin ? (
+                <>
+                  <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-copy-primary">
                     <Checkbox
-                      checked={assigneeIds.includes(m.id)}
-                      onCheckedChange={() => toggleAssignee(m.id)}
+                      checked={members.length > 0 && assigneeIds.length === members.length}
+                      onCheckedChange={() =>
+                        setAssigneeIds(assigneeIds.length === members.length ? [] : members.map((m) => m.id))
+                      }
                     />
-                    {m.displayName}
+                    Select All (whole team — group task)
                   </label>
-                ))}
-              </div>
+                  <div className="grid max-h-32 grid-cols-3 gap-2 overflow-y-auto border-t border-surface-border-subtle pt-2">
+                    {members.map((m) => (
+                      <label key={m.id} className="flex items-center gap-2 text-sm text-copy-primary">
+                        <Checkbox
+                          checked={assigneeIds.includes(m.id)}
+                          onCheckedChange={() => toggleAssignee(m.id)}
+                        />
+                        {m.displayName}
+                      </label>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-copy-secondary">
+                  Assigned to you — only Admins can assign tasks to other members.
+                </p>
+              )}
               {assigneeIds.length === 0 && (
                 <p className="mt-2 text-xs font-medium text-error">
                   Select at least one assignee, or check Select All for a group task.

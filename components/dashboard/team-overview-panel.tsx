@@ -2,24 +2,44 @@ import { format } from "date-fns";
 import { Users, ListChecks, CalendarClock, ShieldQuestion } from "lucide-react";
 
 import { DashboardWidget, WidgetEmptyState } from "@/components/dashboard/dashboard-widget";
-import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
-import {
-  getMockRoleCoverage,
-  getMockTasksByMember,
-  getMockTeamTaskSummary,
-  getMockTeamUpcoming,
-} from "@/lib/mock-dashboard-data";
+import { TaskStatusBadge, type TaskStatusValue } from "@/components/tasks/task-status-badge";
+import { getMemberPickerOptions } from "@/lib/members";
+import { getRoleCoverage, getUpcomingItems } from "@/lib/dashboard";
+import { prisma } from "@/lib/prisma";
+
+const STATUS_LABEL: Record<TaskStatusValue, string> = {
+  TODO: "Not Started",
+  IN_PROGRESS: "In Progress",
+  DONE: "Done",
+};
 
 /**
  * The team-wide dashboard grid — Tasks by Member, Team Task Summary, Team
- * Upcoming, Role Coverage. Mock data only, per 06-dashboard-home.md; the
- * point is surfacing who's doing what and where the gaps are, at a glance.
+ * Upcoming, Role Coverage. Real data as of 22-dashboard-data-wiring.md
+ * (previously mock — see lib/mock-dashboard-data.ts, now unused). Streams
+ * in independently of My Dashboard via dashboard/page.tsx's Suspense
+ * boundary.
  */
-export function TeamOverviewPanel() {
-  const tasksByMember = getMockTasksByMember();
-  const summary = getMockTeamTaskSummary();
-  const upcoming = getMockTeamUpcoming();
-  const roleCoverage = getMockRoleCoverage();
+export async function TeamOverviewPanel() {
+  const [members, allTasks, upcoming, roleCoverage] = await Promise.all([
+    getMemberPickerOptions(),
+    prisma.task.findMany({
+      select: { id: true, title: true, status: true, assignees: { select: { memberId: true } } },
+    }),
+    getUpcomingItems(),
+    getRoleCoverage(),
+  ]);
+
+  const tasksByMember = members.map((m) => ({
+    member: m,
+    tasks: allTasks.filter((t) => t.assignees.some((a) => a.memberId === m.id)),
+  }));
+
+  const summary = (["TODO", "IN_PROGRESS", "DONE"] as const).map((status) => ({
+    status,
+    label: STATUS_LABEL[status],
+    count: allTasks.filter((t) => t.status === status).length,
+  }));
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -29,8 +49,8 @@ export function TeamOverviewPanel() {
         ) : (
           <ul className="space-y-4">
             {tasksByMember.map(({ member, tasks }) => (
-              <li key={member}>
-                <p className="text-sm font-bold text-copy-primary">{member}</p>
+              <li key={member.id}>
+                <p className="text-sm font-bold text-copy-primary">{member.displayName}</p>
                 {tasks.length === 0 ? (
                   <p className="mt-1 text-xs text-copy-secondary">No tasks assigned</p>
                 ) : (
@@ -38,7 +58,7 @@ export function TeamOverviewPanel() {
                     {tasks.map((task) => (
                       <li key={task.id} className="flex items-center justify-between gap-3">
                         <span className="text-xs font-medium text-copy-secondary">{task.title}</span>
-                        <TaskStatusBadge status={task.status} />
+                        <TaskStatusBadge status={task.status as TaskStatusValue} />
                       </li>
                     ))}
                   </ul>
@@ -88,7 +108,7 @@ export function TeamOverviewPanel() {
           <ul className="space-y-2">
             {roleCoverage.map((entry) => (
               <li key={entry.role} className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-copy-primary">{entry.role}</span>
+                <span className="text-sm font-medium text-copy-primary">{entry.label}</span>
                 <span
                   className={
                     entry.members.length === 0

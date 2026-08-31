@@ -91,6 +91,12 @@ export function TaskDetailDialog({
   const [draftDocumentIds, setDraftDocumentIds] = useState(task.documents.map((d) => d.id));
   const [isSaving, setIsSaving] = useState(false);
 
+  // For the non-admin assignee view — everyone else currently on this
+  // task, shown as plain text since a regular member can't edit them.
+  const otherAssigneeNames = task.assignees
+    .filter((a) => a.id !== currentMemberId)
+    .map((a) => a.displayName);
+
   function toggleAssignee(memberId: string) {
     setDraftAssigneeIds((prev) => {
       const set = new Set(prev);
@@ -321,28 +327,56 @@ export function TaskDetailDialog({
 
             <div>
               <p className="mb-2 text-xs font-bold tracking-wide text-copy-primary uppercase">Assignees</p>
-              <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-copy-primary">
-                <Checkbox
-                  checked={members.length > 0 && draftAssigneeIds.length === members.length}
-                  onCheckedChange={() =>
-                    setDraftAssigneeIds(
-                      draftAssigneeIds.length === members.length ? [] : members.map((m) => m.id),
-                    )
-                  }
-                />
-                Select All (whole team — group task)
-              </label>
-              <div className="grid max-h-32 grid-cols-3 gap-2 overflow-y-auto border-t border-surface-border-subtle pt-2">
-                {members.map((m) => (
-                  <label key={m.id} className="flex items-center gap-2 text-sm text-copy-primary">
+              {isAdmin ? (
+                <>
+                  <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-copy-primary">
                     <Checkbox
-                      checked={draftAssigneeIds.includes(m.id)}
-                      onCheckedChange={() => toggleAssignee(m.id)}
+                      checked={members.length > 0 && draftAssigneeIds.length === members.length}
+                      onCheckedChange={() =>
+                        setDraftAssigneeIds(
+                          draftAssigneeIds.length === members.length ? [] : members.map((m) => m.id),
+                        )
+                      }
                     />
-                    {m.displayName}
+                    Select All (whole team — group task)
                   </label>
-                ))}
-              </div>
+                  <div className="grid max-h-32 grid-cols-3 gap-2 overflow-y-auto border-t border-surface-border-subtle pt-2">
+                    {members.map((m) => (
+                      <label key={m.id} className="flex items-center gap-2 text-sm text-copy-primary">
+                        <Checkbox
+                          checked={draftAssigneeIds.includes(m.id)}
+                          onCheckedChange={() => toggleAssignee(m.id)}
+                        />
+                        {m.displayName}
+                      </label>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* A regular member can only ever add/remove *themselves*
+                      here — the server reconciles this the same way even
+                      if it somehow received something else (see
+                      app/api/tasks/[taskId]/route.ts). Other assignees
+                      just show as plain text so it's clear they're
+                      untouched, not silently dropped. */}
+                  {otherAssigneeNames.length > 0 && (
+                    <p className="mb-2 text-xs text-copy-secondary">
+                      Also assigned: {otherAssigneeNames.join(", ")}
+                    </p>
+                  )}
+                  <label className="flex items-center gap-2 text-sm text-copy-primary">
+                    <Checkbox
+                      checked={draftAssigneeIds.includes(currentMemberId)}
+                      onCheckedChange={() => toggleAssignee(currentMemberId)}
+                    />
+                    Assign this to me
+                  </label>
+                  <p className="mt-1 text-xs text-copy-secondary">
+                    Only Admins can assign tasks to other members.
+                  </p>
+                </>
+              )}
               {draftAssigneeIds.length === 0 && (
                 <p className="mt-2 text-xs font-medium text-error">
                   Select at least one assignee, or check Select All for a group task.
