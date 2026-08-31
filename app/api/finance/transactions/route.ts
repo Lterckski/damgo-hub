@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { put } from "@vercel/blob";
 
 import { prisma } from "@/lib/prisma";
-import { getCurrentMember } from "@/lib/current-member";
+import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
 import { pesosToCentavos } from "@/lib/currency";
 import { serializeTransaction } from "@/lib/finance";
 import type { TransactionStatus, TransactionType } from "@/app/generated/prisma/enums";
@@ -34,13 +34,16 @@ export async function GET(request: Request) {
   return NextResponse.json({ transactions: transactions.map(serializeTransaction) });
 }
 
-// POST /api/finance/transactions — any authenticated member logs a
-// transaction; always starts PENDING. multipart/form-data so an optional
-// receipt file can ride along in the same request.
+// POST /api/finance/transactions — org:admin (Leader/Assistant Leader)
+// only; always starts PENDING. multipart/form-data so an optional receipt
+// file can ride along in the same request.
 export async function POST(request: Request) {
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!(await isCurrentMemberAdmin())) {
+    return NextResponse.json({ error: "Only Admins can log transactions" }, { status: 403 });
   }
 
   const member = await getCurrentMember();

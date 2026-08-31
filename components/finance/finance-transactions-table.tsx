@@ -204,9 +204,11 @@ export function FinanceTransactionsTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={() => setIsLogging(true)}>Log Transaction</Button>
-      </div>
+      {isAdmin && (
+        <div className="flex justify-end">
+          <Button onClick={() => setIsLogging(true)}>Log Transaction</Button>
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-surface-border">
         <div className="overflow-x-auto">

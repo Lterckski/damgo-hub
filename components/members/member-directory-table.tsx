@@ -98,6 +98,7 @@ export function MemberDirectoryTable({
   const [editingMember, setEditingMember] = useState<MemberRow | null>(null);
   const [assigningLeader, setAssigningLeader] = useState(false);
   const [deletingMember, setDeletingMember] = useState<MemberRow | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [pendingRoles, setPendingRoles] = useState<{
     functional: string[];
     workDistribution: string[];
@@ -190,11 +191,18 @@ export function MemberDirectoryTable({
   async function deleteMember() {
     if (!deletingMember) return;
     setIsDeleting(true);
+    setDeleteError(null);
     try {
       const response = await fetch(`/api/members/${deletingMember.id}`, { method: "DELETE" });
       if (response.ok) {
         setDeletingMember(null);
         router.refresh();
+      } else {
+        // Was silently doing nothing on failure before — same click,
+        // dialog just sat there with no explanation. Show what actually
+        // went wrong instead.
+        const body = await response.json().catch(() => null);
+        setDeleteError(body?.error ?? "Couldn't delete this member.");
       }
     } finally {
       setIsDeleting(false);
@@ -445,7 +453,15 @@ export function MemberDirectoryTable({
           they created move to whoever's deleting them, per the confirmed
           design (see 22-dashboard-data-wiring.md-adjacent progress-tracker
           entry). */}
-      <Dialog open={deletingMember !== null} onOpenChange={(open) => !open && setDeletingMember(null)}>
+      <Dialog
+        open={deletingMember !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeletingMember(null);
+            setDeleteError(null);
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-copy-primary">Delete member?</DialogTitle>
@@ -455,6 +471,7 @@ export function MemberDirectoryTable({
               stays, reassigned to you, so nothing is lost. This can&apos;t be undone.
             </DialogDescription>
           </DialogHeader>
+          {deleteError && <p className="text-sm font-medium text-error">{deleteError}</p>}
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDeletingMember(null)}>
               Cancel

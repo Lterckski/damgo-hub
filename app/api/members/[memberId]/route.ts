@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
+import { isClerkAPIResponseError } from "@clerk/nextjs/errors";
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
@@ -42,19 +43,39 @@ export async function DELETE(
   // matters (they can no longer sign in / act as this org), and it means
   // getCurrentMember() can't "resurrect" them as a fresh Member row after
   // the Postgres delete below, even if that delete somehow fails partway.
-  await removeMemberFromOrg(target.clerkUserId);
+  // Tolerate them already not being a Clerk org member (e.g. this row is
+  // left over from the earlier public-sign-up/duplicate-org mixup — see
+  // progress-tracker.md) rather than letting that abort the whole delete;
+  // any other failure still does.
+  try {
+    await removeMemberFromOrg(target.clerkUserId);
+  } catch (error) {
+    const alreadyGone = isClerkAPIResponseError(error) && error.status === 404;
+    if (!alreadyGone) {
+      console.error("removeMemberFromOrg failed", error);
+      return NextResponse.json(
+        { error: "Couldn't remove this member from the organization in Clerk." },
+        { status: 502 },
+      );
+    }
+  }
 
-  await prisma.$transaction([
-    prisma.task.updateMany({ where: { createdById: target.id }, data: { createdById: actingAdmin.id } }),
-    prisma.doc.updateMany({ where: { authorId: target.id }, data: { authorId: actingAdmin.id } }),
-    prisma.transaction.updateMany({ where: { memberId: target.id }, data: { memberId: actingAdmin.id } }),
-    prisma.calendarEvent.updateMany({
-      where: { createdById: target.id },
-      data: { createdById: actingAdmin.id },
-    }),
-    prisma.project.updateMany({ where: { ownerId: target.id }, data: { ownerId: actingAdmin.id } }),
-    prisma.member.delete({ where: { id: target.id } }),
-  ]);
+  try {
+    await prisma.$transaction([
+      prisma.task.updateMany({ where: { createdById: target.id }, data: { createdById: actingAdmin.id } }),
+      prisma.doc.updateMany({ where: { authorId: target.id }, data: { authorId: actingAdmin.id } }),
+      prisma.transaction.updateMany({ where: { memberId: target.id }, data: { memberId: actingAdmin.id } }),
+      prisma.calendarEvent.updateMany({
+        where: { createdById: target.id },
+        data: { createdById: actingAdmin.id },
+      }),
+      prisma.project.updateMany({ where: { ownerId: target.id }, data: { ownerId: actingAdmin.id } }),
+      prisma.member.delete({ where: { id: target.id } }),
+    ]);
+  } catch (error) {
+    console.error("Member delete transaction failed", error);
+    return NextResponse.json({ error: "Couldn't delete this member." }, { status: 500 });
+  }
 
   // The cached member-picker list (lib/members.ts) needs a new member to
   // show up — it equally needs a deleted one to disappear.
