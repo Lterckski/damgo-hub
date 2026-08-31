@@ -289,10 +289,10 @@ export function MemberDirectoryTable({
                         }
                       />
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={() => openEditDialog(member)}>
+                        <DropdownMenuItem onClick={() => openEditDialog(member)}>
                           Edit role tags
                         </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => toggleStatus(member)}>
+                        <DropdownMenuItem onClick={() => toggleStatus(member)}>
                           {member.status === "ACTIVE"
                             ? "Set inactive"
                             : "Set active"}
@@ -303,7 +303,7 @@ export function MemberDirectoryTable({
                         {!member.isLeader && member.id !== currentMemberId && (
                           <DropdownMenuItem
                             variant="destructive"
-                            onSelect={() => setDeletingMember(member)}
+                            onClick={() => setDeletingMember(member)}
                           >
                             Delete member
                           </DropdownMenuItem>
