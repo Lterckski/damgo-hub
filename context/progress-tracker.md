@@ -12,6 +12,7 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Completed
 
+- **Brand favicon updated**: regenerated `app/favicon.ico` from the canonical `public/brand/logo.jpeg` so browser tabs use the Damgo Hub logo instead of the original Create Next App favicon. The existing `app/icon.jpeg` and `app/apple-icon.jpeg` remain aligned with the same source image.
 - **Context docs**: `project-overview.md`, `architecture-context.md`, `ui-context.md`, `code-standards.md`, `team-roster.md`, and the full `feature-specs/01`–`22` sequence — all rewritten for Damgo Hub. All cross-references between them verified to resolve to real files.
 - **`04-core-schema.md`**: `Member`, `MemberFunctionalRole`, `MemberWorkDistributionRole` models; `lib/prisma.ts` singleton; `lib/current-member.ts` (`getCurrentMember`, `isCurrentMemberAdmin`, `isCurrentMemberLeader`); migration applied to local dev Postgres; client generated to `app/generated/prisma`.
 - **Trigger.dev infra** (prerequisite for `21-scheduled-reminders.md`, done ahead of sequence): project `proj_ofqyzdcwrtcxuvbpstes` linked, `@trigger.dev/sdk` + `@trigger.dev/build` installed, `trigger.config.ts`, `src/trigger/example.ts` (`hello-world` task), dev worker verified connecting and registering the task.
