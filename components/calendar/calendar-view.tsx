@@ -21,6 +21,7 @@ import { NewEventDialog } from "@/components/calendar/new-event-dialog";
 import { EventDetailDialog } from "@/components/calendar/event-detail-dialog";
 import { NewTaskDialog } from "@/components/tasks/new-task-dialog";
 import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
+import { TaskPriorityBadge, type TaskPriorityValue } from "@/components/tasks/task-priority-badge";
 import { cn } from "@/lib/utils";
 import type { SerializedCalendarEvent, UnifiedCalendarItem } from "@/lib/calendar";
 import type { SerializedTask, TaskDocOption, TaskMemberOption, TaskProjectOption } from "@/lib/tasks";
@@ -384,6 +385,15 @@ export function CalendarView({
             <ul className="space-y-2">
               {dayBars.map((bar) => {
                 const multiDay = bar.start.getTime() !== bar.end.getTime();
+                // Priority + who it's assigned to, for task bars only —
+                // events have neither. See the user's explicit call for
+                // this format.
+                const task = bar.type === "task" ? tasksById.get(bar.itemId) : undefined;
+                const assignedTo = task
+                  ? task.assignees.length > 0
+                    ? task.assignees.map((a) => a.displayName).join(", ")
+                    : "Unassigned"
+                  : null;
                 return (
                   <li
                     key={bar.key}
@@ -393,13 +403,17 @@ export function CalendarView({
                     className="flex cursor-pointer items-center gap-3 rounded-xl border border-surface-border bg-surface px-3 py-2.5 transition-colors hover:border-brand/40"
                   >
                     <span className={cn("h-2 w-2 shrink-0 rounded-full", TYPE_DOT[bar.type])} />
-                    <div>
-                      <p className="text-sm font-medium text-copy-primary">{bar.title}</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="text-sm font-medium text-copy-primary">{bar.title}</p>
+                        {task && <TaskPriorityBadge priority={task.priority as TaskPriorityValue} />}
+                      </div>
                       <p className="text-xs font-medium text-copy-secondary">
                         {TYPE_LABEL[bar.type]}
                         {multiDay
                           ? ` · ${format(bar.start, "MMM d")} – ${format(bar.end, "MMM d")}`
                           : ""}
+                        {assignedTo ? ` · Assigned to ${assignedTo}` : ""}
                       </p>
                     </div>
                   </li>

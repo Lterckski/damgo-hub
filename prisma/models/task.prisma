@@ -4,11 +4,18 @@ enum TaskStatus {
   DONE
 }
 
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 model Task {
   id          String         @id @default(cuid())
   title       String
   description String?
   status      TaskStatus     @default(TODO)
+  priority    TaskPriority   @default(MEDIUM)
   // Free text, not the FunctionalRole enum anymore — was originally
   // reusing it as one taxonomy shared with Member Roles (see
   // 08-task-assignment.md), but the user explicitly asked for a Custom
@@ -39,6 +46,7 @@ model Task {
   @@index([status])
   @@index([type])
   @@index([projectId])
+  @@index([priority])
 }
 
 model TaskAssignee {

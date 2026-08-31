@@ -1,3 +1,5 @@
+import { differenceInCalendarDays } from "date-fns";
+
 import { prisma } from "@/lib/prisma";
 import { FunctionalRole } from "@/app/generated/prisma/enums";
 
@@ -5,6 +7,16 @@ export interface UpcomingItem {
   id: string;
   title: string;
   startsAt: string;
+}
+
+/** "due today" / "due tomorrow" / "due in N days" — calendar-day
+ * difference, not a raw 24h split, so a task due at 1am tomorrow reads as
+ * "due tomorrow" even if it's less than 24 hours from right now. */
+function dueInLabel(dueDate: Date, now: Date): string {
+  const days = differenceInCalendarDays(dueDate, now);
+  if (days <= 0) return "due today";
+  if (days === 1) return "due tomorrow";
+  return `due in ${days} days`;
 }
 
 const FUNCTIONAL_ROLE_LABELS: Record<string, string> = {
@@ -49,7 +61,11 @@ export async function getUpcomingItems(limit = 5): Promise<UpcomingItem[]> {
 
   const items: UpcomingItem[] = [
     ...events.map((e) => ({ id: e.id, title: e.title, startsAt: e.startAt.toISOString() })),
-    ...tasks.map((t) => ({ id: t.id, title: `${t.title} (due)`, startsAt: t.dueDate.toISOString() })),
+    ...tasks.map((t) => ({
+      id: t.id,
+      title: `${t.title} (${dueInLabel(t.dueDate, now)})`,
+      startsAt: t.dueDate.toISOString(),
+    })),
   ];
 
   return items.sort((a, b) => a.startsAt.localeCompare(b.startsAt)).slice(0, limit);

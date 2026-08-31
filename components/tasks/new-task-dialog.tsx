@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 
@@ -26,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DateTimePicker } from "@/components/shared/date-time-picker";
 import { DocumentMultiSelect } from "@/components/tasks/document-multi-select";
 import {
+  TASK_PRIORITY_OPTIONS,
   TASK_TYPE_MAX_LENGTH,
   TASK_TYPE_OPTIONS,
   type TaskDocOption,
@@ -49,6 +50,7 @@ const TASK_TYPE_ITEMS = {
   ...Object.fromEntries(TASK_TYPE_OPTIONS.map((o) => [o.value, o.label])),
   [CUSTOM_TYPE]: CUSTOM_TYPE_LABEL,
 };
+const TASK_PRIORITY_ITEMS = Object.fromEntries(TASK_PRIORITY_OPTIONS.map((o) => [o.value, o.label]));
 
 export interface NewTaskDialogProps {
   members: TaskMemberOption[];
@@ -71,9 +73,18 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // The `disabled` state on the submit button alone isn't airtight against
+  // a fast double-click: there's a real gap between setIsSubmitting(true)
+  // being called and React actually committing that to the DOM's disabled
+  // attribute, and a second click landing inside that gap still reaches
+  // this handler. A ref is checked/set synchronously, before any of that
+  // render-timing gap exists, so a second concurrent call is refused
+  // outright rather than racing on state.
+  const isSubmittingRef = useRef(false);
   const [title, setTitle] = useState("");
   const [type, setType] = useState<string>(TASK_TYPE_OPTIONS[0].value);
   const [customType, setCustomType] = useState("");
+  const [priority, setPriority] = useState<string>("MEDIUM");
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   // A regular member can only ever assign a task to themselves — never to
@@ -93,6 +104,7 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
     setTitle("");
     setType(TASK_TYPE_OPTIONS[0].value);
     setCustomType("");
+    setPriority("MEDIUM");
     setStartDate("");
     setDueDate("");
     setAssigneeIds(isAdmin ? [] : [currentMemberId]);
@@ -110,6 +122,8 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
   }
 
   async function createTask(formData: FormData) {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
       const description = formData.get("description");
@@ -121,6 +135,7 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
           title,
           description: description || undefined,
           type: finalType,
+          priority,
           startDate,
           dueDate,
           assigneeIds,
@@ -135,6 +150,7 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
         router.refresh();
       }
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   }
@@ -206,9 +222,28 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
               <Textarea name="description" rows={2} className="text-copy-primary!" />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <DateTimePicker label="Start" value={startDate} onChange={setStartDate} required />
               <DateTimePicker label="End" value={dueDate} onChange={setDueDate} required />
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Priority</label>
+                <Select
+                  items={TASK_PRIORITY_ITEMS}
+                  value={priority}
+                  onValueChange={(value) => value && setPriority(value)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TASK_PRIORITY_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

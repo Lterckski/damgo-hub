@@ -3,13 +3,14 @@ import { auth } from "@clerk/nextjs/server";
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
-import { serializeTask, TASK_INCLUDE, TASK_TYPE_MAX_LENGTH } from "@/lib/tasks";
+import { serializeTask, TASK_INCLUDE, TASK_PRIORITY_OPTIONS, TASK_TYPE_MAX_LENGTH } from "@/lib/tasks";
 import { TASK_LINKABLE_PROJECT_STATUSES } from "@/lib/projects";
 import { enqueueGoogleCalendarSync } from "@/lib/sync-calendar";
 import type { TaskStatus } from "@/app/generated/prisma/enums";
 import type { Prisma } from "@/app/generated/prisma/client";
 
 const VALID_STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
+const VALID_PRIORITIES = TASK_PRIORITY_OPTIONS.map((option) => option.value);
 
 // PATCH /api/tasks/[taskId] — any authenticated member; updates
 // title/description/status/type/startDate/dueDate/assignees. type,
@@ -33,10 +34,14 @@ export async function PATCH(
   }
 
   const body = await request.json();
-  const { title, description, status, type, startDate, dueDate, assigneeIds, projectId, documentIds } = body;
+  const { title, description, status, type, priority, startDate, dueDate, assigneeIds, projectId, documentIds } =
+    body;
 
   if (status !== undefined && !VALID_STATUSES.includes(status)) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+  }
+  if (priority !== undefined && !VALID_PRIORITIES.includes(priority)) {
+    return NextResponse.json({ error: "Invalid priority" }, { status: 400 });
   }
   if (
     type !== undefined &&
@@ -89,6 +94,7 @@ export async function PATCH(
       typeof description === "string" && description.trim() !== "" ? description.trim() : null;
   }
   if (status !== undefined) data.status = status;
+  if (priority !== undefined) data.priority = priority;
   if (type !== undefined) data.type = type.trim();
   if (startDate !== undefined) data.startDate = new Date(startDate);
   if (dueDate !== undefined) data.dueDate = new Date(dueDate);

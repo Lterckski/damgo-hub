@@ -27,8 +27,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { DateTimePicker } from "@/components/shared/date-time-picker";
 import { DocumentMultiSelect } from "@/components/tasks/document-multi-select";
+import { TaskPriorityBadge, type TaskPriorityValue } from "@/components/tasks/task-priority-badge";
 import { TaskStatusBadge, type TaskStatusValue } from "@/components/tasks/task-status-badge";
 import {
+  TASK_PRIORITY_OPTIONS,
   TASK_TYPE_MAX_LENGTH,
   TASK_TYPE_OPTIONS,
   taskTypeLabel,
@@ -52,6 +54,7 @@ const TASK_TYPE_ITEMS = {
   [CUSTOM_TYPE]: CUSTOM_TYPE_LABEL,
 };
 const TASK_TYPE_PRESET_VALUES: ReadonlySet<string> = new Set(TASK_TYPE_OPTIONS.map((o) => o.value));
+const TASK_PRIORITY_ITEMS = Object.fromEntries(TASK_PRIORITY_OPTIONS.map((o) => [o.value, o.label]));
 
 interface TaskDetailDialogProps {
   task: SerializedTask;
@@ -100,6 +103,7 @@ export function TaskDetailDialog({
   const [draftCustomType, setDraftCustomType] = useState(
     TASK_TYPE_PRESET_VALUES.has(task.type) ? "" : task.type,
   );
+  const [draftPriority, setDraftPriority] = useState(task.priority);
   const [draftStartDate, setDraftStartDate] = useState(task.startDate);
   const [draftDueDate, setDraftDueDate] = useState(task.dueDate);
   const [draftDescription, setDraftDescription] = useState(task.description ?? "");
@@ -145,6 +149,7 @@ export function TaskDetailDialog({
         body: JSON.stringify({
           status: draftStatus,
           type: draftType === CUSTOM_TYPE ? draftCustomType.trim() : draftType,
+          priority: draftPriority,
           startDate: draftStartDate,
           dueDate: draftDueDate,
           description: draftDescription,
@@ -187,6 +192,7 @@ export function TaskDetailDialog({
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
               <TaskStatusBadge status={task.status as TaskStatusValue} />
+              <TaskPriorityBadge priority={task.priority as TaskPriorityValue} />
               <span className="rounded-full bg-subtle px-2 py-0.5 text-xs font-semibold text-copy-secondary">
                 {taskTypeLabel(task.type)}
               </span>
@@ -221,15 +227,21 @@ export function TaskDetailDialog({
               <p className="text-sm text-copy-secondary">{task.description || "No description."}</p>
             </div>
 
-            <div>
-              <p className={FIELD_LABEL_CLASS}>Assignees</p>
-              {task.assignees.length === 0 ? (
-                <p className="text-sm text-copy-faint">Unassigned — group task.</p>
-              ) : (
-                <p className="text-sm font-medium text-copy-primary">
-                  {task.assignees.map((a) => a.displayName).join(", ")}
-                </p>
-              )}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className={FIELD_LABEL_CLASS}>Assignees</p>
+                {task.assignees.length === 0 ? (
+                  <p className="text-sm text-copy-faint">Unassigned — group task.</p>
+                ) : (
+                  <p className="text-sm font-medium text-copy-primary">
+                    {task.assignees.map((a) => a.displayName).join(", ")}
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className={FIELD_LABEL_CLASS}>Assigned By</p>
+                <p className="text-sm font-medium text-copy-primary">{task.createdByName}</p>
+              </div>
             </div>
 
             {task.documents.length > 0 && (
@@ -303,9 +315,28 @@ export function TaskDetailDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <DateTimePicker label="Start" value={draftStartDate} onChange={setDraftStartDate} required />
               <DateTimePicker label="End" value={draftDueDate} onChange={setDraftDueDate} required />
+              <div>
+                <label className={FIELD_LABEL_CLASS}>Priority</label>
+                <Select
+                  items={TASK_PRIORITY_ITEMS}
+                  value={draftPriority}
+                  onValueChange={(value) => value && setDraftPriority(value)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TASK_PRIORITY_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div>

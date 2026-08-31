@@ -36,7 +36,7 @@ import { cn } from "@/lib/utils";
 const FIELD_LABEL_CLASS = "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
 
 const HOURS_12 = Array.from({ length: 12 }, (_, i) => i + 1); // 1..12
-const MINUTES_5 = Array.from({ length: 12 }, (_, i) => i * 5); // 0,5,...,55
+const MINUTES_ALL = Array.from({ length: 60 }, (_, i) => i); // 0..59
 
 /** "14:05" -> { hour12: 2, minute: 5, period: "PM" } */
 function to12Hour(hhmm: string) {
@@ -224,7 +224,7 @@ export function DateTimePicker({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {MINUTES_5.map((m) => (
+                    {MINUTES_ALL.map((m) => (
                       <SelectItem key={m} value={String(m).padStart(2, "0")}>
                         {String(m).padStart(2, "0")}
                       </SelectItem>

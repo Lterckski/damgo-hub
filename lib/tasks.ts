@@ -5,9 +5,11 @@ export interface SerializedTask {
   description: string | null;
   status: string;
   type: string;
+  priority: string;
   startDate: string;
   dueDate: string;
   createdById: string;
+  createdByName: string;
   projectId: string | null;
   projectName: string | null;
   documents: { id: string; title: string }[];
@@ -21,9 +23,11 @@ export function serializeTask(task: {
   description: string | null;
   status: string;
   type: string;
+  priority: string;
   startDate: Date;
   dueDate: Date;
   createdById: string;
+  createdBy: { displayName: string };
   projectId: string | null;
   project: { name: string } | null;
   relatedDocuments: { doc: { id: string; title: string } }[];
@@ -36,9 +40,11 @@ export function serializeTask(task: {
     description: task.description,
     status: task.status,
     type: task.type,
+    priority: task.priority,
     startDate: task.startDate.toISOString(),
     dueDate: task.dueDate.toISOString(),
     createdById: task.createdById,
+    createdByName: task.createdBy.displayName,
     projectId: task.projectId,
     projectName: task.project?.name ?? null,
     documents: task.relatedDocuments.map((rd) => ({ id: rd.doc.id, title: rd.doc.title })),
@@ -51,13 +57,20 @@ export function serializeTask(task: {
   };
 }
 
-// select, not a bare `member: true` include — serializeTask only ever
-// reads id/displayName/avatarUrl off each assignee (same over-fetch as
+// select, not a bare `member: true` / `createdBy: true` include —
+// serializeTask only ever reads id/displayName/avatarUrl off each
+// assignee and displayName off createdBy (same over-fetch as
 // PROJECT_INCLUDE in lib/projects.ts — see that file's comment).
+// createdBy doubles as "assigned by" in the UI — this app has no separate
+// "assigned by someone other than the creator" concept, whoever created
+// the task is who assigned it (to themselves, if a regular member; to
+// whoever they picked, if an admin — see the assignee-restriction rules
+// in app/api/tasks/route.ts).
 export const TASK_INCLUDE = {
   assignees: {
     include: { member: { select: { id: true, displayName: true, avatarUrl: true } } },
   },
+  createdBy: { select: { displayName: true } },
   project: { select: { name: true } },
   relatedDocuments: { include: { doc: { select: { id: true, title: true } } } },
 } as const;
@@ -99,4 +112,19 @@ export const TASK_TYPE_OPTIONS = [
   { value: "QUALITY_ASSURANCE", label: "Quality Assurance" },
   { value: "MARKETING", label: "Marketing" },
   { value: "MODEL", label: "Model" },
+] as const;
+
+export function taskPriorityLabel(priority: string): string {
+  return TASK_PRIORITY_OPTIONS.find((option) => option.value === priority)?.label ?? priority;
+}
+
+// Same LOW/MEDIUM/HIGH shape as Project priority (lib/projects.ts) — kept
+// as its own enum/options rather than reusing ProjectPriority, since a
+// task isn't a project and there's no reason a future divergence between
+// the two (e.g. a task-specific "Urgent" tier) should be blocked by
+// sharing one type.
+export const TASK_PRIORITY_OPTIONS = [
+  { value: "LOW", label: "Low" },
+  { value: "MEDIUM", label: "Medium" },
+  { value: "HIGH", label: "High" },
 ] as const;
