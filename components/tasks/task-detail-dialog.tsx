@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -28,6 +29,7 @@ import { DateTimePicker } from "@/components/shared/date-time-picker";
 import { DocumentMultiSelect } from "@/components/tasks/document-multi-select";
 import { TaskStatusBadge, type TaskStatusValue } from "@/components/tasks/task-status-badge";
 import {
+  TASK_TYPE_MAX_LENGTH,
   TASK_TYPE_OPTIONS,
   taskTypeLabel,
   type SerializedTask,
@@ -39,11 +41,17 @@ import {
 const FIELD_LABEL_CLASS = "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
 const NO_PROJECT = "__none__";
 const NO_PROJECT_LABEL = "Not part of a project / Standalone";
+const CUSTOM_TYPE = "__custom__";
+const CUSTOM_TYPE_LABEL = "Custom…";
 
 // See new-task-dialog.tsx's comment — <Select.Value> needs an `items` map
 // to show a label instead of the raw value before the popup has opened.
 const STATUS_ITEMS = { TODO: "To Do", IN_PROGRESS: "In Progress", DONE: "Done" };
-const TASK_TYPE_ITEMS = Object.fromEntries(TASK_TYPE_OPTIONS.map((o) => [o.value, o.label]));
+const TASK_TYPE_ITEMS = {
+  ...Object.fromEntries(TASK_TYPE_OPTIONS.map((o) => [o.value, o.label])),
+  [CUSTOM_TYPE]: CUSTOM_TYPE_LABEL,
+};
+const TASK_TYPE_PRESET_VALUES: ReadonlySet<string> = new Set(TASK_TYPE_OPTIONS.map((o) => o.value));
 
 interface TaskDetailDialogProps {
   task: SerializedTask;
@@ -82,7 +90,16 @@ export function TaskDetailDialog({
 }: TaskDetailDialogProps) {
   const router = useRouter();
   const [draftStatus, setDraftStatus] = useState<TaskStatusValue>(task.status as TaskStatusValue);
-  const [draftType, setDraftType] = useState(task.type);
+  // task.type may already be a custom label (free text since the
+  // migration — see task.prisma), not one of the 7 presets — the Select
+  // needs the CUSTOM_TYPE sentinel selected in that case, with the actual
+  // value living in draftCustomType instead.
+  const [draftType, setDraftType] = useState(
+    TASK_TYPE_PRESET_VALUES.has(task.type) ? task.type : CUSTOM_TYPE,
+  );
+  const [draftCustomType, setDraftCustomType] = useState(
+    TASK_TYPE_PRESET_VALUES.has(task.type) ? "" : task.type,
+  );
   const [draftStartDate, setDraftStartDate] = useState(task.startDate);
   const [draftDueDate, setDraftDueDate] = useState(task.dueDate);
   const [draftDescription, setDraftDescription] = useState(task.description ?? "");
@@ -127,7 +144,7 @@ export function TaskDetailDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           status: draftStatus,
-          type: draftType,
+          type: draftType === CUSTOM_TYPE ? draftCustomType.trim() : draftType,
           startDate: draftStartDate,
           dueDate: draftDueDate,
           description: draftDescription,
@@ -270,8 +287,19 @@ export function TaskDetailDialog({
                         {option.label}
                       </SelectItem>
                     ))}
+                    <SelectItem value={CUSTOM_TYPE}>{CUSTOM_TYPE_LABEL}</SelectItem>
                   </SelectContent>
                 </Select>
+                {draftType === CUSTOM_TYPE && (
+                  <Input
+                    className="mt-2 text-copy-primary!"
+                    value={draftCustomType}
+                    onChange={(e) => setDraftCustomType(e.target.value)}
+                    placeholder="Describe the task type…"
+                    maxLength={TASK_TYPE_MAX_LENGTH}
+                    required
+                  />
+                )}
               </div>
             </div>
 
@@ -404,7 +432,11 @@ export function TaskDetailDialog({
               <Button
                 onClick={saveTask}
                 disabled={
-                  isSaving || draftStartDate === "" || draftDueDate === "" || draftAssigneeIds.length === 0
+                  isSaving ||
+                  draftStartDate === "" ||
+                  draftDueDate === "" ||
+                  draftAssigneeIds.length === 0 ||
+                  (draftType === CUSTOM_TYPE && draftCustomType.trim() === "")
                 }
               >
                 Save

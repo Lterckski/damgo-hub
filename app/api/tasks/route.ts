@@ -3,14 +3,13 @@ import { auth } from "@clerk/nextjs/server";
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
-import { serializeTask, TASK_INCLUDE, TASK_TYPE_OPTIONS } from "@/lib/tasks";
+import { serializeTask, TASK_INCLUDE, TASK_TYPE_MAX_LENGTH } from "@/lib/tasks";
 import { TASK_LINKABLE_PROJECT_STATUSES } from "@/lib/projects";
 import { enqueueGoogleCalendarSync } from "@/lib/sync-calendar";
-import type { FunctionalRole, TaskStatus } from "@/app/generated/prisma/enums";
+import type { TaskStatus } from "@/app/generated/prisma/enums";
 import type { Prisma } from "@/app/generated/prisma/client";
 
 const VALID_STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
-const VALID_TYPES = TASK_TYPE_OPTIONS.map((option) => option.value);
 
 // GET /api/tasks — any authenticated member; ?assignee=me, ?projectId=,
 // ?status= filters.
@@ -62,8 +61,14 @@ export async function POST(request: Request) {
   if (typeof title !== "string" || title.trim() === "") {
     return NextResponse.json({ error: "title is required" }, { status: 400 });
   }
-  if (typeof type !== "string" || !VALID_TYPES.includes(type as FunctionalRole)) {
-    return NextResponse.json({ error: "type is required and must be a valid task type" }, { status: 400 });
+  // type is free text now (a preset label or a custom one — see
+  // task.prisma), just non-empty and capped so a custom label can't blow
+  // out task cards/badges elsewhere.
+  if (typeof type !== "string" || type.trim() === "" || type.trim().length > TASK_TYPE_MAX_LENGTH) {
+    return NextResponse.json(
+      { error: `type is required and must be ${TASK_TYPE_MAX_LENGTH} characters or fewer` },
+      { status: 400 },
+    );
   }
   if (typeof startDate !== "string" || Number.isNaN(Date.parse(startDate))) {
     return NextResponse.json({ error: "startDate is required and must be a valid date" }, { status: 400 });
@@ -106,7 +111,7 @@ export async function POST(request: Request) {
     data: {
       title: title.trim(),
       description: typeof description === "string" && description.trim() !== "" ? description.trim() : null,
-      type: type as FunctionalRole,
+      type: type.trim(),
       startDate: new Date(startDate),
       dueDate: new Date(dueDate),
       createdById: creator.id,

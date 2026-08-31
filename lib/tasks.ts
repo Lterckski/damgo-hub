@@ -86,6 +86,11 @@ export function taskTypeLabel(type: string): string {
   return TASK_TYPE_OPTIONS.find((option) => option.value === type)?.label ?? type;
 }
 
+// A generous cap, not a real limit anyone should hit — just enough to stop
+// a custom type from blowing out a task card/badge. See task.prisma: type
+// is free text now, not the FunctionalRole enum.
+export const TASK_TYPE_MAX_LENGTH = 40;
+
 export const TASK_TYPE_OPTIONS = [
   { value: "PITCHING", label: "Pitching" },
   { value: "DOCUMENTS", label: "Documents" },

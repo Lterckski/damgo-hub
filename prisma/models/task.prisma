@@ -9,10 +9,15 @@ model Task {
   title       String
   description String?
   status      TaskStatus     @default(TODO)
-  // Reuses FunctionalRole (member.prisma) rather than a separate enum —
-  // one taxonomy for "what kind of work is this," shared between task
-  // types and Member Roles. See 08-task-assignment.md.
-  type        FunctionalRole
+  // Free text, not the FunctionalRole enum anymore — was originally
+  // reusing it as one taxonomy shared with Member Roles (see
+  // 08-task-assignment.md), but the user explicitly asked for a Custom
+  // task type, which a hard Postgres enum can't accommodate without
+  // constantly growing the enum for one-off labels. The UI still offers
+  // the same 7 presets first; "Custom…" just reveals a free-text field
+  // instead of being blocked. Member Roles (MemberFunctionalRole) still
+  // use the real FunctionalRole enum — unaffected by this.
+  type        String
   // Both mandatory, per the user's explicit request — a task always has a
   // defined start and a deadline. startDate is date-only (no time
   // component expected in the UI); dueDate carries the actual time, since

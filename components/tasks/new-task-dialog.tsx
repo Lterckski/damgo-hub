@@ -26,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DateTimePicker } from "@/components/shared/date-time-picker";
 import { DocumentMultiSelect } from "@/components/tasks/document-multi-select";
 import {
+  TASK_TYPE_MAX_LENGTH,
   TASK_TYPE_OPTIONS,
   type TaskDocOption,
   type TaskMemberOption,
@@ -35,6 +36,8 @@ import {
 const FIELD_LABEL_CLASS = "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
 const NO_PROJECT = "__none__";
 const NO_PROJECT_LABEL = "Not part of a project / Standalone";
+const CUSTOM_TYPE = "__custom__";
+const CUSTOM_TYPE_LABEL = "Custom…";
 
 // Base UI's <Select.Value> can only show the label for the current value
 // once the popup has actually opened and registered its items — without an
@@ -42,7 +45,10 @@ const NO_PROJECT_LABEL = "Not part of a project / Standalone";
 // enum like "PITCHING", a sentinel like "__none__", or worse, a member's
 // raw id) until then. Passing `items` fixes this on every Select in the
 // app, not just this file — see the fix in every other Select usage too.
-const TASK_TYPE_ITEMS = Object.fromEntries(TASK_TYPE_OPTIONS.map((o) => [o.value, o.label]));
+const TASK_TYPE_ITEMS = {
+  ...Object.fromEntries(TASK_TYPE_OPTIONS.map((o) => [o.value, o.label])),
+  [CUSTOM_TYPE]: CUSTOM_TYPE_LABEL,
+};
 
 export interface NewTaskDialogProps {
   members: TaskMemberOption[];
@@ -67,6 +73,7 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [title, setTitle] = useState("");
   const [type, setType] = useState<string>(TASK_TYPE_OPTIONS[0].value);
+  const [customType, setCustomType] = useState("");
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   // A regular member can only ever assign a task to themselves — never to
@@ -85,6 +92,7 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
   function resetForm() {
     setTitle("");
     setType(TASK_TYPE_OPTIONS[0].value);
+    setCustomType("");
     setStartDate("");
     setDueDate("");
     setAssigneeIds(isAdmin ? [] : [currentMemberId]);
@@ -105,13 +113,14 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
     setIsSubmitting(true);
     try {
       const description = formData.get("description");
+      const finalType = type === CUSTOM_TYPE ? customType.trim() : type;
       const response = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title,
           description: description || undefined,
-          type,
+          type: finalType,
           startDate,
           dueDate,
           assigneeIds,
@@ -176,8 +185,19 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
                         {option.label}
                       </SelectItem>
                     ))}
+                    <SelectItem value={CUSTOM_TYPE}>{CUSTOM_TYPE_LABEL}</SelectItem>
                   </SelectContent>
                 </Select>
+                {type === CUSTOM_TYPE && (
+                  <Input
+                    className="mt-2 text-copy-primary!"
+                    value={customType}
+                    onChange={(e) => setCustomType(e.target.value)}
+                    placeholder="Describe the task type…"
+                    maxLength={TASK_TYPE_MAX_LENGTH}
+                    required
+                  />
+                )}
               </div>
             </div>
 
@@ -282,7 +302,12 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
               <Button
                 type="submit"
                 disabled={
-                  isSubmitting || title.trim() === "" || startDate === "" || dueDate === "" || assigneeIds.length === 0
+                  isSubmitting ||
+                  title.trim() === "" ||
+                  startDate === "" ||
+                  dueDate === "" ||
+                  assigneeIds.length === 0 ||
+                  (type === CUSTOM_TYPE && customType.trim() === "")
                 }
               >
                 Create Task
