@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   addMonths,
   eachDayOfInterval,
@@ -17,6 +18,12 @@ import {
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  CalendarFilters,
+  isDefaultFilterState,
+  STANDALONE_PROJECT_KEY,
+  type CalendarFilterState,
+} from "@/components/calendar/calendar-filters";
 import { NewEventDialog } from "@/components/calendar/new-event-dialog";
 import { EventDetailDialog } from "@/components/calendar/event-detail-dialog";
 import { NewTaskDialog } from "@/components/tasks/new-task-dialog";
@@ -104,6 +111,40 @@ interface CalendarViewProps {
   isAdmin: boolean;
 }
 
+function parseListParam(params: URLSearchParams, key: string): string[] {
+  const raw = params.get(key);
+  if (!raw) return [];
+  return raw.split(",").filter(Boolean);
+}
+
+function filtersFromSearchParams(params: URLSearchParams): CalendarFilterState {
+  return {
+    assigneeIds: parseListParam(params, "assignee"),
+    projectKeys: parseListParam(params, "project"),
+    priorities: parseListParam(params, "priority"),
+    myTasksOnly: params.get("mine") === "1",
+  };
+}
+
+// Order doesn't carry meaning for any of these lists, so compare sorted —
+// two filter states built from equivalent-but-differently-ordered URLs
+// should count as equal, not trigger a redundant setFilters.
+function sameList(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sortedA = [...a].sort();
+  const sortedB = [...b].sort();
+  return sortedA.every((v, i) => v === sortedB[i]);
+}
+
+function calendarFiltersEqual(a: CalendarFilterState, b: CalendarFilterState): boolean {
+  return (
+    a.myTasksOnly === b.myTasksOnly &&
+    sameList(a.assigneeIds, b.assigneeIds) &&
+    sameList(a.projectKeys, b.projectKeys) &&
+    sameList(a.priorities, b.priorities)
+  );
+}
+
 export function CalendarView({
   items,
   events,
@@ -114,17 +155,110 @@ export function CalendarView({
   currentMemberId,
   isAdmin,
 }: CalendarViewProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [openEventId, setOpenEventId] = useState<string | null>(null);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+  // Read once, on mount, from the URL — a filtered view is shareable/
+  // bookmarkable (requirement 5), but the filters themselves are *not*
+  // otherwise persisted (no localStorage, no per-user DB row): a fresh
+  // /calendar visit with no query params always starts at "All". DECISION
+  // POINT (flagged per the user's explicit call): if the team later wants
+  // "remember my last filters" across sessions, that's a deliberate
+  // addition, not something this implementation does implicitly.
+  const [filters, setFilters] = useState<CalendarFilterState>(() => filtersFromSearchParams(searchParams));
+  // Tracks the last searchParams string `filters` was derived from, so the
+  // render-time adjustment below can tell "the URL changed from outside"
+  // apart from "nothing changed" — see that block for why this isn't a
+  // useEffect.
+  const [syncedSearchParams, setSyncedSearchParams] = useState(() => searchParams.toString());
+
+  // URL -> filters, adjusted during render rather than in a useEffect —
+  // this is React's own recommended pattern for "sync state to a changed
+  // prop/external value" (react-hooks/set-state-in-effect flags the
+  // effect-based version: an extra render+commit+effect cycle where this
+  // needs none). CalendarView can stay mounted across a same-route
+  // navigation that only changes searchParams (Next.js preserves Client
+  // Component state across those), so reading the URL solely in the
+  // useState initializer above would leave `filters` stuck on stale
+  // values if something outside this component (a Link to
+  // "/calendar?priority=HIGH" while already on /calendar, browser back/
+  // forward) changes the query string without remounting the component.
+  const currentSearchParams = searchParams.toString();
+  if (currentSearchParams !== syncedSearchParams) {
+    setSyncedSearchParams(currentSearchParams);
+    const next = filtersFromSearchParams(searchParams);
+    if (!calendarFiltersEqual(filters, next)) setFilters(next);
+  }
+
+  // Filters -> URL, not the other way after mount — replace (not push) so
+  // tweaking a filter doesn't spam the back button with history entries,
+  // and scroll:false so it doesn't jump the page. The write here also
+  // updates `syncedSearchParams` (once the resulting navigation lands and
+  // `searchParams` changes to match) so the render-time block above
+  // doesn't mistake this effect's own write for an external one and loop.
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (filters.assigneeIds.length > 0) params.set("assignee", filters.assigneeIds.join(","));
+    if (filters.projectKeys.length > 0) params.set("project", filters.projectKeys.join(","));
+    if (filters.priorities.length > 0) params.set("priority", filters.priorities.join(","));
+    if (filters.myTasksOnly) params.set("mine", "1");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- router/pathname are stable; re-running on them would fight the URL write this effect itself performs.
+  }, [filters]);
 
   const eventsById = useMemo(() => new Map(events.map((event) => [event.id, event])), [events]);
   const tasksById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
 
+  const memberOptions = useMemo(
+    () => members.map((m) => ({ value: m.id, label: m.displayName })),
+    [members],
+  );
+  const projectOptions = useMemo(
+    () => [
+      { value: STANDALONE_PROJECT_KEY, label: "Standalone (no project)" },
+      ...projects.map((p) => ({ value: p.id, label: p.name })),
+    ],
+    [projects],
+  );
+
+  // Assignee/Project/Priority describe a *task* — an event has none of
+  // them, so those three filters never hide events (there's nothing on an
+  // event for them to match or fail to match). "My Tasks Only" is
+  // different: read literally ("filters to the current logged-in user's
+  // assigned tasks"), it narrows the whole view to just that, so events
+  // drop out too while it's active.
+  function taskMatchesFilters(task: SerializedTask): boolean {
+    if (filters.myTasksOnly && !task.assignees.some((a) => a.id === currentMemberId)) return false;
+    if (filters.assigneeIds.length > 0 && !task.assignees.some((a) => filters.assigneeIds.includes(a.id))) {
+      return false;
+    }
+    if (filters.projectKeys.length > 0) {
+      const key = task.projectId ?? STANDALONE_PROJECT_KEY;
+      if (!filters.projectKeys.includes(key)) return false;
+    }
+    if (filters.priorities.length > 0 && !filters.priorities.includes(task.priority)) return false;
+    return true;
+  }
+
+  const filteredItems = useMemo(() => {
+    if (isDefaultFilterState(filters)) return items;
+    return items.filter((item) => {
+      if (item.type === "event") return !filters.myTasksOnly;
+      const task = tasksById.get(item.id);
+      return task ? taskMatchesFilters(task) : false;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- taskMatchesFilters closes over `filters`/`currentMemberId`, already listed.
+  }, [items, tasksById, filters, currentMemberId]);
+
   const bars = useMemo<CalendarBar[]>(
     () =>
-      items.map((item) => {
+      filteredItems.map((item) => {
         const start = truncateToDay(new Date(item.startAt));
         const rawEnd = item.endAt ? truncateToDay(new Date(item.endAt)) : start;
         return {
@@ -136,7 +270,7 @@ export function CalendarView({
           end: rawEnd < start ? start : rawEnd,
         };
       }),
-    [items],
+    [filteredItems],
   );
 
   const placedBars = useMemo(() => assignLanes(bars), [bars]);
@@ -200,7 +334,15 @@ export function CalendarView({
   }
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+    <div className="flex flex-col gap-4">
+      <CalendarFilters
+        filters={filters}
+        onChange={setFilters}
+        memberOptions={memberOptions}
+        projectOptions={projectOptions}
+      />
+
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
       {/* Month grid — half the page, natural height so it scrolls with the page, not on its own */}
       <div className="sticky top-4 flex w-full flex-col overflow-hidden rounded-2xl border border-surface-border bg-surface lg:w-1/2">
         <div className="flex items-center justify-between border-b border-surface-border px-4 py-3">
@@ -422,6 +564,7 @@ export function CalendarView({
             </ul>
           </div>
         ))}
+      </div>
       </div>
 
       {openEvent && (
