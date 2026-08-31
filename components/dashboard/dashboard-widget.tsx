@@ -68,10 +68,19 @@ interface WidgetEmptyStateProps {
  * widget still just sizes to its own content; a stretched one truly
  * centers in the extra space instead of hugging the top with a gap
  * below).
+ *
+ * Padding is deliberately asymmetric (pb-14, no pt) rather than the even
+ * py-6 it started as — centering purely *within CardContent* still reads
+ * as sitting too low, because that ignores the header sitting above it.
+ * True whole-card symmetry needs the midpoint shifted up by roughly half
+ * the header block's own height (accent bar + CardHeader, ~56px); with no
+ * top padding, flex centering's equal-space-on-both-sides math does that
+ * shift for free — pb-14 (56px) → the content's center moves up ~28px,
+ * which is that half.
  */
 export function WidgetEmptyState({ icon: Icon, message }: WidgetEmptyStateProps) {
   return (
-    <div className="flex h-full min-h-[7rem] flex-col items-center justify-center gap-2 py-6 text-center">
+    <div className="flex h-full min-h-[7rem] flex-col items-center justify-center gap-2 pb-14 text-center">
       <Icon className="h-8 w-8 text-copy-faint" />
       <p className="text-sm text-copy-secondary">{message}</p>
     </div>
