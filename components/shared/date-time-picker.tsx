@@ -31,28 +31,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { HOURS_12, MINUTES_ALL, to12Hour, to24Hour } from "@/lib/time-of-day";
 import { cn } from "@/lib/utils";
 
 const FIELD_LABEL_CLASS = "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
 
-const HOURS_12 = Array.from({ length: 12 }, (_, i) => i + 1); // 1..12
-const MINUTES_ALL = Array.from({ length: 60 }, (_, i) => i); // 0..59
-
-/** "14:05" -> { hour12: 2, minute: 5, period: "PM" } */
-function to12Hour(hhmm: string) {
-  const [h, m] = hhmm.split(":").map(Number);
-  const period: "AM" | "PM" = h >= 12 ? "PM" : "AM";
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return { hour12, minute: m, period };
-}
-
-/** { hour12: 2, minute: 5, period: "PM" } -> "14:05" */
-function to24Hour(hour12: number, minute: number, period: "AM" | "PM"): string {
-  const hour = period === "PM" ? (hour12 % 12) + 12 : hour12 % 12;
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-}
-
 interface DateTimePickerProps {
+  id?: string;
   label: string;
   value: string; // ISO string, or "" if unset
   onChange: (iso: string) => void;
@@ -71,6 +56,7 @@ interface DateTimePickerProps {
  * this replaces it outright rather than trying to work around it.
  */
 export function DateTimePicker({
+  id,
   label,
   value,
   onChange,
@@ -116,12 +102,14 @@ export function DateTimePicker({
 
   return (
     <div>
-      <label className={FIELD_LABEL_CLASS}>
+      <label htmlFor={id} className={FIELD_LABEL_CLASS}>
         {label} {required && <span className="text-error">*</span>}
       </label>
       <button
+        id={id}
         type="button"
         onClick={openPicker}
+        aria-haspopup="dialog"
         className="flex h-8 w-full items-center justify-between rounded-lg border border-input bg-transparent px-2.5 text-sm text-copy-primary transition-colors hover:border-ring"
       >
         <span className={displayValue ? "" : "text-copy-faint"}>{displayValue || "Select a date…"}</span>

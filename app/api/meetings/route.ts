@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
+import { normalizeAgendaItemDrafts } from "@/lib/meeting-format";
 import {
   createMeetingNotificationOutbox,
   enqueueMeetingNotificationOutbox,
@@ -51,13 +52,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const organizer = await getCurrentMember();
+  const [organizer, isAdmin] = await Promise.all([getCurrentMember(), isCurrentMemberAdmin()]);
   const body = await request.json().catch(() => null);
   if (!body) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { title, description, scheduledAt, endsAt, location, meetingUrl, participantIds } = body;
+  const { title, description, scheduledAt, endsAt, location, meetingUrl, participantIds, agendaItems } = body;
 
   if (typeof title !== "string" || title.trim() === "") {
     return NextResponse.json({ error: "title is required" }, { status: 400 });
@@ -102,6 +103,15 @@ export async function POST(request: Request) {
   });
   const participantMemberIds = realMembers.map((m) => m.id);
 
+  // Only the Leader/Assistant Leader can add final agenda items directly
+  // — enforced here, not just by hiding the "Add an agenda" button
+  // client-side (see architecture-context.md invariant 3). A non-admin's
+  // submitted agendaItems are silently dropped rather than erroring the
+  // whole request, same leniency as an unknown participant id above.
+  const agendaItemTexts = isAdmin && Array.isArray(agendaItems)
+    ? normalizeAgendaItemDrafts(agendaItems.filter((item): item is string => typeof item === "string"))
+    : [];
+
   const { meeting, invitationOutboxId } = await prisma.$transaction(async (tx) => {
     const meeting = await tx.meeting.create({
       data: {
@@ -116,6 +126,21 @@ export async function POST(request: Request) {
       },
       include: MEETING_LIST_INCLUDE,
     });
+
+    // Agenda items added while scheduling go straight onto the final
+    // agenda, in submission order, same as POST /agenda-items — this is
+    // just that same direct-add path, done inline during creation instead
+    // of as a separate follow-up request.
+    if (agendaItemTexts.length > 0) {
+      await tx.agendaItem.createMany({
+        data: agendaItemTexts.map((text, position) => ({
+          meetingId: meeting.id,
+          text,
+          position,
+          addedById: organizer.id,
+        })),
+      });
+    }
 
     const invitationOutboxId = await createMeetingNotificationOutbox(
       tx,

@@ -184,7 +184,8 @@ Create `app/(app)/meetings/page.tsx` and `app/(app)/meetings/[meetingId]/page.ts
 
 - Upcoming and Past tabs
 - Cards showing title, date/time, organizer, optional location or external-service label, and participant avatar stack
-- "Schedule Meeting" dialog with title, description, start, optional end, optional location, optional external meeting link, and participant multi-select
+- "Schedule Meeting" dialog with title, description, a **separate required meeting date and meeting time** (two distinct fields, not one combined start picker — no end date/end time field in this dialog at all; `Meeting.endsAt` still exists in the schema and still renders read-only wherever an existing meeting already has one, purely for backward compatibility with records created before this UI change), optional location, optional external meeting link, and participant multi-select
+- The dialog also includes an inline "Add an agenda" agenda-item builder (Leader/Assistant Leader only — a non-admin sees a disabled "Propose an agenda" stand-in instead, since a real proposal needs an existing meeting to attach to and none exists yet at this point in the flow); items submitted here are added directly to the final agenda, in the order entered, the same as `POST /agenda-items` — enforced server-side, not just by hiding the button
 - Upcoming meetings expose a clear "Join external meeting" action only when `meetingUrl` is present
 
 ### Meeting detail
