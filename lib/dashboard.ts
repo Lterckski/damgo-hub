@@ -1,7 +1,9 @@
 import { differenceInCalendarDays } from "date-fns";
+import { get } from "@vercel/blob";
 
 import { prisma } from "@/lib/prisma";
 import { FunctionalRole } from "@/app/generated/prisma/enums";
+import type { IdeaNode } from "@/types/roadmap";
 
 export interface UpcomingItem {
   id: string;
@@ -97,5 +99,61 @@ export async function getRoleCoverage(): Promise<RoleCoverageEntry[]> {
     role,
     label: FUNCTIONAL_ROLE_LABELS[role] ?? role,
     members: byRole.get(role) ?? [],
+  }));
+}
+
+export interface RecentIdea {
+  id: string;
+  text: string;
+  authorName: string;
+  colorIndex: number;
+}
+
+// The single IdeasBoard row's fixed, known id — see 19-ideas-board.md and
+// its own migration's seed insert. Never generated, always this literal.
+const IDEAS_BOARD_ID = "ideas-board";
+
+/**
+ * Latest few idea notes for the dashboard's Recent Ideas widget — see
+ * 22-dashboard-data-wiring.md. Live board state lives in a Liveblocks room,
+ * not the database, so this reads the same last-autosaved-snapshot Blob the
+ * board itself loads from on open (GET /api/boards/ideas/snapshot's
+ * counterpart, read directly here rather than over HTTP since this already
+ * runs server-side) — a lag of at most one autosave interval behind the
+ * live board, matching the spec's explicit fallback.
+ *
+ * `useLiveblocksFlow`'s "add" change appends to the end of the nodes array
+ * (see components/ideas/ideas-canvas.tsx's `addIdea`), so the last N items
+ * are the most recently created notes — there's no separate createdAt on
+ * IdeaNodeData to sort by instead.
+ */
+export async function getRecentIdeas(limit = 5): Promise<RecentIdea[]> {
+  const board = await prisma.ideasBoard.findUnique({
+    where: { id: IDEAS_BOARD_ID },
+    select: { snapshotPath: true },
+  });
+  if (!board?.snapshotPath) return [];
+
+  const blob = await get(board.snapshotPath, { access: "private" });
+  if (!blob?.stream) return [];
+
+  const text = await new Response(blob.stream).text();
+  const snapshot = JSON.parse(text) as { nodes?: IdeaNode[] };
+  const notes = (snapshot.nodes ?? []).filter((node) => node.data.text.trim() !== "");
+  if (notes.length === 0) return [];
+
+  const recent = notes.slice(-limit).reverse();
+  const authorIds = [...new Set(recent.map((node) => node.data.authorId))];
+  const authors = await prisma.member.findMany({
+    where: { id: { in: authorIds } },
+    select: { id: true, displayName: true },
+  });
+  const nameById = new Map(authors.map((author) => [author.id, author.displayName]));
+
+  return recent.map((node) => ({
+    id: node.id,
+    text: node.data.text,
+    authorName: nameById.get(node.data.authorId) ?? "Unknown member",
+    colorIndex: node.data.colorIndex,
   }));
 }

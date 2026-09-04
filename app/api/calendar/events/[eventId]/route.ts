@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
+import { cancelCalendarReminder, scheduleCalendarReminder } from "@/lib/calendar-reminders";
 import { enqueueGoogleCalendarSync } from "@/lib/sync-calendar";
 import { serializeCalendarEvent } from "@/lib/calendar";
 
@@ -50,6 +51,12 @@ export async function PATCH(
 
   await enqueueGoogleCalendarSync("CALENDAR_EVENT", event.id);
 
+  // Reschedule on every edit, same as 16-meeting-scheduling.md's meeting
+  // reminders — not conditioned on startAt specifically having changed.
+  await cancelCalendarReminder(existing.reminderRunId);
+  const reminderRunId = await scheduleCalendarReminder(event);
+  await prisma.calendarEvent.update({ where: { id: eventId }, data: { reminderRunId } });
+
   return NextResponse.json({ event: serializeCalendarEvent(event) });
 }
 
@@ -79,6 +86,7 @@ export async function DELETE(
 
   await prisma.calendarEvent.delete({ where: { id: eventId } });
   await enqueueGoogleCalendarSync("CALENDAR_EVENT", eventId);
+  await cancelCalendarReminder(existing.reminderRunId);
 
   return NextResponse.json({ ok: true });
 }

@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
+import { scheduleCalendarReminder } from "@/lib/calendar-reminders";
 import { enqueueGoogleCalendarSync } from "@/lib/sync-calendar";
 import { serializeCalendarEvent, type UnifiedCalendarItem } from "@/lib/calendar";
 import { getVisibleMeetingCalendarItems } from "@/lib/meetings";
@@ -101,6 +102,11 @@ export async function POST(request: Request) {
   });
 
   await enqueueGoogleCalendarSync("CALENDAR_EVENT", event.id);
+
+  const reminderRunId = await scheduleCalendarReminder(event);
+  if (reminderRunId) {
+    await prisma.calendarEvent.update({ where: { id: event.id }, data: { reminderRunId } });
+  }
 
   return NextResponse.json({ event: serializeCalendarEvent(event) }, { status: 201 });
 }

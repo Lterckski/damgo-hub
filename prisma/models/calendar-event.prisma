@@ -7,6 +7,12 @@ model CalendarEvent {
   endAt       DateTime?
   createdById String
   createdBy   Member    @relation(fields: [createdById], references: [id])
+  // Trigger.dev run ID for the single scheduled reminder ahead of
+  // startAt (21-scheduled-reminders.md) — so an edit/delete can cancel
+  // the previously-scheduled run instead of leaving a stale one firing.
+  // One reminder, not Meeting's 24h/1h pair — the spec just says "fires
+  // ahead of startAt," no dual-interval requirement for calendar events.
+  reminderRunId String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
