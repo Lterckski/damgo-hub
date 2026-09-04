@@ -21,11 +21,15 @@ model Transaction {
   description String?
   receiptPath String?
   status      TransactionStatus @default(PENDING)
-  // Penalty doesn't exist until 18-penalty-tracker.md — nullable plain
-  // column now, becomes a formal relation once Penalty exists. Set only on
-  // the Transaction auto-created when an Admin resolves a monetary penalty;
-  // never set by the manual POST /api/finance/transactions flow.
+  // Set only on the Transaction auto-created when an Admin resolves a
+  // monetary penalty (18-penalty-tracker.md) — never by the manual
+  // POST /api/finance/transactions flow. No onDelete override: there's no
+  // "delete a penalty" flow anywhere in the app, so the default Restrict
+  // behavior (block deleting a Penalty row that still has this
+  // Transaction attached) is exactly what should happen if that's ever
+  // added later, rather than silently orphaning financial history.
   penaltyId   String?           @unique
+  penalty     Penalty?          @relation(fields: [penaltyId], references: [id])
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
