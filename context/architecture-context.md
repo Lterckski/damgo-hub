@@ -10,6 +10,7 @@
 | Database              | Prisma + PostgreSQL      | Relational data: members, projects, tasks, finances, penalties, records |
 | Real-time collaboration | Liveblocks + React Flow | Live collaborative boards: project roadmaps and ideas board              |
 | Background jobs       | Trigger.dev              | Durable, scheduled work: reminders, notifications, recurring checks      |
+| Transactional email   | Resend                   | Meeting invitations, changes, cancellations, and scheduled reminders      |
 | Artifact storage      | Vercel Blob              | Board snapshots, receipts, and uploaded document attachments             |
 
 ## System Boundaries
@@ -81,7 +82,7 @@ Liveblocks + React Flow back two distinct collaborative surfaces. Both share the
 
 Background jobs are scheduled/reminder-driven, not AI generation. Current job types:
 
-- **Meeting reminders** — notify participants ahead of a scheduled meeting.
+- **Meeting notifications** — send participant invitations, changes, cancellations, and 24-hour/1-hour reminder emails through Resend.
 - **Calendar reminders** — notify members ahead of deadlines and calendar events.
 - **Penalty escalation checks** — recurring scan for unresolved or overdue penalties.
 - **Financial summaries** — recurring generation of budget/transaction summaries for admin review.

@@ -31,7 +31,7 @@ Basically: `progress-tracker.md` tells you where we are, `feature-specs/` tells 
 These are written as specs but not built yet — same numbering as `context/feature-specs/`:
 
 - **Collaborative board follow-ups** — add persistence to the existing project roadmap and build the open ideas board with the same real-time collaboration tools.
-- **Meeting planning** — scheduling meetings, inviting participants, linking an external meeting service or location, and preparing an ordered agenda ahead of time.
+- **Meeting planning** — scheduling meetings, inviting participants by email, linking an external meeting service or location, and preparing an ordered agenda ahead of time.
 - **Penalty tracker** — logging penalties issued to members, tied into the financial ledger.
 - **Admin dashboard** — a dedicated oversight area beyond what's already on the Member Tracker.
 - **Scheduled reminders** — automatic nudges for due dates and upcoming events.

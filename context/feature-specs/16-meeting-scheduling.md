@@ -20,6 +20,9 @@ Add `Meeting`:
 - `location` — optional physical location
 - `meetingUrl` — optional external meeting link
 - `organizerId` — relation to `Member`, `onDelete: Restrict`
+- `notificationRevision` — integer, defaults to `1`; increment transactionally whenever email-relevant meeting details or the participant list changes
+- `reminder24hRunId` — optional Trigger.dev run ID for cancellation/rescheduling
+- `reminder1hRunId` — optional Trigger.dev run ID for cancellation/rescheduling
 - timestamps
 - index on `scheduledAt`
 
@@ -101,6 +104,51 @@ Meetings appear in the existing organization calendar without duplicating them i
 - Clicking a meeting in the calendar navigates to `/meetings/[meetingId]`; the detail page still enforces participant/Admin access.
 - Google Calendar synchronization for meetings is not part of this unit; it remains limited to tasks and standalone calendar events unless a later requirement explicitly adds meetings.
 
+## Email Notifications
+
+Meeting email is a real delivery channel, not an in-app notification placeholder, and is implemented as part of this unit rather than deferred until unit `21`. Reuse the existing Trigger.dev setup; meeting request handlers enqueue or schedule work and never call Resend inline.
+
+Implementation:
+
+- Install the official `resend` package.
+- Add server-only `RESEND_API_KEY`, `MEETING_EMAIL_FROM`, and canonical production `APP_URL` variables to `.env.example` and Vercel.
+- Create `lib/email.ts` as the typed, server-only Resend wrapper.
+- Create a reusable escaped meeting email template for invitations, updates, participant/meeting cancellations, and reminders.
+- Create `trigger/meeting-notification.ts` for immediate emails and `trigger/meeting-reminder.ts` for delayed 24-hour/1-hour reminders. Unit `21-scheduled-reminders.md` reuses these instead of creating a second meeting-notification system.
+
+Send one email per recipient—never expose the participant list through a shared `To` or `CC` header:
+
+- **Invitation:** send immediately when a member is first added as a participant, including when the meeting is created.
+- **Updated meeting:** send to participants who remain on the meeting when the title, start/end time, location, or external meeting URL changes. In a request that also changes participants, newly added members receive only the invitation and removed members receive only the cancellation. Do not email for agenda-only changes.
+- **Participant removed:** send a cancellation notice only to a member removed from the participant list.
+- **Meeting cancelled:** send a cancellation notice to every current participant when the meeting is deleted.
+- **Reminders:** schedule participant emails 24 hours and 1 hour before `scheduledAt`. If either reminder time has already passed when the meeting is created or rescheduled, skip that occurrence instead of sending it late.
+
+Every invitation, update, and reminder includes:
+
+- meeting title and optional description
+- start time, optional end time, and an explicit timezone label
+- organizer name
+- physical location and/or external meeting link when present
+- a link to `/meetings/[meetingId]` in Damgo Hub, where the participant can view the current final agenda
+
+Email behavior:
+
+- Use each participant's stored `Member.email`; skip missing/invalid addresses and log a structured delivery error without failing the meeting mutation.
+- Deduplicate recipient member IDs before enqueueing.
+- Use a stable idempotency key per meeting, recipient, notification type, and meeting revision so retries cannot send the same message twice.
+- Treat meeting titles, descriptions, locations, and organizer names as untrusted text and escape them through the email template rather than interpolating raw HTML.
+- Creating/updating a meeting schedules new reminder runs and cancels any still-pending reminder runs for the previous schedule. Deleting the meeting cancels pending reminders.
+- Provider failures use Trigger.dev retries and are visible in task logs; they do not roll back an already-valid meeting mutation.
+- Do not send email to non-participants merely because they are an Admin. The Leader or Assistant Leader receives meeting email only when they are also a participant.
+
+External setup required before delivery can work:
+
+- Create a Resend account and verify the sending domain.
+- Create an API key and configure `RESEND_API_KEY` locally and in Vercel.
+- Configure `MEETING_EMAIL_FROM` with an address on the verified domain.
+- Configure `APP_URL` with the canonical production origin so email links never point to a preview deployment.
+
 ## Pages
 
 Create `app/(app)/meetings/page.tsx` and `app/(app)/meetings/[meetingId]/page.tsx`.
@@ -133,12 +181,15 @@ The detail page is an asynchronous planning page, not a live meeting workspace. 
 - No collaborative meeting notes or quote capture
 - No attendance tracking in this unit
 - Do not implement `17-meeting-agenda-board.md`; that unit is retired by this product decision
+- Do not send email inline from API routes or client components
 
 ## Check When Done
 
 - Meetings can be scheduled with participants and an optional physical location or external meeting link.
 - Upcoming and past meetings are listed correctly.
 - Visible meetings appear on the shared calendar with their optional end time; inaccessible meetings are not leaked.
+- New participants receive one invitation email; removed participants and participants of a deleted meeting receive the appropriate cancellation email.
+- Meeting schedule/detail changes notify current participants, and 24-hour/1-hour reminders are rescheduled without duplicate delivery.
 - Participants can propose agenda items.
 - Regular members cannot directly add, edit, reorder, or remove final agenda items.
 - Only the Leader and Assistant Leader can accept/decline proposals and add, edit, reorder, or remove final agenda items.
