@@ -42,7 +42,10 @@ export function ProjectsList({ myProjects, allProjects, members, currentMemberId
   );
 }
 
-function ProjectGrid({ projects, emptyMessage }: { projects: SerializedProject[]; emptyMessage: string }) {
+// Exported so app/(app)/admin/projects/page.tsx's AdminProjectsView
+// (20-admin-dashboard.md) can reuse the exact same card rendering with its
+// own status-filtered project list, instead of a parallel copy.
+export function ProjectGrid({ projects, emptyMessage }: { projects: SerializedProject[]; emptyMessage: string }) {
   if (projects.length === 0) {
     return (
       <div className="flex flex-col items-center gap-2 py-10 text-center">
