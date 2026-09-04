@@ -4,7 +4,16 @@ import { BackButton } from "@/components/shared/back-button";
 import { IdeasBoard } from "@/components/ideas/ideas-board";
 
 export default async function IdeasPage() {
-  const [member, memberOptions] = await Promise.all([getCurrentMember(), getMemberPickerOptions()]);
+  // Sequential, not Promise.all: on a genuine first visit, getCurrentMember()
+  // upserts this member's own row, and getMemberPickerOptions() does its own
+  // separate Clerk-roster upsert of the same row — running them concurrently
+  // risks memberOptions being read before that upsert commits, which would
+  // leave the current member's own metadata unresolvable for their own idea
+  // notes (BoardMembersContext has nothing to look their authorId up
+  // against). Awaiting getCurrentMember() first guarantees the row exists
+  // before memberOptions is read.
+  const member = await getCurrentMember();
+  const memberOptions = await getMemberPickerOptions();
 
   return (
     <div className="p-6">

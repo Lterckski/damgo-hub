@@ -81,6 +81,7 @@ export function IdeaNode({ id, data, selected }: NodeProps<IdeaNodeType>) {
     <div
       className={cn(
         "flex min-h-[6rem] w-52 flex-col justify-between rounded-2xl p-3 shadow-sm transition-shadow",
+        !isEditing && "cursor-text",
         selected && "ring-2 ring-brand ring-offset-2 ring-offset-base",
       )}
       style={{
@@ -88,6 +89,23 @@ export function IdeaNode({ id, data, selected }: NodeProps<IdeaNodeType>) {
         color: `var(--idea-color-${data.colorIndex}-text)`,
       }}
       onDoubleClick={() => setIsEditing(true)}
+      // Double-click is a pointer-only interaction — a keyboard user
+      // tabbing to this note has no other way to reach edit mode after
+      // its initial auto-edit session ends. role="button" + Enter/Space
+      // matches the keyboard convention every other clickable card in
+      // this app already gets for free from a real <button>; this one
+      // can't just be a <button> since it also needs to host a <textarea>
+      // once editing starts.
+      role={isEditing ? undefined : "button"}
+      tabIndex={isEditing ? undefined : 0}
+      aria-label={isEditing ? undefined : `Edit idea: ${data.text || "empty note"}`}
+      onKeyDown={(e) => {
+        if (isEditing) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setIsEditing(true);
+        }
+      }}
     >
       {isEditing ? (
         <textarea

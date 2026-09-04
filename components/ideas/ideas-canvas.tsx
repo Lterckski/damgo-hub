@@ -39,7 +39,7 @@ export function IdeasCanvas({ currentMemberId }: { currentMemberId: string }) {
   });
   const { zoomIn, zoomOut, fitView } = useReactFlow();
 
-  const { status: saveStatus } = useBoardAutosave({
+  const { status: saveStatus, canRetryLoad, retryLoad } = useBoardAutosave({
     roomId: "ideas",
     nodes,
     edges,
@@ -108,7 +108,7 @@ export function IdeasCanvas({ currentMemberId }: { currentMemberId: string }) {
                   <Maximize className="h-4 w-4" />
                 </Button>
                 <div className="mx-1 h-4 w-px bg-surface-border" />
-                <BoardSaveStatus status={saveStatus} />
+                <BoardSaveStatus status={saveStatus} onRetryLoad={canRetryLoad ? retryLoad : undefined} />
               </div>
             </Panel>
           </ReactFlow>
