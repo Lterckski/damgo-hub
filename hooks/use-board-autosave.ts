@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type BoardAutosaveStatus = "loading" | "idle" | "saving" | "saved" | "error";
 
@@ -24,6 +24,7 @@ interface UseBoardAutosaveOptions<N, E> {
 }
 
 const DEFAULT_DEBOUNCE_MS = 1500;
+type SnapshotLoadState = "loading" | "ready" | "error";
 
 /**
  * Generic board autosave — see 15-board-autosave.md. Debounces saves of
@@ -48,10 +49,13 @@ export function useBoardAutosave<N, E>({
   // has to be real state instead. Neither ever gets its setter called
   // again — `nodes`/`edges` only matter here at the exact moment of the
   // first render, not as the board fills up during normal use.
-  const [wasInitiallyEmpty] = useState(() => nodes.length === 0 && edges.length === 0);
-  const [status, setStatus] = useState<BoardAutosaveStatus>(() => (wasInitiallyEmpty ? "loading" : "idle"));
+  const [needsInitialLoad] = useState(() => nodes.length === 0 && edges.length === 0);
+  const [loadState, setLoadState] = useState<SnapshotLoadState>(() => (needsInitialLoad ? "loading" : "ready"));
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [status, setStatus] = useState<BoardAutosaveStatus>(() => (needsInitialLoad ? "loading" : "idle"));
 
   const hasAppliedSnapshotRef = useRef(false);
+  const latestBoardRef = useRef({ nodes, edges });
   const onLoadSnapshotRef = useRef(onLoadSnapshot);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -62,45 +66,63 @@ export function useBoardAutosave<N, E>({
     onLoadSnapshotRef.current = onLoadSnapshot;
   });
 
+  // The GET may resolve after Liveblocks has received local or remote edits.
+  // Keep the most recently committed board available to the async callback so
+  // it never restores a stale snapshot over an active room.
+  useEffect(() => {
+    latestBoardRef.current = { nodes, edges };
+  }, [nodes, edges]);
+
   // Load-on-mount. Guarded by `hasAppliedSnapshotRef` (not by skipping the
   // fetch itself) so React Strict Mode's dev-only double-effect can safely
   // re-run the (idempotent) GET without ever applying a loaded snapshot
   // twice — applying it twice would double up every loaded node/edge.
   useEffect(() => {
-    if (!wasInitiallyEmpty) return;
+    if (!needsInitialLoad) return;
 
     let cancelled = false;
     fetch(`/api/boards/${encodeURIComponent(roomId)}/snapshot`)
-      .then((res) => (res.ok ? (res.json() as Promise<BoardSnapshot<N, E>>) : null))
+      .then((res) => {
+        if (!res.ok) throw new Error(`Snapshot load failed with status ${res.status}`);
+        return res.json() as Promise<BoardSnapshot<N, E>>;
+      })
       .then((snapshot) => {
-        if (cancelled || !snapshot || hasAppliedSnapshotRef.current) return;
-        if (snapshot.nodes.length > 0 || snapshot.edges.length > 0) {
+        if (cancelled) return;
+
+        const latestBoard = latestBoardRef.current;
+        const roomIsStillEmpty = latestBoard.nodes.length === 0 && latestBoard.edges.length === 0;
+        if (roomIsStillEmpty && !hasAppliedSnapshotRef.current && (snapshot.nodes.length > 0 || snapshot.edges.length > 0)) {
           hasAppliedSnapshotRef.current = true;
           onLoadSnapshotRef.current(snapshot);
         }
+
+        setLoadState("ready");
+        setStatus("idle");
       })
       .catch(() => {
-        if (!cancelled) setStatus("error");
-      })
-      .finally(() => {
-        if (!cancelled) setStatus((current) => (current === "error" ? current : "idle"));
+        if (!cancelled) {
+          setLoadState("error");
+          setStatus("error");
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [roomId, wasInitiallyEmpty]);
+  }, [loadAttempt, needsInitialLoad, roomId]);
 
-  // Debounced save — skipped entirely while the initial load is still in
-  // flight, so a fresh mount never races a save against its own load and
-  // (worse) writes an empty board over a real saved snapshot before it's
-  // even been read.
-  // `status` is read only to gate against saving before the initial load
-  // settles; it isn't something a save should re-trigger itself on (that
-  // would re-arm this effect every time status flips through
-  // saving/saved), so it's deliberately left out of the dependency array.
+  const retryLoad = useCallback(() => {
+    if (loadState !== "error") return;
+    setLoadState("loading");
+    setStatus("loading");
+    setLoadAttempt((attempt) => attempt + 1);
+  }, [loadState]);
+
+  // Debounced save. Loading failures remain blocked until retryLoad completes
+  // a successful GET. Including loadState means an edit committed while the
+  // GET was pending is scheduled as soon as the load safely reaches "ready".
   useEffect(() => {
-    if (status === "loading") return;
+    if (loadState !== "ready") return;
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
@@ -117,8 +139,7 @@ export function useBoardAutosave<N, E>({
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, edges, roomId, debounceMs]);
+  }, [nodes, edges, roomId, debounceMs, loadState]);
 
-  return { status };
+  return { status, canRetryLoad: loadState === "error", retryLoad };
 }

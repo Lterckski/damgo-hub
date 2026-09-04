@@ -24,7 +24,13 @@ const STATUS_CONFIG: Partial<
  * so it's ready for `19-ideas-board.md` to drop in next to its own control
  * bar the same way `13-roadmap-board.md`'s does.
  */
-export function BoardSaveStatus({ status }: { status: BoardAutosaveStatus }) {
+export function BoardSaveStatus({
+  status,
+  onRetryLoad,
+}: {
+  status: BoardAutosaveStatus;
+  onRetryLoad?: () => void;
+}) {
   const config = STATUS_CONFIG[status];
   if (!config) return null;
 
@@ -33,6 +39,11 @@ export function BoardSaveStatus({ status }: { status: BoardAutosaveStatus }) {
     <div className={cn("flex items-center gap-1.5 px-1.5 text-xs font-medium", config.className)}>
       <Icon className={cn("h-3.5 w-3.5", config.spin && "animate-spin")} />
       {config.label}
+      {status === "error" && onRetryLoad ? (
+        <button type="button" className="underline underline-offset-2" onClick={onRetryLoad}>
+          Retry load
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { get, put } from "@vercel/blob";
+import { del, get, put } from "@vercel/blob";
 
 import { hasVerifiedOrgMembership, memberHasRoomAccess } from "@/lib/board-access";
 import { getCurrentMember } from "@/lib/current-member";
@@ -27,6 +27,14 @@ function resolveBoardOwner(room: string): BoardOwner | null {
   if (room === "ideas") return { kind: "ideas" };
   if (room.startsWith("project:")) return { kind: "project", projectId: room.slice("project:".length) };
   return null;
+}
+
+async function deleteSnapshotBlob(pathname: string) {
+  try {
+    await del(pathname);
+  } catch (error) {
+    console.error("Failed to delete board snapshot Blob", { pathname, error });
+  }
 }
 
 async function authorizeRoom(room: string) {
@@ -70,16 +78,43 @@ export async function PUT(request: Request, { params }: { params: Promise<{ room
     return NextResponse.json({ error: "Ideas board autosave isn't wired up yet" }, { status: 501 });
   }
 
-  const blob = await put(`boards/project-${owner.projectId}-${Date.now()}.json`, JSON.stringify(body), {
-    access: "private",
-    contentType: "application/json",
-    addRandomSuffix: true,
-  });
-
-  await prisma.project.update({
+  const project = await prisma.project.findUnique({
     where: { id: owner.projectId },
-    data: { roadmapSnapshotPath: blob.pathname },
+    select: { roadmapSnapshotPath: true },
   });
+  if (!project) {
+    return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  }
+
+  const previousPath = project.roadmapSnapshotPath;
+  let blob: Awaited<ReturnType<typeof put>> | null = null;
+
+  try {
+    blob = await put(`boards/project-${owner.projectId}-${Date.now()}.json`, JSON.stringify(body), {
+      access: "private",
+      contentType: "application/json",
+      addRandomSuffix: true,
+    });
+
+    // Compare-and-swap the pointer. If another save advanced it while this
+    // request was uploading, this stale request must not move it backwards.
+    const replacement = await prisma.project.updateMany({
+      where: { id: owner.projectId, roadmapSnapshotPath: previousPath },
+      data: { roadmapSnapshotPath: blob.pathname },
+    });
+
+    if (replacement.count !== 1) {
+      await deleteSnapshotBlob(blob.pathname);
+      return NextResponse.json({ error: "A newer board snapshot was already saved" }, { status: 409 });
+    }
+  } catch (error) {
+    if (blob) await deleteSnapshotBlob(blob.pathname);
+    throw error;
+  }
+
+  // The new pointer is committed before the old object is reclaimed, so a
+  // failed upload or losing concurrent save can never strand the database.
+  if (previousPath) await deleteSnapshotBlob(previousPath);
 
   return NextResponse.json({ ok: true });
 }

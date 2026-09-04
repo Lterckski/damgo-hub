@@ -54,7 +54,7 @@ export function RoadmapCanvas({
   const canUndo = useCanUndo();
   const canRedo = useCanRedo();
 
-  const { status: saveStatus } = useBoardAutosave({
+  const { status: saveStatus, canRetryLoad, retryLoad } = useBoardAutosave({
     roomId: `project:${projectId}`,
     nodes,
     edges,
@@ -133,7 +133,7 @@ export function RoadmapCanvas({
               >
                 <Redo2 className="h-4 w-4" />
               </Button>
-              <BoardSaveStatus status={saveStatus} />
+              <BoardSaveStatus status={saveStatus} onRetryLoad={canRetryLoad ? retryLoad : undefined} />
             </div>
           </Panel>
         </ReactFlow>
