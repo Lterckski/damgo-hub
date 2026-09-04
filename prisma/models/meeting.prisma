@@ -1,0 +1,181 @@
+enum AgendaProposalStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+// Mirrors the delivery channel a notification is about, per
+// 16-meeting-scheduling.md's Email Notifications section.
+enum MeetingNotificationType {
+  INVITATION
+  UPDATED
+  PARTICIPANT_REMOVED
+  MEETING_CANCELLED
+  REMINDER_24H
+  REMINDER_1H
+}
+
+enum MeetingEmailDeliveryStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum MeetingNotificationOutboxStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  DEAD_LETTER
+}
+
+model Meeting {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  scheduledAt DateTime
+  endsAt      DateTime?
+  // Physical location and/or an external meeting link (Google Meet, Zoom,
+  // Teams, ...) — Damgo Hub never hosts the meeting itself, see this
+  // spec's own Goal section.
+  location    String?
+  meetingUrl  String?
+  organizerId String
+  // Restrict, not Cascade/SetNull — a meeting always needs a real
+  // organizer to attribute it to. Deleting the organizer's Member row
+  // must reassign this first (see the member-deletion policy below), the
+  // same pattern Task.createdBy/Doc.author already rely on.
+  organizer   Member    @relation("MeetingOrganizer", fields: [organizerId], references: [id], onDelete: Restrict)
+  // Bumped transactionally whenever email-relevant details (title,
+  // start/end, location, meetingUrl) or the participant list change.
+  // MeetingEmailDelivery's uniqueness is keyed on this, so the same
+  // notification type can be legitimately re-sent after a real change
+  // without colliding with the delivery record for the previous revision.
+  notificationRevision Int @default(1)
+  // Trigger.dev run IDs for the two scheduled reminders, so a
+  // reschedule/cancellation can cancel the previously-scheduled run
+  // instead of leaving a stale reminder firing against old details.
+  reminder24hRunId String?
+  reminder1hRunId  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  participants      MeetingParticipant[]
+  agendaProposals   AgendaProposal[]
+  agendaItems       AgendaItem[]
+
+  @@index([scheduledAt])
+  @@index([organizerId])
+}
+
+model MeetingParticipant {
+  id        String   @id @default(cuid())
+  meetingId String
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  memberId  String
+  member    Member   @relation("MeetingParticipations", fields: [memberId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([meetingId, memberId])
+  @@index([memberId])
+}
+
+model AgendaProposal {
+  id           String               @id @default(cuid())
+  meetingId    String
+  meeting      Meeting              @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  proposedById String
+  // Restrict — see Meeting.organizer's comment; the member-deletion
+  // transaction reassigns these before deleting a member.
+  proposedBy   Member               @relation("AgendaProposalAuthor", fields: [proposedById], references: [id], onDelete: Restrict)
+  text         String
+  status       AgendaProposalStatus @default(PENDING)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  agendaItem AgendaItem?
+
+  @@index([meetingId])
+  @@index([proposedById])
+}
+
+model AgendaItem {
+  id        String   @id @default(cuid())
+  meetingId String
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  text      String
+  // Contiguous, zero-based, unique per meeting. Adding/accepting appends
+  // at the next position; removing compacts the remaining ones;
+  // reordering rewrites every affected position — always in one
+  // transaction, per this spec's own note on AgendaItem records.
+  position  Int
+  addedById String
+  // Restrict — always the Leader/Assistant Leader who added or accepted
+  // this item; reassigned to the acting admin on member deletion, same as
+  // Meeting.organizer/AgendaProposal.proposedBy.
+  addedBy   Member   @relation("AgendaItemAddedBy", fields: [addedById], references: [id], onDelete: Restrict)
+  // Optional — set only when this item came from an accepted proposal.
+  // SetNull (not Restrict/Cascade): if the source proposal is ever
+  // removed some other way, the agenda item it produced is still real
+  // content and should survive as a standalone item, just without the
+  // provenance link.
+  sourceProposalId String?         @unique
+  sourceProposal    AgendaProposal? @relation(fields: [sourceProposalId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([meetingId, position])
+  @@index([meetingId])
+  @@index([addedById])
+}
+
+// Durable delivery/idempotency record for meeting email — see
+// 16-meeting-scheduling.md's Email Notifications section. Deliberately
+// NOT a relation to Meeting/Member (plain string columns instead): this
+// is delivery history, not current ownership, and must survive both
+// meeting deletion (so cancellation-delivery history isn't lost) and
+// member deletion (so it never blocks deleting a member, and keeps
+// recording the original recipient for auditing/duplicate-prevention
+// even after that member is gone).
+model MeetingEmailDelivery {
+  id                String                     @id @default(cuid())
+  meetingId         String
+  recipientMemberId String
+  notificationType  MeetingNotificationType
+  meetingRevision   Int
+  status            MeetingEmailDeliveryStatus @default(PENDING)
+  providerMessageId String?
+  attemptCount      Int                        @default(0)
+  // Sanitized provider error text only — never an API key or a full
+  // provider response body, per this spec's explicit instruction.
+  lastError         String?
+  sentAt            DateTime?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+
+  @@unique([meetingId, recipientMemberId, notificationType, meetingRevision])
+  @@index([meetingId])
+  @@index([status])
+}
+
+// Durable intent written in the same transaction as a meeting mutation.
+// Trigger.dev delivery can be retried from this record after an outage.
+model MeetingNotificationOutbox {
+  id                 String                          @id @default(cuid())
+  meetingId          String
+  notificationType   MeetingNotificationType
+  meetingRevision    Int
+  recipientMemberIds Json
+  snapshot           Json
+  status             MeetingNotificationOutboxStatus @default(PENDING)
+  attemptCount       Int                             @default(0)
+  lastError          String?
+  processedAt        DateTime?
+  createdAt          DateTime                        @default(now())
+  updatedAt          DateTime                        @updatedAt
+
+  @@index([meetingId])
+  @@index([status, updatedAt])
+}

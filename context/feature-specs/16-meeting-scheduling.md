@@ -59,13 +59,21 @@ Add `MeetingEmailDelivery` as a durable delivery/idempotency record:
 - `recipientMemberId` — plain string so delivery history does not block member deletion
 - `notificationType` enum: `INVITATION`, `UPDATED`, `PARTICIPANT_REMOVED`, `MEETING_CANCELLED`, `REMINDER_24H`, `REMINDER_1H`
 - `meetingRevision`
-- `status` enum: `PENDING`, `SENDING`, `SENT`, `FAILED`
+- `status` enum: `PENDING`, `SENDING`, `SENT`, `FAILED`, `SKIPPED`; use `SKIPPED` for permanent recipient problems such as a missing/invalid address
 - `providerMessageId` — optional
 - `attemptCount` — defaults to `0`
 - `lastError` — optional sanitized provider error; never store API keys or full provider responses
 - `sentAt` — optional
 - timestamps
 - unique constraint on `meetingId`/`recipientMemberId`/`notificationType`/`meetingRevision`
+
+Add `MeetingNotificationOutbox` for immediate invitation/update/cancellation intent:
+
+- store the meeting ID, notification type/revision, deduplicated recipient IDs, and immutable meeting snapshot
+- `status` enum: `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`, `DEAD_LETTER`
+- attempt count, sanitized last error, processed timestamp, and timestamps
+- write the outbox row in the same database transaction as the meeting create/update/delete
+- enqueue its worker only after commit; a recurring Trigger.dev sweep re-enqueues pending/failed/stale-processing rows after an API-to-Trigger outage, with a bounded retry count before `DEAD_LETTER`
 
 `AgendaItem` records are the meeting's final agenda. Positions are contiguous, zero-based, and unique within the meeting. Adding an item or accepting a proposal appends it at the next position; removing one closes the gap; reordering rewrites all affected positions in one transaction. Queries sort by `position`, then `createdAt`, then `id` as a defensive stable fallback.
 
@@ -153,7 +161,9 @@ Email behavior:
 
 - Use each participant's stored `Member.email`; skip missing/invalid addresses and log a structured delivery error without failing the meeting mutation.
 - Deduplicate recipient member IDs before enqueueing.
+- Persist immediate-notification intent in `MeetingNotificationOutbox` before enqueueing so a Trigger.dev outage cannot lose an invitation, update, removal, or cancellation.
 - Before sending, claim the unique `MeetingEmailDelivery` row for the meeting, recipient, notification type, and meeting revision. Skip rows already marked `SENT`; retry only a definitively `FAILED` attempt. Keep an ambiguous interrupted `SENDING` attempt for manual reconciliation rather than risking a duplicate. Use the same composite value as Resend's idempotency key as a secondary short-window safeguard, but rely on the database row for durable deduplication.
+- Treat missing/invalid recipient addresses as permanent `SKIPPED` deliveries; they must not fail or repeatedly retry the whole Trigger.dev task.
 - Treat meeting titles, descriptions, locations, and organizer names as untrusted text and escape them through the email template rather than interpolating raw HTML.
 - Creating/updating a meeting schedules new reminder runs and cancels any still-pending reminder runs for the previous schedule. Deleting the meeting cancels pending reminders.
 - Provider failures use Trigger.dev retries and are visible in task logs; they do not roll back an already-valid meeting mutation.

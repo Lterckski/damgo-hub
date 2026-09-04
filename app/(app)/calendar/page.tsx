@@ -4,27 +4,29 @@ import { getMemberPickerOptions } from "@/lib/members";
 import { serializeCalendarEvent, type UnifiedCalendarItem } from "@/lib/calendar";
 import { serializeTask, TASK_INCLUDE } from "@/lib/tasks";
 import { TASK_LINKABLE_PROJECT_STATUSES } from "@/lib/projects";
+import { getVisibleMeetingCalendarItems } from "@/lib/meetings";
 import { BackButton } from "@/components/shared/back-button";
 import { CalendarView } from "@/components/calendar/calendar-view";
 
 export default async function CalendarPage() {
-  const [eventRecords, taskRecords, memberRecords, linkableProjects, docs, currentMember, isAdmin] =
-    await Promise.all([
-      prisma.calendarEvent.findMany({
-        include: { createdBy: { select: { displayName: true } } },
-        orderBy: { startAt: "asc" },
-      }),
-      prisma.task.findMany({ include: TASK_INCLUDE, orderBy: { createdAt: "desc" } }),
-      getMemberPickerOptions(),
-      prisma.project.findMany({
-        where: { status: { in: [...TASK_LINKABLE_PROJECT_STATUSES] } },
-        select: { id: true, name: true },
-        orderBy: { name: "asc" },
-      }),
-      prisma.doc.findMany({ select: { id: true, title: true, projectId: true }, orderBy: { title: "asc" } }),
-      getCurrentMember(),
-      isCurrentMemberAdmin(),
-    ]);
+  const currentMember = await getCurrentMember();
+  const isAdmin = await isCurrentMemberAdmin();
+
+  const [eventRecords, taskRecords, memberRecords, linkableProjects, docs, meetingItems] = await Promise.all([
+    prisma.calendarEvent.findMany({
+      include: { createdBy: { select: { displayName: true } } },
+      orderBy: { startAt: "asc" },
+    }),
+    prisma.task.findMany({ include: TASK_INCLUDE, orderBy: { createdAt: "desc" } }),
+    getMemberPickerOptions(),
+    prisma.project.findMany({
+      where: { status: { in: [...TASK_LINKABLE_PROJECT_STATUSES] } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.doc.findMany({ select: { id: true, title: true, projectId: true }, orderBy: { title: "asc" } }),
+    getVisibleMeetingCalendarItems(currentMember.id, isAdmin),
+  ]);
 
   const events = eventRecords.map(serializeCalendarEvent);
   const tasks = taskRecords.map(serializeTask);
@@ -53,6 +55,7 @@ export default async function CalendarPage() {
       endAt: task.dueDate,
       creatorId: null,
     })),
+    ...meetingItems,
   ];
 
   return (

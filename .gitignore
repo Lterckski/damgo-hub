@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...except the committed reference template itself, per 16-meeting-scheduling.md
+!.env.example
 
 # vercel
 .vercel

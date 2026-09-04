@@ -61,17 +61,49 @@ export async function DELETE(
   }
 
   try {
-    await prisma.$transaction([
-      prisma.task.updateMany({ where: { createdById: target.id }, data: { createdById: actingAdmin.id } }),
-      prisma.doc.updateMany({ where: { authorId: target.id }, data: { authorId: actingAdmin.id } }),
-      prisma.transaction.updateMany({ where: { memberId: target.id }, data: { memberId: actingAdmin.id } }),
-      prisma.calendarEvent.updateMany({
+    await prisma.$transaction(async (tx) => {
+      await tx.task.updateMany({ where: { createdById: target.id }, data: { createdById: actingAdmin.id } });
+      await tx.doc.updateMany({ where: { authorId: target.id }, data: { authorId: actingAdmin.id } });
+      await tx.transaction.updateMany({ where: { memberId: target.id }, data: { memberId: actingAdmin.id } });
+      await tx.calendarEvent.updateMany({
         where: { createdById: target.id },
         data: { createdById: actingAdmin.id },
-      }),
-      prisma.project.updateMany({ where: { ownerId: target.id }, data: { ownerId: actingAdmin.id } }),
-      prisma.member.delete({ where: { id: target.id } }),
-    ]);
+      });
+      await tx.project.updateMany({ where: { ownerId: target.id }, data: { ownerId: actingAdmin.id } });
+
+      // Meetings organized by the deleted member reassign to the acting
+      // admin — and that admin needs a deduplicated MeetingParticipant row
+      // for each one, since an organizer is always a participant (see
+      // 16-meeting-scheduling.md's Permissions section). `skipDuplicates`
+      // handles the admin already being a participant on some of these.
+      const organizedMeetings = await tx.meeting.findMany({
+        where: { organizerId: target.id },
+        select: { id: true },
+      });
+      if (organizedMeetings.length > 0) {
+        await tx.meeting.updateMany({ where: { organizerId: target.id }, data: { organizerId: actingAdmin.id } });
+        await tx.meetingParticipant.createMany({
+          data: organizedMeetings.map((meeting) => ({ meetingId: meeting.id, memberId: actingAdmin.id })),
+          skipDuplicates: true,
+        });
+      }
+      // Agenda proposals/items authored by the deleted member reassign too
+      // — meeting content is preserved under the acting admin, same policy
+      // as everything else in this transaction.
+      await tx.agendaProposal.updateMany({
+        where: { proposedById: target.id },
+        data: { proposedById: actingAdmin.id },
+      });
+      await tx.agendaItem.updateMany({ where: { addedById: target.id }, data: { addedById: actingAdmin.id } });
+
+      // The deleted member's own MeetingParticipant rows cascade away via
+      // the schema relation — nothing to do for those here.
+      // MeetingEmailDelivery.recipientMemberId is intentionally left
+      // untouched (see prisma/models/meeting.prisma) — it's immutable
+      // delivery history, not current ownership.
+
+      await tx.member.delete({ where: { id: target.id } });
+    });
   } catch (error) {
     console.error("Member delete transaction failed", error);
     return NextResponse.json({ error: "Couldn't delete this member." }, { status: 500 });
