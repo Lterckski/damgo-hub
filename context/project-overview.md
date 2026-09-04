@@ -127,9 +127,10 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 ### Agenda Proposal
 
 - Agenda item submission form
-- Voting/upvoting on items
-- Status tracking (Proposed/Approved/Discussed)
-- Link agenda items to meetings
+- Participant proposals linked to a meeting
+- Status tracking (Pending/Accepted/Declined)
+- Organizer-only accept/decline controls
+- Organizer ordering of accepted items into the final agenda
 
 ### Ideas (Open to All)
 
@@ -167,7 +168,7 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 
 ### Analytics / Reports
 
-- Meetings conducted (count, attendance rate over time)
+- Meetings scheduled and completed over time
 - Tasks finished vs. pending (per member, per project, team-wide)
 - Financial trends (spending over time, budget vs actual)
 - Penalty trends per member

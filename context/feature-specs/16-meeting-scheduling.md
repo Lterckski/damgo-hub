@@ -19,27 +19,38 @@ Add `Meeting`:
 - `endsAt` — optional
 - `location` — optional physical location
 - `meetingUrl` — optional external meeting link
-- `organizerId` — relation to `Member`
+- `organizerId` — relation to `Member`, `onDelete: Restrict`
 - timestamps
 - index on `scheduledAt`
 
 Add `MeetingParticipant`:
 
 - `meetingId` relation, cascade delete
-- `memberId` relation
+- `memberId` relation, cascade delete
 - unique constraint on `meetingId`/`memberId`
 
 Add `AgendaProposal`:
 
 - `id`
 - `meetingId` relation, cascade delete
-- `proposedById` — relation to `Member`
+- `proposedById` — relation to `Member`, `onDelete: Restrict`
 - `text`
 - `status` enum: `PENDING`, `ACCEPTED`, `DECLINED` — defaults to `PENDING`
-- `position` — optional integer used to order accepted agenda items
+- `position` — optional integer; required for `ACCEPTED` items and `null` otherwise
 - timestamps
+- unique constraint on `meetingId`/`position` (PostgreSQL permits multiple `null` values)
 
-Accepted proposals are the meeting's final agenda. They remain ordinary PostgreSQL records and do not seed a separate collaborative board.
+Accepted proposals are the meeting's final agenda. Accepted positions are contiguous, zero-based, and unique within the meeting. Accepting an item appends it at the next position; declining an accepted item clears its position and closes the gap; reordering rewrites all affected positions in one transaction. Queries sort accepted items by `position`, then `createdAt`, then `id` as a defensive stable fallback. They remain ordinary PostgreSQL records and do not seed a separate collaborative board.
+
+### Member deletion policy
+
+The existing Admin member-deletion transaction must handle meeting relations before deleting the member:
+
+- Reassign meetings organized by the deleted member to the acting Admin, and ensure that Admin has a deduplicated `MeetingParticipant` row for each reassigned meeting.
+- Reassign agenda proposals authored by the deleted member to the acting Admin so accepted and pending agenda content is preserved.
+- Delete the member's `MeetingParticipant` rows through the cascade relation.
+
+The `Restrict` relations intentionally prevent deleting a member without this reassignment. This follows the app's existing policy of preserving member-created organizational content under the acting Admin rather than silently deleting it.
 
 ## Permissions
 
@@ -57,12 +68,23 @@ Create REST endpoints under `app/api/meetings`:
 - `GET /api/meetings` — list meetings visible to the current member; support `?upcoming=true`
 - `POST /api/meetings` — schedule a meeting; accepts meeting details and an initial participant list
 - `GET /api/meetings/[meetingId]` — requires participation or Admin
-- `PATCH /api/meetings/[meetingId]` — organizer only; edits details and participants
+- `PATCH /api/meetings/[meetingId]` — organizer only; edits details and participants. Normalize submitted participant IDs server-side by deduplicating them and always including `organizerId` before replacing participant rows.
 - `DELETE /api/meetings/[meetingId]` — organizer only
 - `POST /api/meetings/[meetingId]/agenda-proposals` — any participant can propose an item
 - `PATCH /api/meetings/[meetingId]/agenda-proposals/[proposalId]` — organizer only; accept, decline, edit, or change an accepted item's position
 
 Validate that `endsAt`, when provided, is later than `scheduledAt`. Validate `meetingUrl` as an `http` or `https` URL.
+
+## Calendar Integration
+
+Meetings appear in the existing organization calendar without duplicating them into `CalendarEvent`:
+
+- Extend `GET /api/calendar/events` to include meetings visible to the caller: meetings where they are a participant, or all meetings when they are an Admin.
+- Map `Meeting.id`, `title`, `scheduledAt`, and `endsAt` to the unified calendar shape as `{ id, title, type: "meeting", startAt: scheduledAt, endAt: endsAt }`.
+- Apply the calendar route's existing overlap-based `?from=&to=` range filtering to the complete meeting interval. A missing `endsAt` is a single-point item.
+- Meeting create, edit, and delete UI refreshes the relevant server data so the meetings list, meeting detail, dashboard, and calendar reflect the mutation without a manual reload.
+- Clicking a meeting in the calendar navigates to `/meetings/[meetingId]`; the detail page still enforces participant/Admin access.
+- Google Calendar synchronization for meetings is not part of this unit; it remains limited to tasks and standalone calendar events unless a later requirement explicitly adds meetings.
 
 ## Pages
 
@@ -100,6 +122,7 @@ The detail page is an asynchronous planning page, not a live meeting workspace. 
 
 - Meetings can be scheduled with participants and an optional physical location or external meeting link.
 - Upcoming and past meetings are listed correctly.
+- Visible meetings appear on the shared calendar with their optional end time; inaccessible meetings are not leaked.
 - Participants can propose agenda items.
 - Only the organizer can accept, decline, and reorder agenda items or edit/delete the meeting.
 - Accepted proposals render as the ordered final agenda.
