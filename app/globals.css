@@ -160,3 +160,19 @@
     @apply font-sans;
   }
 }
+
+/* Collaborative boards (React Flow) — see 13-roadmap-board.md's "Add
+   dependency edges" step. Hover/selected states need real CSS since React
+   Flow's `defaultEdgeOptions` only sets a static rest style; these two
+   selectors target the library's own stable classnames instead of
+   reaching into edge internals. Canvas background dot color kept in one
+   place too, since it's shared by every board surface (ui-context.md's
+   "Canvas Background"). */
+.react-flow__background-pattern circle {
+  fill: var(--border-default);
+}
+
+.react-flow__edge:hover .react-flow__edge-path,
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--accent-primary) !important;
+}

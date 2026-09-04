@@ -21,12 +21,14 @@ interface FilterMultiSelectProps {
 }
 
 /**
- * Compact "Assignee (2)"-style filter dropdown for the calendar filter bar
- * (calendar-filters.tsx) — a lighter sibling to
- * components/tasks/document-multi-select.tsx: no search bar, no chips
- * below the trigger, since these lists (members, projects, 3 priority
- * levels) are always short enough to just scan. Stays a controlled,
- * teal-accented outline button so it reads as "filter," not "form field."
+ * Compact "Assignee (2)"-style multi-select dropdown. Originally built for
+ * the calendar filter bar (calendar-filters.tsx) and reused as-is for the
+ * roadmap milestone dialog's assignee picker (milestone-edit-dialog.tsx) —
+ * a lighter sibling to components/tasks/document-multi-select.tsx: no
+ * search bar, no chips below the trigger, since these lists (members,
+ * projects, priority levels) are always short enough to just scan. Stays a
+ * controlled, teal-accented outline button so it reads as "filter," not
+ * "form field."
  */
 export function FilterMultiSelect({ label, options, selected, onChange }: FilterMultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);

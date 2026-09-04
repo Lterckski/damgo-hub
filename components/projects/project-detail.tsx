@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { FolderKanban, Link as LinkIcon, Map, Pencil, Trash2 } from "lucide-react";
+import { FolderKanban, Link as LinkIcon, Pencil, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,11 +25,11 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { WidgetEmptyState } from "@/components/dashboard/dashboard-widget";
 import { BackButton } from "@/components/shared/back-button";
 import { DateTimePicker } from "@/components/shared/date-time-picker";
 import { ManageCollaboratorsDialog } from "@/components/projects/manage-collaborators-dialog";
 import { ProjectStatusBadge } from "@/components/projects/project-status-badge";
+import { RoadmapBoard } from "@/components/roadmap/roadmap-board";
 import { formatPHP } from "@/lib/currency";
 import {
   PROJECT_CATEGORY_OPTIONS,
@@ -378,12 +378,7 @@ export function ProjectDetail({ project, allMembers, isOwner }: ProjectDetailPro
         </TabsContent>
 
         <TabsContent value="roadmap" className="mt-4">
-          <div className="rounded-2xl border border-surface-border bg-surface p-6">
-            <WidgetEmptyState
-              icon={Map}
-              message="The collaborative roadmap board lands in a later unit — nothing to see here yet."
-            />
-          </div>
+          <RoadmapBoard projectId={project.id} collaborators={project.members} />
         </TabsContent>
       </Tabs>
 
