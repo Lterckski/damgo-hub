@@ -28,6 +28,7 @@ export interface MeetingEmailDetails {
   organizerName: string;
   location: string | null;
   meetingUrl: string | null;
+  agendaItems: string[];
 }
 
 const SUBJECT_BY_KIND: Record<MeetingEmailKind, (title: string) => string> = {
@@ -72,34 +73,83 @@ export function meetingEmailHtml(kind: MeetingEmailKind, details: MeetingEmailDe
   const appUrl = process.env.APP_URL ?? "";
   const meetingLink = `${appUrl}/meetings/${details.meetingId}`;
 
+  const isActiveMeeting = kind !== "PARTICIPANT_REMOVED" && kind !== "MEETING_CANCELLED";
   const rows: string[] = [
-    `<p>${escapeHtml(INTRO_BY_KIND[kind])}</p>`,
-    `<h2 style="margin:0 0 8px">${escapeHtml(details.title)}</h2>`,
+    `<p style="margin:0 0 8px;color:#0f766e;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">Damgo Hub meeting</p>`,
+    `<h1 style="margin:0 0 12px;color:#0f172a;font-size:26px;line-height:1.25">${escapeHtml(details.title)}</h1>`,
+    `<p style="margin:0 0 24px;color:#475569">${escapeHtml(INTRO_BY_KIND[kind])}</p>`,
   ];
 
   if (details.description) {
-    rows.push(`<p>${escapeHtml(details.description)}</p>`);
+    rows.push(`<h2 style="margin:24px 0 8px;font-size:16px">Description</h2>`);
+    rows.push(`<p style="margin:0;color:#334155;white-space:pre-line">${escapeHtml(details.description)}</p>`);
   }
 
   const when = details.endsAt
     ? `${escapeHtml(formatMeetingTime(details.scheduledAt))} – ${escapeHtml(formatMeetingTime(details.endsAt))}`
     : escapeHtml(formatMeetingTime(details.scheduledAt));
-  rows.push(`<p><strong>When:</strong> ${when}</p>`);
-  rows.push(`<p><strong>Organizer:</strong> ${escapeHtml(details.organizerName)}</p>`);
+  rows.push(`<div style="margin:24px 0;padding:16px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc">`);
+  rows.push(`<p style="margin:0 0 8px"><strong>When:</strong> ${when}</p>`);
+  rows.push(`<p style="margin:0"><strong>Organizer:</strong> ${escapeHtml(details.organizerName)}</p>`);
 
   if (details.location) {
-    rows.push(`<p><strong>Location:</strong> ${escapeHtml(details.location)}</p>`);
+    rows.push(`<p style="margin:8px 0 0"><strong>Location:</strong> ${escapeHtml(details.location)}</p>`);
   }
-  if (details.meetingUrl) {
-    // Validated as an http/https URL at the API boundary before it's ever
-    // stored (see app/api/meetings/route.ts) — safe as an href; still run
-    // through escapeHtml() as text content for defense in depth.
+  rows.push(`</div>`);
+
+  if (details.agendaItems.length > 0) {
+    rows.push(`<h2 style="margin:24px 0 8px;font-size:16px">Agenda</h2>`);
+    rows.push(
+      `<ol style="margin:0;padding-left:24px;color:#334155">${details.agendaItems
+        .map((item) => `<li style="margin:0 0 8px">${escapeHtml(item)}</li>`)
+        .join("")}</ol>`,
+    );
+  } else if (isActiveMeeting) {
+    rows.push(`<p style="margin:24px 0;color:#64748b"><em>No agenda items have been added yet.</em></p>`);
+  }
+
+  if (isActiveMeeting && details.meetingUrl) {
     const url = escapeHtml(details.meetingUrl);
-    rows.push(`<p><strong>Join:</strong> <a href="${url}">${url}</a></p>`);
+    rows.push(
+      `<p style="margin:24px 0"><a href="${url}" style="display:inline-block;padding:12px 18px;border-radius:8px;background:#0d9488;color:#fff;font-weight:700;text-decoration:none">Join the meeting</a></p>`,
+    );
   }
 
-  const link = escapeHtml(meetingLink);
-  rows.push(`<p><a href="${link}">View this meeting in Damgo Hub</a> to see the current final agenda.</p>`);
+  if (isActiveMeeting) {
+    const link = escapeHtml(meetingLink);
+    rows.push(
+      `<p style="margin:16px 0 0"><a href="${link}" style="color:#0f766e">View meeting details in Damgo Hub</a></p>`,
+    );
+  }
 
-  return `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#0f172a">${rows.join("\n")}</div>`;
+  return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:28px;color:#0f172a">${rows.join("\n")}</div>`;
+}
+
+export function meetingEmailText(kind: MeetingEmailKind, details: MeetingEmailDetails): string {
+  const isActiveMeeting = kind !== "PARTICIPANT_REMOVED" && kind !== "MEETING_CANCELLED";
+  const lines = [
+    "DAMGO HUB MEETING",
+    details.title,
+    "",
+    INTRO_BY_KIND[kind],
+  ];
+
+  if (details.description) lines.push("", "DESCRIPTION", details.description);
+
+  const when = details.endsAt
+    ? `${formatMeetingTime(details.scheduledAt)} – ${formatMeetingTime(details.endsAt)}`
+    : formatMeetingTime(details.scheduledAt);
+  lines.push("", `When: ${when}`, `Organizer: ${details.organizerName}`);
+  if (details.location) lines.push(`Location: ${details.location}`);
+
+  if (details.agendaItems.length > 0) {
+    lines.push("", "AGENDA", ...details.agendaItems.map((item, index) => `${index + 1}. ${item}`));
+  } else if (isActiveMeeting) {
+    lines.push("", "No agenda items have been added yet.");
+  }
+
+  if (isActiveMeeting && details.meetingUrl) lines.push("", `Join: ${details.meetingUrl}`);
+  if (isActiveMeeting) lines.push("", `View details: ${process.env.APP_URL ?? ""}/meetings/${details.meetingId}`);
+
+  return lines.join("\n");
 }

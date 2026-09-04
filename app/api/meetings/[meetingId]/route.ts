@@ -42,6 +42,7 @@ function meetingSnapshot(meeting: {
   location: string | null;
   meetingUrl: string | null;
   organizer: { displayName: string };
+  agendaItems: { text: string }[];
 }) {
   return {
     title: meeting.title,
@@ -51,6 +52,7 @@ function meetingSnapshot(meeting: {
     location: meeting.location,
     meetingUrl: meeting.meetingUrl,
     organizerName: meeting.organizer.displayName,
+    agendaItems: meeting.agendaItems.map((item) => item.text),
   };
 }
 

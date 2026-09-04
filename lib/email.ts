@@ -37,6 +37,7 @@ export interface SendEmailParams {
   to: string;
   subject: string;
   html: string;
+  text: string;
   /**
    * Resend's own idempotency key — a secondary, short-window (24h)
    * safeguard per 16-meeting-scheduling.md. The durable dedup mechanism
@@ -61,7 +62,7 @@ export type SendEmailResult = { ok: true; providerMessageId: string } | { ok: fa
  * Trigger.dev's own retries handle the rest, per this spec's explicit
  * "do not roll back an already-valid meeting mutation."
  */
-export async function sendEmail({ to, subject, html, idempotencyKey }: SendEmailParams): Promise<SendEmailResult> {
+export async function sendEmail({ to, subject, html, text, idempotencyKey }: SendEmailParams): Promise<SendEmailResult> {
   const from = process.env.MEETING_EMAIL_FROM;
   if (!from) {
     return { ok: false, error: "MEETING_EMAIL_FROM is not set" };
@@ -72,7 +73,7 @@ export async function sendEmail({ to, subject, html, idempotencyKey }: SendEmail
 
   try {
     const client = getResendClient();
-    const { data, error } = await client.emails.send({ from, to, subject, html }, { idempotencyKey });
+    const { data, error } = await client.emails.send({ from, to, subject, html, text }, { idempotencyKey });
     if (error) {
       return { ok: false, error: error.message };
     }

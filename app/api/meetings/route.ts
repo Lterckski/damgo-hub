@@ -207,6 +207,7 @@ function createMeeting(input: CreateMeetingInput) {
         location: meeting.location,
         meetingUrl: meeting.meetingUrl,
         organizerName: input.organizerName,
+        agendaItems: input.agendaItemTexts,
       },
     );
 

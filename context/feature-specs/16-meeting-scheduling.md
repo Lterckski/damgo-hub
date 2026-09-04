@@ -156,6 +156,7 @@ Every invitation, update, and reminder includes:
 - organizer name
 - physical location and/or external meeting link when present
 - a link to `/meetings/[meetingId]` in Damgo Hub, where the participant can view the current final agenda
+- the current ordered final agenda inline in both the HTML and plain-text email; show a clear empty-agenda note when none exists yet
 
 Email behavior:
 
