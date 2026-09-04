@@ -28,6 +28,7 @@ enum MeetingNotificationOutboxStatus {
   PROCESSING
   COMPLETED
   FAILED
+  DEAD_LETTER
 }
 
 model Meeting {

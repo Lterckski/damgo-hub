@@ -70,10 +70,10 @@ Add `MeetingEmailDelivery` as a durable delivery/idempotency record:
 Add `MeetingNotificationOutbox` for immediate invitation/update/cancellation intent:
 
 - store the meeting ID, notification type/revision, deduplicated recipient IDs, and immutable meeting snapshot
-- `status` enum: `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`
+- `status` enum: `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`, `DEAD_LETTER`
 - attempt count, sanitized last error, processed timestamp, and timestamps
 - write the outbox row in the same database transaction as the meeting create/update/delete
-- enqueue its worker only after commit; a recurring Trigger.dev sweep re-enqueues pending/failed/stale-processing rows after an API-to-Trigger outage
+- enqueue its worker only after commit; a recurring Trigger.dev sweep re-enqueues pending/failed/stale-processing rows after an API-to-Trigger outage, with a bounded retry count before `DEAD_LETTER`
 
 `AgendaItem` records are the meeting's final agenda. Positions are contiguous, zero-based, and unique within the meeting. Adding an item or accepting a proposal appends it at the next position; removing one closes the gap; reordering rewrites all affected positions in one transaction. Queries sort by `position`, then `createdAt`, then `id` as a defensive stable fallback.
 

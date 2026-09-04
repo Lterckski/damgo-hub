@@ -10,6 +10,7 @@ import type { meetingReminderTask } from "@/src/trigger/meeting-reminder";
 
 const REMINDER_24H_MS = 24 * 60 * 60 * 1000;
 const REMINDER_1H_MS = 60 * 60 * 1000;
+const MAX_OUTBOX_ATTEMPTS = 8;
 
 export interface MeetingSnapshot {
   title: string;
@@ -192,6 +193,7 @@ export async function processMeetingNotificationOutbox(outboxId: string): Promis
   const claim = await prisma.meetingNotificationOutbox.updateMany({
     where: {
       id: outboxId,
+      attemptCount: { lt: MAX_OUTBOX_ATTEMPTS },
       OR: [
         { status: { in: ["PENDING", "FAILED"] } },
         { status: "PROCESSING", updatedAt: { lt: staleClaimBefore } },
@@ -225,9 +227,14 @@ export async function processMeetingNotificationOutbox(outboxId: string): Promis
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const current = await prisma.meetingNotificationOutbox.findUnique({
+      where: { id: outboxId },
+      select: { attemptCount: true },
+    });
+    const exhausted = (current?.attemptCount ?? MAX_OUTBOX_ATTEMPTS) >= MAX_OUTBOX_ATTEMPTS;
     await prisma.meetingNotificationOutbox.updateMany({
       where: { id: outboxId, status: "PROCESSING" },
-      data: { status: "FAILED", lastError: message.slice(0, 500) },
+      data: { status: exhausted ? "DEAD_LETTER" : "FAILED", lastError: message.slice(0, 500) },
     });
     throw error;
   }
@@ -238,6 +245,7 @@ export async function pendingMeetingNotificationOutboxIds(): Promise<string[]> {
   const retryBefore = new Date(Date.now() - 5 * 60 * 1000);
   const records = await prisma.meetingNotificationOutbox.findMany({
     where: {
+      attemptCount: { lt: MAX_OUTBOX_ATTEMPTS },
       OR: [
         { status: "PENDING", createdAt: { lt: retryBefore } },
         { status: "FAILED", updatedAt: { lt: retryBefore } },

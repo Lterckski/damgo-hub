@@ -12,6 +12,7 @@ import {
   isEndsAtValid,
   isValidHttpUrl,
   MEETING_DETAIL_INCLUDE,
+  runSerializableMeetingTransaction,
   serializeMeeting,
 } from "@/lib/meetings";
 import { prisma } from "@/lib/prisma";
@@ -140,11 +141,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ me
   });
   const newParticipantIds = new Set(realMembers.map((m) => m.id));
 
-  const oldParticipantIds = new Set(existing.participants.map((p) => p.member.id));
-  const addedIds = [...newParticipantIds].filter((id) => !oldParticipantIds.has(id));
-  const removedIds = [...oldParticipantIds].filter((id) => !newParticipantIds.has(id));
-  const remainingIds = [...newParticipantIds].filter((id) => oldParticipantIds.has(id));
-
   const newDetails = {
     title: title.trim(),
     scheduledAt: scheduledAtDate,
@@ -152,10 +148,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ me
     location: typeof location === "string" && location.trim() !== "" ? location.trim() : null,
     meetingUrl: meetingUrlValue,
   };
-  const emailRelevantChange = detailsChanged(existing, newDetails);
-  const participantsChanged = addedIds.length > 0 || removedIds.length > 0;
+  const transactionResult = await runSerializableMeetingTransaction(async (tx) => {
+    const current = await tx.meeting.findUnique({ where: { id: meetingId }, include: MEETING_DETAIL_INCLUDE });
+    if (!current) return { kind: "not-found" } as const;
+    if (current.organizerId !== member.id) return { kind: "forbidden" } as const;
 
-  const { full, outboxIds } = await prisma.$transaction(async (tx) => {
+    const oldParticipantIds = new Set(current.participants.map((participant) => participant.member.id));
+    const addedIds = [...newParticipantIds].filter((id) => !oldParticipantIds.has(id));
+    const removedIds = [...oldParticipantIds].filter((id) => !newParticipantIds.has(id));
+    const remainingIds = [...newParticipantIds].filter((id) => oldParticipantIds.has(id));
+    const emailRelevantChange = detailsChanged(current, newDetails);
+    const participantsChanged = addedIds.length > 0 || removedIds.length > 0;
+
     const meeting = await tx.meeting.update({
       where: { id: meetingId },
       data: {
@@ -208,8 +212,24 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ me
         : null,
     ]);
 
-    return { full, outboxIds };
+    return {
+      kind: "success",
+      full,
+      outboxIds,
+      previousReminderRuns: {
+        reminder24hRunId: current.reminder24hRunId,
+        reminder1hRunId: current.reminder1hRunId,
+      },
+    } as const;
   });
+
+  if (transactionResult.kind === "not-found") {
+    return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
+  }
+  if (transactionResult.kind === "forbidden") {
+    return NextResponse.json({ error: "Only the organizer can edit this meeting" }, { status: 403 });
+  }
+  const { full, outboxIds, previousReminderRuns } = transactionResult;
 
   await enqueueMeetingNotificationOutboxes(outboxIds);
 
@@ -218,7 +238,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ me
   // any still-pending reminder runs for the previous schedule" — not
   // conditioned on scheduledAt specifically having changed.
   try {
-    await cancelMeetingReminders(existing);
+    await cancelMeetingReminders(previousReminderRuns);
     const { reminder24hRunId, reminder1hRunId } = await scheduleMeetingReminders(full);
     await prisma.meeting.update({ where: { id: meetingId }, data: { reminder24hRunId, reminder1hRunId } });
   } catch (error) {

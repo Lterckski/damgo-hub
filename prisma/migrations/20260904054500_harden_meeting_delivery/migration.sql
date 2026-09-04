@@ -2,7 +2,7 @@
 ALTER TYPE "MeetingEmailDeliveryStatus" ADD VALUE 'SKIPPED';
 
 -- CreateEnum
-CREATE TYPE "MeetingNotificationOutboxStatus" AS ENUM ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED');
+CREATE TYPE "MeetingNotificationOutboxStatus" AS ENUM ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'DEAD_LETTER');
 
 -- CreateTable
 CREATE TABLE "MeetingNotificationOutbox" (
@@ -22,9 +22,6 @@ CREATE TABLE "MeetingNotificationOutbox" (
     CONSTRAINT "MeetingNotificationOutbox_pkey" PRIMARY KEY ("id")
 );
 
--- Add indexes omitted from the already-applied add_meetings migration.
-CREATE INDEX "Meeting_organizerId_idx" ON "Meeting"("organizerId");
-CREATE INDEX "AgendaProposal_proposedById_idx" ON "AgendaProposal"("proposedById");
-CREATE INDEX "AgendaItem_addedById_idx" ON "AgendaItem"("addedById");
+-- Indexes on the new, initially empty outbox table do not need concurrent creation.
 CREATE INDEX "MeetingNotificationOutbox_meetingId_idx" ON "MeetingNotificationOutbox"("meetingId");
 CREATE INDEX "MeetingNotificationOutbox_status_updatedAt_idx" ON "MeetingNotificationOutbox"("status", "updatedAt");
