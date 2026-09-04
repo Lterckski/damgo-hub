@@ -44,3 +44,42 @@ export function createMilestoneNode(id: string, position: { x: number; y: number
     },
   };
 }
+
+// Idea node shape for the open ideas board — see 19-ideas-board.md. A
+// freeform sticky note, deliberately much simpler than a milestone: one
+// editable text field, an author set once at creation and never editable
+// afterward, and a color cycled from the shared 8-pair palette
+// (app/globals.css's --idea-color-N-fill/-text custom properties, copied
+// from ui-context.md's Node Color Palette) so the board reads as varied
+// rather than uniform as notes are added.
+
+export const IDEA_NODE_COLOR_COUNT = 8;
+
+export interface IdeaNodeData extends Record<string, unknown> {
+  text: string;
+  authorId: string;
+  /** Index into the shared 8-color palette, fixed at creation — never recomputed later. */
+  colorIndex: number;
+}
+
+export const IDEA_NODE_TYPE = "ideaNode" as const;
+
+export type IdeaNode = Node<IdeaNodeData, typeof IDEA_NODE_TYPE>;
+
+export function createIdeaNode(
+  id: string,
+  position: { x: number; y: number },
+  authorId: string,
+  colorIndex: number,
+): IdeaNode {
+  return {
+    id,
+    type: IDEA_NODE_TYPE,
+    position,
+    data: {
+      text: "",
+      authorId,
+      colorIndex: colorIndex % IDEA_NODE_COLOR_COUNT,
+    },
+  };
+}

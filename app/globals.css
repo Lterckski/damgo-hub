@@ -58,6 +58,32 @@
   --chart-3: var(--state-warning);
   --chart-4: var(--state-success);
   --chart-5: var(--state-error);
+
+  /* Node color palette (ui-context.md's "Node Color Palette") — 8 fill/
+     text pairs the ideas board (19-ideas-board.md) cycles through so
+     notes read as varied rather than uniform. Dark-mode values are
+     copied directly from ui-context.md's table; light-mode values here
+     are this session's own derivation (lower saturation, higher
+     lightness for the fill, darker text for contrast) rather than
+     pixel-picked, same caveat progress-tracker.md already carries for
+     the base navy/teal palette — worth a real eyedropper pass later if
+     exact fidelity matters. */
+  --idea-color-0-fill: #e9edf5;
+  --idea-color-0-text: #1f2937;
+  --idea-color-1-fill: #d6f5f0;
+  --idea-color-1-text: #0f766e;
+  --idea-color-2-fill: #dceafb;
+  --idea-color-2-text: #1d4e89;
+  --idea-color-3-fill: #ede3fb;
+  --idea-color-3-text: #6b3fa0;
+  --idea-color-4-fill: #fbefd2;
+  --idea-color-4-text: #92650b;
+  --idea-color-5-fill: #fbe0de;
+  --idea-color-5-text: #b23a32;
+  --idea-color-6-fill: #fae1ee;
+  --idea-color-6-text: #a34572;
+  --idea-color-7-fill: #def5e6;
+  --idea-color-7-text: #1f7a44;
 }
 
 /* Dark (deep navy) — system preference only, no manual toggle. Only the
@@ -82,6 +108,26 @@
     --state-error: #f0655c;
     --state-success: #52c77d;
     --state-warning: #e8b84b;
+
+    /* Dark-mode idea-note fill/text pairs, copied directly from
+       ui-context.md's Node Color Palette table (Neutral, Teal, Blue,
+       Purple, Amber, Red, Rose, Green, in that order). */
+    --idea-color-0-fill: #182238;
+    --idea-color-0-text: #f3f6fb;
+    --idea-color-1-fill: #173248;
+    --idea-color-1-text: #45d9c5;
+    --idea-color-2-fill: #1b2a45;
+    --idea-color-2-text: #7fb0e0;
+    --idea-color-3-fill: #2e2545;
+    --idea-color-3-text: #b79ce0;
+    --idea-color-4-fill: #332912;
+    --idea-color-4-text: #e8b84b;
+    --idea-color-5-fill: #331e1c;
+    --idea-color-5-text: #f0655c;
+    --idea-color-6-fill: #301e30;
+    --idea-color-6-text: #d888ac;
+    --idea-color-7-fill: #16301f;
+    --idea-color-7-text: #52c77d;
   }
 }
 

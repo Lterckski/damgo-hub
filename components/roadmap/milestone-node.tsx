@@ -5,7 +5,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { useRoadmapMembers } from "@/components/roadmap/roadmap-member-context";
+import { useBoardMembers } from "@/components/board/board-member-context";
 import type { MilestoneNode as MilestoneNodeType, MilestoneStatus } from "@/types/roadmap";
 
 const MAX_VISIBLE_ASSIGNEES = 3;
@@ -50,7 +50,7 @@ function initialsFor(name: string): string {
  * exactly what's synced through Liveblocks storage.
  */
 export function MilestoneNode({ data, selected }: NodeProps<MilestoneNodeType>) {
-  const members = useRoadmapMembers();
+  const members = useBoardMembers();
   const assignees = data.assigneeIds
     .map((id) => members.find((m) => m.id === id))
     .filter((m): m is NonNullable<typeof m> => m !== undefined);

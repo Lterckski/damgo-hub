@@ -4,9 +4,9 @@ import { ClientSideSuspense, LiveblocksProvider, RoomProvider } from "@liveblock
 import { ReactFlowProvider } from "@xyflow/react";
 import { Loader2 } from "lucide-react";
 
+import { BoardErrorBoundary } from "@/components/board/board-error-boundary";
+import { BoardMembersProvider } from "@/components/board/board-member-context";
 import { RoadmapCanvas } from "@/components/roadmap/roadmap-canvas";
-import { RoadmapErrorBoundary } from "@/components/roadmap/roadmap-error-boundary";
-import { RoadmapMembersProvider } from "@/components/roadmap/roadmap-member-context";
 import type { ProjectMemberOption } from "@/lib/projects";
 
 interface RoadmapBoardProps {
@@ -32,7 +32,7 @@ interface RoadmapBoardProps {
  */
 export function RoadmapBoard({ projectId, collaborators }: RoadmapBoardProps) {
   return (
-    <RoadmapErrorBoundary>
+    <BoardErrorBoundary boardLabel="roadmap board">
       <LiveblocksProvider authEndpoint="/api/liveblocks-auth">
         <RoomProvider id={`project:${projectId}`} initialPresence={{ cursor: null }}>
           <ClientSideSuspense
@@ -42,14 +42,14 @@ export function RoadmapBoard({ projectId, collaborators }: RoadmapBoardProps) {
               </div>
             }
           >
-            <RoadmapMembersProvider members={collaborators}>
+            <BoardMembersProvider members={collaborators}>
               <ReactFlowProvider>
                 <RoadmapCanvas projectId={projectId} collaborators={collaborators} />
               </ReactFlowProvider>
-            </RoadmapMembersProvider>
+            </BoardMembersProvider>
           </ClientSideSuspense>
         </RoomProvider>
       </LiveblocksProvider>
-    </RoadmapErrorBoundary>
+    </BoardErrorBoundary>
   );
 }
