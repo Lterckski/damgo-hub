@@ -1,11 +1,13 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 
+import { organizationMemberProfile } from "@/lib/member-profile";
+import { prisma } from "@/lib/prisma";
+
 /**
  * Clerk organization-membership operations for the single Damgo Hub org.
- * Kept separate from lib/current-member.ts, which only resolves the
- * current session's own identity/profile — this module acts on other
- * members' Clerk roles, always gated by isCurrentMemberLeader() at the
- * call site (see 05-member-directory.md).
+ * Besides role changes, this module reconciles Clerk's current membership
+ * list into the local Member table so selectors do not depend on every
+ * teammate having opened Damgo Hub once first.
  */
 
 async function getCurrentOrgId(): Promise<string> {
@@ -34,6 +36,7 @@ export async function listOrgRoles(): Promise<Map<string, string>> {
   const client = await clerkClient();
 
   const roles = new Map<string, string>();
+  const profiles = [];
   let offset = 0;
   const limit = 100;
 
@@ -44,14 +47,52 @@ export async function listOrgRoles(): Promise<Map<string, string>> {
     );
 
     for (const membership of data) {
-      const clerkUserId = membership.publicUserData?.userId;
-      if (clerkUserId) {
-        roles.set(clerkUserId, membership.role);
-      }
+      const publicUserData = membership.publicUserData;
+      if (!publicUserData) continue;
+
+      roles.set(publicUserData.userId, membership.role);
+      profiles.push(organizationMemberProfile(publicUserData));
     }
 
     if (data.length < limit) break;
     offset += limit;
+  }
+
+  const existingMembers = await prisma.member.findMany({
+    where: { clerkUserId: { in: profiles.map((profile) => profile.clerkUserId) } },
+    select: { clerkUserId: true, email: true, displayName: true, avatarUrl: true },
+  });
+  const existingByClerkId = new Map(existingMembers.map((member) => [member.clerkUserId, member]));
+  const changedProfiles = profiles.filter((profile) => {
+    const existing = existingByClerkId.get(profile.clerkUserId);
+    return (
+      !existing ||
+      existing.email !== profile.email ||
+      existing.displayName !== profile.displayName ||
+      existing.avatarUrl !== profile.avatarUrl
+    );
+  });
+
+  if (changedProfiles.length > 0) {
+    await prisma.$transaction(
+      changedProfiles.map((profile) =>
+        prisma.member.upsert({
+          where: { clerkUserId: profile.clerkUserId },
+          update: {
+            email: profile.email,
+            displayName: profile.displayName,
+            avatarUrl: profile.avatarUrl,
+          },
+          create: {
+            clerkUserId: profile.clerkUserId,
+            email: profile.email,
+            displayName: profile.displayName,
+            avatarUrl: profile.avatarUrl,
+            status: "ACTIVE",
+          },
+        }),
+      ),
+    );
   }
 
   return roles;

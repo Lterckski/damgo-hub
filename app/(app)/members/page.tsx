@@ -8,12 +8,13 @@ import {
 } from "@/components/members/member-directory-table";
 
 export default async function MembersPage() {
-  const [members, orgRoles, isAdmin, isLeader, currentMember] = await Promise.all([
+  const orgRoles = await listOrgRoles();
+  const [members, isAdmin, isLeader, currentMember] = await Promise.all([
     prisma.member.findMany({
+      where: { clerkUserId: { in: [...orgRoles.keys()] } },
       include: { functionalRoles: true, workDistributionRoles: true },
       orderBy: { createdAt: "asc" },
     }),
-    listOrgRoles(),
     isCurrentMemberAdmin(),
     isCurrentMemberLeader(),
     getCurrentMember(),

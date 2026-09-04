@@ -1,5 +1,4 @@
-import { unstable_cache } from "next/cache";
-
+import { listOrgRoles } from "@/lib/organization-roles";
 import { prisma } from "@/lib/prisma";
 
 export interface MemberPickerOption {
@@ -9,24 +8,16 @@ export interface MemberPickerOption {
 }
 
 /**
- * id/displayName/avatarUrl for every member, used to populate the
- * assignee/collaborator pickers on tasks, calendar, and projects — four
- * separate page loads were each independently querying this exact shape.
- * Cached indefinitely rather than on a timer, since displayName/avatarUrl
- * are only ever written once, at first sign-in (see getCurrentMember() in
- * lib/current-member.ts) — nothing else in the app updates them. That's
- * also the only place that calls revalidateTag("members"), so this can
- * never actually go stale; caching it just skips the repeat query when
- * nothing has changed. If an "edit profile" feature is ever added, its
- * write path needs the same revalidateTag call.
+ * Fresh picker options for the active Clerk organization. The Clerk roster
+ * is reconciled before the database query, so a newly accepted member is
+ * available on the next render without first visiting Damgo Hub themself.
  */
-export const getMemberPickerOptions = unstable_cache(
-  async (): Promise<MemberPickerOption[]> => {
-    return prisma.member.findMany({
-      select: { id: true, displayName: true, avatarUrl: true },
-      orderBy: { displayName: "asc" },
-    });
-  },
-  ["member-picker-options"],
-  { tags: ["members"] },
-);
+export async function getMemberPickerOptions(): Promise<MemberPickerOption[]> {
+  const orgRoles = await listOrgRoles();
+
+  return prisma.member.findMany({
+    where: { clerkUserId: { in: [...orgRoles.keys()] } },
+    select: { id: true, displayName: true, avatarUrl: true },
+    orderBy: { displayName: "asc" },
+  });
+}
