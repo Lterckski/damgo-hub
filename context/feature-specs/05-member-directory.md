@@ -6,6 +6,8 @@ Build the Member Tracker: the roster of everyone in the organization, the Leader
 
 ## Routes
 
+Before returning the roster or member-picker options, reconcile every membership in the active Clerk organization into the local `Member` table. Use Clerk's organization-membership identity for new members and updated names, emails, and avatars. This must not require a teammate to visit Damgo Hub once before other members can assign them. Picker and directory queries include only users who are still present in the current Clerk organization; Clerk remains the source of truth for organization membership and roles.
+
 Create REST endpoints under `app/api/members`:
 
 - `GET /api/members` — list all members, including their Clerk org role (fetched via Clerk's backend SDK, not stored in Postgres), `isLeader`, and their functional/work-distribution tags (any authenticated member)

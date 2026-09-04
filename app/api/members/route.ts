@@ -15,13 +15,12 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [members, orgRoles] = await Promise.all([
-    prisma.member.findMany({
-      include: { functionalRoles: true, workDistributionRoles: true },
-      orderBy: { createdAt: "asc" },
-    }),
-    listOrgRoles(),
-  ]);
+  const orgRoles = await listOrgRoles();
+  const members = await prisma.member.findMany({
+    where: { clerkUserId: { in: [...orgRoles.keys()] } },
+    include: { functionalRoles: true, workDistributionRoles: true },
+    orderBy: { createdAt: "asc" },
+  });
 
   return NextResponse.json({
     members: members.map((member) => ({
