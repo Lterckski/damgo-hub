@@ -37,7 +37,7 @@
 ## Data and Storage
 
 - Member, project, task, financial, penalty, calendar, meeting, and idea records belong in PostgreSQL via Prisma.
-- Collaborative board snapshots (roadmap, meeting agenda, ideas board), receipts, and document attachments belong in Vercel Blob; Prisma stores only the blob URL reference.
+- Collaborative board snapshots (roadmap and ideas board), receipts, and document attachments belong in Vercel Blob; Prisma stores only the blob URL reference.
 - Do not store large generated or uploaded content directly in the database.
 - Financial transactions and penalties are corrected via new adjustment records, not edits to settled records — treat ownership and role checks as verified before any mutation.
 

@@ -1,8 +1,7 @@
-// Shared Liveblocks configuration — one realtime infrastructure for three
-// surfaces built later: the project roadmap (13-roadmap-board.md), the
-// meeting agenda (17-meeting-agenda-board.md), and the ideas board
-// (19-ideas-board.md). See 12-liveblocks-setup.md. Kept generic across
-// room types on purpose — nothing here is coupled to any one surface.
+// Shared Liveblocks configuration for the project roadmap
+// (13-roadmap-board.md) and ideas board (19-ideas-board.md). See
+// 12-liveblocks-setup.md. Kept generic across room types on purpose —
+// nothing here is coupled to either surface.
 //
 // Module augmentation is Liveblocks' own documented pattern for typing
 // Presence/UserMeta app-wide (every `@liveblocks/react` hook — useOthers,

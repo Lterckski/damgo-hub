@@ -8,7 +8,7 @@
 | UI                    | Tailwind + shadcn/ui     | Component composition and styling                                       |
 | Auth                  | Clerk (B2B Organizations) | Member identity, org-level admin/member roles, and route protection    |
 | Database              | Prisma + PostgreSQL      | Relational data: members, projects, tasks, finances, penalties, records |
-| Real-time collaboration | Liveblocks + React Flow | Live collaborative boards: project roadmaps, meeting agendas, ideas board |
+| Real-time collaboration | Liveblocks + React Flow | Live collaborative boards: project roadmaps and ideas board              |
 | Background jobs       | Trigger.dev              | Durable, scheduled work: reminders, notifications, recurring checks      |
 | Artifact storage      | Vercel Blob              | Board snapshots, receipts, and uploaded document attachments             |
 
@@ -53,11 +53,11 @@ Separate from the Clerk admin/member split, every member can hold any number of 
 
 - Project proposals have an owner (the proposing member) and assigned collaborators; only the owner or an assigned collaborator can mutate a project's tasks, milestones, or roadmap.
 - The Ideas board is open to every authenticated member — there is no per-idea ownership restriction on viewing or posting.
-- Liveblocks room tokens are issued only after verifying the member's access to that room (project membership for a roadmap room, meeting participation for an agenda room; any authenticated member for the ideas room).
+- Liveblocks room tokens are issued only after verifying the member's access to that room (project membership for a roadmap room; any authenticated member for the ideas room).
 
 ## Real-Time Collaboration Model
 
-Liveblocks + React Flow back three distinct collaborative surfaces. All three share the same underlying node/edge canvas schema so canvas components are reusable across surfaces.
+Liveblocks + React Flow back two distinct collaborative surfaces. Both share the same underlying node/edge canvas schema so canvas components are reusable across surfaces.
 
 ### Project Roadmap
 
@@ -65,12 +65,12 @@ Liveblocks + React Flow back three distinct collaborative surfaces. All three sh
 - React Flow canvas used to lay out milestones and their relationships.
 - Editable by the project owner and assigned collaborators.
 
-### Meeting Agenda
+### Meeting Planning
 
-- One Liveblocks room per meeting.
-- Used for live co-editing of the agenda and meeting notes while the meeting is happening.
-- Agenda Proposal items submitted ahead of time are curated into this live agenda by the meeting organizer.
-- Quotes captured during the meeting are recorded alongside the notes.
+- Meetings, participants, and agenda proposals are relational PostgreSQL records.
+- Accepted proposals form an ordered final agenda curated by the organizer.
+- An optional physical location or external meeting URL tells participants where to meet.
+- The meeting itself happens outside Damgo Hub; meeting pages do not initialize Liveblocks or provide calls, live notes, recording, or quote capture.
 
 ### Ideas Board
 
@@ -96,6 +96,6 @@ Request handlers only enqueue these jobs; they never run the reminder/notificati
 3. Auth, role, and ownership checks are enforced at every mutation boundary — Admin-only actions must verify the Clerk `org:admin` role server-side, not just hide UI.
 7. `org:admin` is granted or revoked on another member only through the Leader-gated "Assign Assistant Leader" flow — never through a generic role-edit form, and never by a member acting on themself.
 4. Client components are used only where browser interactivity or Liveblocks real-time state requires them.
-5. The canvas node/edge schema stays consistent across the roadmap, meeting agenda, and ideas board surfaces.
+5. The canvas node/edge schema stays consistent across the roadmap and ideas board surfaces.
 6. Financial transactions and penalties are corrected via new adjustment records, not edits to settled records — both need an audit trail.
 8. All money in the app is Philippine Pesos (PHP) — single currency, no currency field anywhere. Every monetary amount is stored as an integer number of centavos, never a float, and rendered for display only through the shared `formatPHP()` helper (`lib/currency.ts`). See `07-financial-tracker.md`'s Currency section.

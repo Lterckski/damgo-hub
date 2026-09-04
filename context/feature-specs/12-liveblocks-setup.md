@@ -1,4 +1,4 @@
-Set up the shared realtime collaboration infrastructure using Liveblocks. This is used by three surfaces built later — the project roadmap (`13-roadmap-board.md`), the meeting agenda (`17-meeting-agenda-board.md`), and the ideas board (`19-ideas-board.md`) — so keep it generic across room types rather than coupling it to any one of them.
+Set up the shared realtime collaboration infrastructure using Liveblocks. This is used by two surfaces — the project roadmap (`13-roadmap-board.md`) and the ideas board (`19-ideas-board.md`) — so keep it generic across room types rather than coupling it to either one.
 
 ## Configuration
 
@@ -25,10 +25,9 @@ Add a helper that deterministically maps a member ID to a consistent color from 
 
 ## Room ID Convention
 
-Rooms are namespaced by surface so the same infrastructure serves all three:
+Rooms are namespaced by surface so the same infrastructure serves both:
 
 - roadmap room: `project:{projectId}`
-- meeting agenda room: `meeting:{meetingId}`
 - ideas board room: `ideas` (single global room, no suffix)
 
 ## Auth Route
@@ -41,10 +40,9 @@ This route must:
    member of their active Clerk organization before calling
    `getCurrentMember()` (which may auto-provision a local profile and therefore
    is not itself proof of organization membership)
-2. parse the requested room ID and resolve which surface it belongs to (project/meeting/ideas) from its prefix
+2. parse the requested room ID and resolve which surface it belongs to (project/ideas) from its prefix
 3. verify access for that surface:
    - `project:*` — use `requireProjectAccess` from `lib/project-access.ts`
-   - `meeting:*` — verify the member is a meeting participant (added in `16-meeting-scheduling.md`; until then, any authenticated member passes)
    - `ideas` — any authenticated member passes
 4. ensure the Liveblocks room exists (create only if needed)
 5. return a session token with display name, avatar, and a generated cursor color
@@ -59,7 +57,7 @@ actually true when this unit was picked up — `package.json` had no
 `@liveblocks/node`, and `@liveblocks/react` (all `^3.24.1`, the current
 published version) as part of this unit. `@liveblocks/react` isn't
 imported by anything yet — nothing needs its hooks until `13-roadmap-
-board.md` — installed now so all three collaborative-board units can
+board.md` — installed now so both collaborative-board units can
 build on it without a second install pass.
 
 ## Check When Done
@@ -67,5 +65,5 @@ build on it without a second install pass.
 - `liveblocks.config.ts` defines Presence and UserMeta
 - Liveblocks client is cached
 - auth route resolves the correct access check per room-ID prefix
-- unauthorized project/meeting access returns `403`
+- unauthorized project access returns `403`
 - `npm run build` passes

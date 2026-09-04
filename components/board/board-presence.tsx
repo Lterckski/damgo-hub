@@ -15,9 +15,9 @@ function initialsFor(name: string): string {
 
 /**
  * Shared, board-agnostic "who else is here" avatar stack — see
- * 14-presence-avatars-cursors.md. Drop into any Liveblocks room (roadmap,
- * meeting agenda, ideas board) inside its RoomProvider/ClientSideSuspense
- * tree; it reads presence from whichever room it's rendered in.
+ * 14-presence-avatars-cursors.md. Drop into a roadmap or ideas Liveblocks
+ * room inside its RoomProvider/ClientSideSuspense tree; it reads presence
+ * from whichever room it's rendered in.
  *
  * `useOthers()` already excludes the current member's own connection by
  * definition (it's every *other* connection in the room), so there's no

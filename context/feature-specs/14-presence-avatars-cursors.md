@@ -1,4 +1,4 @@
-Show active room participants and live cursors on collaborative boards. Build this once, generically, so it works for the roadmap board (`13-roadmap-board.md`) now and the meeting agenda and ideas boards (`17-meeting-agenda-board.md`, `19-ideas-board.md`) when they're built — don't couple it to the roadmap specifically.
+Show active room participants and live cursors on collaborative boards. Build this once, generically, so it works for the roadmap board (`13-roadmap-board.md`) now and the ideas board (`19-ideas-board.md`) when it is built — don't couple it to the roadmap specifically.
 
 ## Implementation
 
