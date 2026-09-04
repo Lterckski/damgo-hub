@@ -41,6 +41,7 @@ export default async function MeetingsPage() {
           past={past}
           members={memberOptions}
           currentMemberId={member.id}
+          isAdmin={isAdmin}
         />
       </div>
     </div>

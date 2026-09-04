@@ -17,9 +17,10 @@ interface MeetingsListProps {
   past: SerializedMeetingListItem[];
   members: MeetingMemberOption[];
   currentMemberId: string;
+  isAdmin: boolean;
 }
 
-export function MeetingsList({ upcoming, past, members, currentMemberId }: MeetingsListProps) {
+export function MeetingsList({ upcoming, past, members, currentMemberId, isAdmin }: MeetingsListProps) {
   return (
     <Tabs defaultValue="upcoming">
       <div className="flex items-center justify-between gap-3">
@@ -31,7 +32,7 @@ export function MeetingsList({ upcoming, past, members, currentMemberId }: Meeti
             Past
           </TabsTrigger>
         </TabsList>
-        <MeetingFormDialog members={members} currentMemberId={currentMemberId} />
+        <MeetingFormDialog members={members} currentMemberId={currentMemberId} isAdmin={isAdmin} />
       </div>
 
       <TabsContent value="upcoming" className="mt-6">

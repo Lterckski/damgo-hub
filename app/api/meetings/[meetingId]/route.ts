@@ -8,6 +8,7 @@ import {
   enqueueMeetingNotificationOutboxes,
   scheduleMeetingReminders,
 } from "@/lib/meeting-notifications";
+import { resolveEffectiveEndsAt } from "@/lib/meeting-format";
 import {
   isEndsAtValid,
   isValidHttpUrl,
@@ -112,8 +113,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ me
   }
   const scheduledAtDate = new Date(scheduledAt);
 
+  // The "Ends" field no longer exists in the Schedule/Edit Meeting form —
+  // it never sends `endsAt` at all now. Distinguishing "key absent" from
+  // "explicit empty string" (rather than always defaulting to null) is
+  // what keeps an *existing* meeting's already-set endsAt intact across
+  // an edit that has nothing to do with it, per this app's backward-
+  // compatibility requirement for old records. A caller that does send
+  // the key — some future admin tool, say — can still set or clear it
+  // explicitly; only PATCH requests lacking the key entirely are treated
+  // as "don't touch."
+  const endsAtProvided = Object.prototype.hasOwnProperty.call(body, "endsAt");
   let endsAtDate: Date | null = null;
-  if (typeof endsAt === "string" && endsAt !== "") {
+  if (endsAtProvided && typeof endsAt === "string" && endsAt !== "") {
     if (Number.isNaN(Date.parse(endsAt))) {
       return NextResponse.json({ error: "endsAt must be a valid date" }, { status: 400 });
     }
@@ -144,7 +155,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ me
   const newDetails = {
     title: title.trim(),
     scheduledAt: scheduledAtDate,
-    endsAt: endsAtDate,
     location: typeof location === "string" && location.trim() !== "" ? location.trim() : null,
     meetingUrl: meetingUrlValue,
   };
@@ -153,17 +163,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ me
     if (!current) return { kind: "not-found" } as const;
     if (current.organizerId !== member.id) return { kind: "forbidden" } as const;
 
+    const effectiveEndsAt = resolveEffectiveEndsAt(endsAtProvided, endsAtDate, current.endsAt);
+
     const oldParticipantIds = new Set(current.participants.map((participant) => participant.member.id));
     const addedIds = [...newParticipantIds].filter((id) => !oldParticipantIds.has(id));
     const removedIds = [...oldParticipantIds].filter((id) => !newParticipantIds.has(id));
     const remainingIds = [...newParticipantIds].filter((id) => oldParticipantIds.has(id));
-    const emailRelevantChange = detailsChanged(current, newDetails);
+    const emailRelevantChange = detailsChanged(current, { ...newDetails, endsAt: effectiveEndsAt });
     const participantsChanged = addedIds.length > 0 || removedIds.length > 0;
 
     const meeting = await tx.meeting.update({
       where: { id: meetingId },
       data: {
         ...newDetails,
+        ...(endsAtProvided ? { endsAt: endsAtDate } : {}),
         description: typeof description === "string" && description.trim() !== "" ? description.trim() : null,
         ...(emailRelevantChange || participantsChanged ? { notificationRevision: { increment: 1 } } : {}),
       },

@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Plus } from "lucide-react";
+import { format } from "date-fns";
+import { Pencil, Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -16,14 +17,19 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DateTimePicker } from "@/components/shared/date-time-picker";
 import { FilterMultiSelect } from "@/components/shared/filter-multi-select";
+import { TimeOfDaySelect } from "@/components/shared/time-of-day-select";
+import { combineDateAndTime, normalizeAgendaItemDrafts } from "@/lib/meeting-format";
 import type { MeetingMemberOption, SerializedMeeting } from "@/lib/meetings";
 
 const FIELD_LABEL_CLASS = "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
+const DEFAULT_MEETING_TIME = "09:00";
 
 interface MeetingFormDialogProps {
   /** Every member — anyone can be invited as a participant. */
   members: MeetingMemberOption[];
   currentMemberId: string;
+  /** Leader/Assistant Leader — gates the inline "add an agenda" builder shown while scheduling. */
+  isAdmin: boolean;
   /** Present = edit this meeting (organizer only, enforced server-side too). Absent = create. */
   meeting?: SerializedMeeting;
 }
@@ -34,8 +40,15 @@ interface MeetingFormDialogProps {
  * 16-meeting-scheduling.md's Pages section, just POSTing vs PATCHing.
  * Manual open-state + a plain trigger Button, matching
  * new-task-dialog.tsx's established pattern rather than a DialogTrigger.
+ *
+ * Date and time are two separate required fields (not one combined
+ * picker) and there's no end-date/end-time field at all — a deliberate
+ * follow-up request. `endsAt` still exists on `Meeting` and is still
+ * shown read-only wherever an existing meeting already has one (the
+ * detail header, the calendar) for backward compatibility; this form
+ * just never displays or submits it, on create or edit.
  */
-export function MeetingFormDialog({ members, currentMemberId, meeting }: MeetingFormDialogProps) {
+export function MeetingFormDialog({ members, currentMemberId, isAdmin, meeting }: MeetingFormDialogProps) {
   const router = useRouter();
   const isEdit = meeting !== undefined;
 
@@ -45,27 +58,53 @@ export function MeetingFormDialog({ members, currentMemberId, meeting }: Meeting
 
   const [title, setTitle] = useState(meeting?.title ?? "");
   const [description, setDescription] = useState(meeting?.description ?? "");
-  const [scheduledAt, setScheduledAt] = useState(meeting?.scheduledAt ?? "");
-  const [endsAt, setEndsAt] = useState(meeting?.endsAt ?? "");
+  const [meetingDate, setMeetingDate] = useState(meeting?.scheduledAt ?? "");
+  const [meetingTime, setMeetingTime] = useState(
+    meeting ? format(new Date(meeting.scheduledAt), "HH:mm") : DEFAULT_MEETING_TIME,
+  );
   const [location, setLocation] = useState(meeting?.location ?? "");
   const [meetingUrl, setMeetingUrl] = useState(meeting?.meetingUrl ?? "");
   const [participantIds, setParticipantIds] = useState<string[]>(
     meeting ? meeting.participants.map((p) => p.id) : [currentMemberId],
   );
+  // Only meaningful in create mode — see 16-meeting-scheduling.md's "Add
+  // agendas while scheduling". Editing an existing meeting's agenda
+  // happens on the detail page, which already has full add/edit/reorder/
+  // remove controls; this dialog doesn't duplicate that in edit mode.
+  const [agendaDrafts, setAgendaDrafts] = useState<string[]>([]);
 
   function resetToMeeting() {
     setTitle(meeting?.title ?? "");
     setDescription(meeting?.description ?? "");
-    setScheduledAt(meeting?.scheduledAt ?? "");
-    setEndsAt(meeting?.endsAt ?? "");
+    setMeetingDate(meeting?.scheduledAt ?? "");
+    setMeetingTime(meeting ? format(new Date(meeting.scheduledAt), "HH:mm") : DEFAULT_MEETING_TIME);
     setLocation(meeting?.location ?? "");
     setMeetingUrl(meeting?.meetingUrl ?? "");
     setParticipantIds(meeting ? meeting.participants.map((p) => p.id) : [currentMemberId]);
+    setAgendaDrafts([]);
     setError(null);
+  }
+
+  function addAgendaDraft() {
+    setAgendaDrafts((drafts) => [...drafts, ""]);
+  }
+
+  function updateAgendaDraft(index: number, value: string) {
+    setAgendaDrafts((drafts) => drafts.map((draft, i) => (i === index ? value : draft)));
+  }
+
+  function removeAgendaDraft(index: number) {
+    setAgendaDrafts((drafts) => drafts.filter((_, i) => i !== index));
   }
 
   async function submit() {
     if (isSubmitting) return;
+    const scheduledAt = combineDateAndTime(meetingDate, meetingTime);
+    if (!scheduledAt) {
+      setError("Pick both a meeting date and time.");
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
     try {
@@ -76,10 +115,10 @@ export function MeetingFormDialog({ members, currentMemberId, meeting }: Meeting
           title,
           description,
           scheduledAt,
-          endsAt: endsAt || null,
           location,
           meetingUrl,
           participantIds,
+          ...(isEdit ? {} : { agendaItems: normalizeAgendaItemDrafts(agendaDrafts) }),
         }),
       });
       if (!response.ok) {
@@ -97,7 +136,7 @@ export function MeetingFormDialog({ members, currentMemberId, meeting }: Meeting
   }
 
   const memberOptions = members.map((m) => ({ value: m.id, label: m.displayName }));
-  const canSubmit = title.trim() !== "" && scheduledAt !== "" && !isSubmitting;
+  const canSubmit = title.trim() !== "" && meetingDate !== "" && meetingTime !== "" && !isSubmitting;
 
   return (
     <>
@@ -122,7 +161,7 @@ export function MeetingFormDialog({ members, currentMemberId, meeting }: Meeting
       </Button>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-copy-primary">
               {isEdit ? "Edit Meeting" : "Schedule Meeting"}
@@ -153,9 +192,25 @@ export function MeetingFormDialog({ members, currentMemberId, meeting }: Meeting
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <DateTimePicker label="Starts" value={scheduledAt} onChange={setScheduledAt} required />
-              <DateTimePicker label="Ends (optional)" value={endsAt} onChange={setEndsAt} />
+            <AgendaBuilder
+              isAdmin={isAdmin}
+              isEdit={isEdit}
+              drafts={agendaDrafts}
+              onAdd={addAgendaDraft}
+              onChange={updateAgendaDraft}
+              onRemove={removeAgendaDraft}
+            />
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <DateTimePicker
+                id="meeting-date"
+                label="Meeting date"
+                value={meetingDate}
+                onChange={setMeetingDate}
+                includeTime={false}
+                required
+              />
+              <TimeOfDaySelect id="meeting-time" label="Meeting time" value={meetingTime} onChange={setMeetingTime} required />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -192,7 +247,7 @@ export function MeetingFormDialog({ members, currentMemberId, meeting }: Meeting
               />
             </div>
 
-            {error && <p className="text-sm font-medium text-error">{error}</p>}
+            {error && <p className="text-sm font-medium text-error" role="alert">{error}</p>}
           </div>
 
           <DialogFooter>
@@ -200,11 +255,86 @@ export function MeetingFormDialog({ members, currentMemberId, meeting }: Meeting
               Cancel
             </Button>
             <Button type="button" disabled={!canSubmit} onClick={submit}>
-              {isEdit ? "Save" : "Schedule"}
+              {isSubmitting ? (isEdit ? "Saving…" : "Scheduling…") : isEdit ? "Save" : "Schedule"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+interface AgendaBuilderProps {
+  isAdmin: boolean;
+  isEdit: boolean;
+  drafts: string[];
+  onAdd: () => void;
+  onChange: (index: number, value: string) => void;
+  onRemove: (index: number) => void;
+}
+
+/**
+ * "Add an agenda" — inline agenda-item builder for the create flow, per
+ * 16-meeting-scheduling.md's Permissions ("only Leader/Assistant Leader
+ * add final agenda items directly") applied to this new surface: a
+ * regular member gets a disabled, explanatory stand-in instead of a live
+ * button, since proposals need a real meeting to attach to and none
+ * exists yet at this point in the create flow. Not rendered at all in
+ * edit mode — the detail page already owns agenda management for an
+ * existing meeting.
+ */
+function AgendaBuilder({ isAdmin, isEdit, drafts, onAdd, onChange, onRemove }: AgendaBuilderProps) {
+  if (isEdit) return null;
+
+  return (
+    <div>
+      <label className={FIELD_LABEL_CLASS}>Agenda (optional)</label>
+
+      {drafts.length > 0 && (
+        <ul className="mb-2 space-y-2">
+          {drafts.map((draft, index) => (
+            <li key={index} className="flex items-center gap-2">
+              <label htmlFor={`agenda-item-${index}`} className="sr-only">
+                Agenda item {index + 1}
+              </label>
+              <span className="flex h-8 w-6 shrink-0 items-center justify-center text-xs font-bold text-copy-secondary">
+                {index + 1}.
+              </span>
+              <Input
+                id={`agenda-item-${index}`}
+                value={draft}
+                onChange={(e) => onChange(index, e.target.value)}
+                placeholder="Agenda item"
+                className="text-copy-primary!"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => onRemove(index)}
+                aria-label={`Remove agenda item ${index + 1}`}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {isAdmin ? (
+        <Button type="button" variant="outline" size="sm" onClick={onAdd}>
+          <Plus className="h-3.5 w-3.5" /> Add an agenda
+        </Button>
+      ) : (
+        <div>
+          <Button type="button" variant="outline" size="sm" disabled>
+            Propose an agenda
+          </Button>
+          <p className="mt-1.5 text-xs text-copy-secondary">
+            You&apos;ll be able to propose agenda items once this meeting is scheduled.
+          </p>
+        </div>
+      )}
+    </div>
   );
 }

@@ -34,3 +34,50 @@ export function meetingServiceLabel(meetingUrl: string): string {
     return "External meeting";
   }
 }
+
+/**
+ * Combines a date-only ISO string (from the "Meeting date" field, always
+ * midnight local time) with an "HH:mm" 24-hour time (from "Meeting time")
+ * into one full ISO datetime — same math date-time-picker.tsx's own
+ * `confirm()` uses for its combined date+time mode, extracted here since
+ * meeting-form-dialog.tsx now keeps date and time as two separate fields
+ * per 16-meeting-scheduling.md's split. Returns `""` if either input is
+ * missing/unparseable, so a caller can treat that as "not ready to submit"
+ * without needing its own separate validity check.
+ */
+export function combineDateAndTime(dateIso: string, hhmm: string): string {
+  if (!dateIso) return "";
+  const date = new Date(dateIso);
+  if (Number.isNaN(date.getTime())) return "";
+  const [hours, minutes] = hhmm.split(":").map(Number);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return "";
+  date.setHours(hours, minutes, 0, 0);
+  return date.toISOString();
+}
+
+/**
+ * Trims and drops empty agenda-item drafts before they're submitted — see
+ * 16-meeting-scheduling.md's "Do not submit empty agenda items."
+ */
+export function normalizeAgendaItemDrafts(drafts: string[]): string[] {
+  return drafts.map((draft) => draft.trim()).filter((draft) => draft !== "");
+}
+
+/**
+ * What `endsAt` should actually be written on a `PATCH` — the Schedule/
+ * Edit Meeting form no longer has an "Ends" field and never sends the key
+ * at all, so an existing meeting's already-set `endsAt` must survive an
+ * edit that has nothing to do with it (backward compatibility for old
+ * records). A caller that *does* send the key — explicitly setting or
+ * clearing it — is still honored; only a genuinely absent key means
+ * "leave it alone." Lives here, not lib/meetings.ts, so it's testable
+ * without that module's top-level `lib/prisma.ts` import needing a real
+ * `DATABASE_URL` in the test environment.
+ */
+export function resolveEffectiveEndsAt(
+  endsAtProvided: boolean,
+  submittedEndsAt: Date | null,
+  currentEndsAt: Date | null,
+): Date | null {
+  return endsAtProvided ? submittedEndsAt : currentEndsAt;
+}

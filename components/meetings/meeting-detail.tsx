@@ -247,7 +247,7 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
 
         {isOrganizer && (
           <div className="flex shrink-0 items-center gap-2">
-            <MeetingFormDialog members={members} currentMemberId={currentMemberId} meeting={meeting} />
+            <MeetingFormDialog members={members} currentMemberId={currentMemberId} isAdmin={isAdmin} meeting={meeting} />
             <Button
               type="button"
               variant="ghost"
