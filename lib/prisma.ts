@@ -1,9 +1,12 @@
-import { PrismaClient } from "@/app/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+
+import { PrismaClient } from "../app/generated/prisma/client";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
+
+let prismaClient = globalForPrisma.prisma;
 
 function createPrismaClient() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -39,8 +42,28 @@ function createPrismaClient() {
   return new PrismaClient({ adapter });
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+function getPrismaClient() {
+  if (!prismaClient) {
+    prismaClient = createPrismaClient();
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
+    if (process.env.NODE_ENV !== "production") {
+      globalForPrisma.prisma = prismaClient;
+    }
+  }
+
+  return prismaClient;
 }
+
+/**
+ * Defer client construction until code actually performs a database operation.
+ * Trigger.dev imports task modules while indexing a deployment, before runtime
+ * secrets are injected; importing those modules must not require DATABASE_URL.
+ */
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, property) {
+    const client = getPrismaClient();
+    const value: unknown = Reflect.get(client, property, client);
+
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});
