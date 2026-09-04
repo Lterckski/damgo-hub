@@ -49,6 +49,7 @@ These are written as specs but not built yet — same numbering as `context/feat
 | **Prisma + Postgres** | Our database and the tool that talks to it. Postgres stores everything (members, tasks, docs, money); Prisma is how the app reads/writes it safely. |
 | **Vercel** | Where the live site is actually hosted — every push to `main` deploys automatically. |
 | **Vercel Blob** | Storage for uploaded files — receipts, doc attachments — kept private, not public links. |
+| **Resend** | Sends transactional meeting emails — invitations, updates, cancellations, and scheduled reminders — without exposing participant addresses. |
 | **Google Drive / Picker API** | Lets us link a Google Doc/Sheet/Slide to a Damgo Hub page and edit it live, right inside the app. |
 | **Google Calendar API + Trigger.dev** | Syncs tasks/events to each member's own Google Calendar in the background, without slowing down the app itself. |
 | **date-fns** | Handles date/time formatting and math (e.g. "due in 3 days") consistently across the app. |
