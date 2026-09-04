@@ -1,15 +1,31 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 
 import { getCurrentMember } from "@/lib/current-member";
 import { cursorColorForMember, liveblocksClient } from "@/lib/liveblocks";
 import { requireProjectAccess } from "@/lib/project-access";
 import type { Member } from "@/app/generated/prisma/client";
 
-// Resolves which surface a room ID belongs to from its prefix (see
-// 12-liveblocks-setup.md's Room ID Convention) and checks access for that
-// surface specifically — never a blanket "any authenticated member" for
-// project/meeting rooms.
+/**
+ * Confirms the signed-in user is still a member of their active Clerk
+ * organization. This must run before `getCurrentMember()`, since that helper
+ * creates a local profile and a local profile is not proof of org membership.
+ */
+async function hasVerifiedOrgMembership(userId: string, orgId: string): Promise<boolean> {
+  const client = await clerkClient();
+  const { data } = await client.organizations.getOrganizationMembershipList({
+    organizationId: orgId,
+    userId: [userId],
+    limit: 1,
+  });
+
+  return data.some((membership) => membership.publicUserData?.userId === userId);
+}
+
+/**
+ * Resolves a room ID to its collaboration surface and enforces that surface's
+ * resource-level access rule.
+ */
 async function memberHasRoomAccess(room: string, member: Member): Promise<boolean> {
   if (room === "ideas") {
     // Single global room, no suffix — any authenticated member passes.
@@ -34,14 +50,18 @@ async function memberHasRoomAccess(room: string, member: Member): Promise<boolea
   return false;
 }
 
-// POST /api/liveblocks-auth — Liveblocks' client SDK calls this itself
-// (via the `authEndpoint` option passed to createClient/RoomProvider in
-// whichever surface is actually using a room) whenever a member tries to
-// enter one. See 12-liveblocks-setup.md.
+/**
+ * Authorizes a verified organization member for one Liveblocks room.
+ * Liveblocks' client SDK calls this through its configured auth endpoint.
+ */
 export async function POST(request: Request) {
-  const { userId } = await auth();
+  const { userId, orgId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!orgId || !(await hasVerifiedOrgMembership(userId, orgId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const body = await request.json().catch(() => null);
