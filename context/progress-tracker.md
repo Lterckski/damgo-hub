@@ -86,7 +86,7 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## In Progress
 
-- Roadmap production hotfix on `fix/roadmap-react-flow-provider`: add the missing `ReactFlowProvider`, then merge and verify the deployed board with two signed-in accounts. `10`'s Google Calendar Sync piece is code-complete but still awaits its external Google Cloud/Clerk setup.
+- Roadmap provider hotfix PR #8 awaits merge and deployment; afterward, verify the deployed board with two signed-in accounts. `10`'s Google Calendar Sync piece is code-complete but still awaits its external Google Cloud/Clerk setup.
 
 ## Next Up
 
