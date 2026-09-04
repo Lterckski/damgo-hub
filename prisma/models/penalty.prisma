@@ -1,0 +1,41 @@
+enum PenaltyStatus {
+  OPEN
+  RESOLVED
+  WAIVED
+}
+
+// See 18-penalty-tracker.md. Resolved/waived penalties are never edited —
+// only `status`/`resolvedAt` change, `reason`/`amountCents` stay exactly
+// as issued, per architecture-context.md invariant 6 (financial records
+// correct via new entries, not rewrites).
+model Penalty {
+  id         String        @id @default(cuid())
+  memberId   String
+  // Who the penalty was issued against. Field named `amountCents` (not
+  // `...Centavos`, the naming convention every other money field in this
+  // app uses — Transaction.amount, Project.estimatedBudgetCentavos) —
+  // kept exactly as 18-penalty-tracker.md's spec text names it rather
+  // than silently "fixing" it; it still means PHP centavos, same as
+  // everywhere else (architecture-context.md invariant 8).
+  member     Member        @relation("PenaltyRecipient", fields: [memberId], references: [id])
+  issuedById String
+  // Must be an Admin at issuance time (enforced in the route, not the
+  // schema — Clerk org role isn't stored on Member at all).
+  issuedBy   Member        @relation("PenaltyIssuer", fields: [issuedById], references: [id])
+  reason     String
+  // Optional — unset for a purely behavioral/warning penalty, set for a
+  // monetary one (most of them, for this team).
+  amountCents Int?
+  status     PenaltyStatus @default(OPEN)
+  resolvedAt DateTime?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  // The Transaction auto-created when this penalty is resolved while
+  // monetary — see Transaction.penaltyId's own comment in
+  // transaction.prisma. Never set for a waived or non-monetary penalty.
+  transaction Transaction?
+
+  @@index([memberId])
+  @@index([status])
+}
