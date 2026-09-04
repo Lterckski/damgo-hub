@@ -1,4 +1,4 @@
-Add autosave and loading for collaborative boards so state is persisted. Board JSON is stored in Vercel Blob, and the saved blob URL is stored on the owning Prisma record — per the storage model in `architecture-context.md`. Build this generically so the roadmap board (`13-roadmap-board.md`) uses it now, and the meeting agenda / ideas boards (`17-meeting-agenda-board.md`, `19-ideas-board.md`) reuse the same hook and routes later.
+Add autosave and loading for collaborative boards so state is persisted. Board JSON is stored in Vercel Blob, and the saved blob URL is stored on the owning Prisma record — per the storage model in `architecture-context.md`. Build this generically so the roadmap board (`13-roadmap-board.md`) uses it now and the ideas board (`19-ideas-board.md`) reuses the same hook and routes later.
 
 ## What to Install
 
@@ -13,7 +13,7 @@ Add autosave and loading for collaborative boards so state is persisted. Board J
    Create: `PUT /api/boards/[roomId]/snapshot`
 
    - receive the latest board JSON (nodes + edges)
-   - resolve which owning record the `roomId` prefix maps to (`project:{id}` → `Project.roadmapSnapshotPath`; `meeting:{id}` and `ideas` are wired the same way once those units exist)
+   - resolve which owning record the `roomId` maps to (`project:{id}` → `Project.roadmapSnapshotPath`; `ideas` is wired once that unit exists)
    - verify the caller has access to that room (reuse the same access check as `/api/liveblocks-auth`)
    - upload the JSON to Vercel Blob
    - store the returned blob URL on the matching record

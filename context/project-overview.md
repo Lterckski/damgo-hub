@@ -2,7 +2,7 @@
 
 ## Overview
 
-Damgo Hub is a collaborative platform for a hackathon group / organization. It brings project proposals, task assignment, organizational finances, documentation, meetings, penalties, and member management into one shared workspace, with real-time collaborative boards for project roadmaps, meeting agendas, and open idea sharing.
+Damgo Hub is a collaborative platform for a hackathon group / organization. It brings project proposals, task assignment, organizational finances, documentation, meeting planning, penalties, and member management into one shared workspace, with real-time collaborative boards for project roadmaps and open idea sharing.
 
 ## Goals
 
@@ -12,7 +12,7 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 4. Let members author and browse shared organizational documentation.
 5. Let members submit project proposals, assign collaborators, and plan milestones on a shared roadmap.
 6. Let members view a shared calendar of events, meetings, and deadlines.
-7. Let members schedule meetings, propose agenda items ahead of time, collaborate live on the agenda and notes, and capture notable quotes.
+7. Let members schedule meetings, share an external meeting link or physical location, and prepare an ordered agenda ahead of time.
 8. Let admins track penalties issued to members.
 9. Let admins manage the member roster and roles.
 10. Provide an admin-only area for oversight of members, finances, penalties, and project proposals.
@@ -27,8 +27,8 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 5. Tasks are created and assigned to members, optionally linked to a project milestone.
 6. Members log financial transactions (dues, expenses, reimbursements) for the organization.
 7. Members check the shared calendar for upcoming meetings, milestones, and deadlines.
-8. Ahead of a meeting, members submit agenda proposals; the meeting organizer curates them into the final agenda.
-9. During the meeting, participants collaborate live on the agenda and notes, and log notable quotes.
+8. Ahead of a meeting, members submit agenda proposals; the Leader or Assistant Leader curates them into the final agenda.
+9. Participants use the prepared agenda while the actual meeting takes place outside Damgo Hub.
 10. Admins track penalties issued to members and monitor resolution.
 11. Admins manage the member roster, roles, and organization-wide oversight from the Admin Side.
 12. Any member can post or browse ideas on the open Ideas board at any time.
@@ -92,13 +92,12 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 ### Meetings
 
 - Meeting scheduler (date, time, location/link)
-- Agenda attachment
-- Attendance tracker
-- Meeting minutes/notes
-- **Quote**
-  - Random/curated quote per meeting
-  - Member-submitted quotes
-- Recording/link attachment
+- Participant selection
+- Agenda proposals from participants
+- Leader/Assistant Leader approval and ordering of the final agenda
+- Upcoming and past meeting views
+- External meeting link when applicable
+- Participant email invitations, updates, cancellations, and scheduled reminders
 
 ### Penalty Tracker
 
@@ -129,9 +128,10 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 ### Agenda Proposal
 
 - Agenda item submission form
-- Voting/upvoting on items
-- Status tracking (Proposed/Approved/Discussed)
-- Link agenda items to meetings
+- Participant proposals linked to a meeting
+- Status tracking (Pending/Accepted/Declined)
+- Leader/Assistant Leader-only accept/decline controls
+- Leader/Assistant Leader ordering of accepted items into the final agenda
 
 ### Ideas (Open to All)
 
@@ -147,7 +147,8 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 - Notification triggers for: task status change, upcoming deadlines, meeting reminders, milestone completion, proposal/expense approval or rejection
 - Centralized notification center/inbox (read/unread state)
 - System-wide announcements from Admin
-- Optional: email or push notification integration
+- Email delivery for meeting invitations, changes, cancellations, and reminders
+- Optional later: push notification integration
 
 ### Dashboard / Home Overview
 
@@ -169,7 +170,7 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 
 ### Analytics / Reports
 
-- Meetings conducted (count, attendance rate over time)
+- Meetings scheduled over time
 - Tasks finished vs. pending (per member, per project, team-wide)
 - Financial trends (spending over time, budget vs actual)
 - Penalty trends per member
@@ -202,7 +203,7 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 - Shared documentation with file attachments
 - Project proposals, collaborator assignment, and milestone roadmaps
 - Shared organization calendar
-- Meeting scheduling, agenda proposals, live agenda/notes collaboration, and quote capture
+- Meeting scheduling, participant invitations, and asynchronous agenda planning
 - Penalty tracking and resolution status
 - Admin-only oversight area
 - Open, organization-wide ideas board
@@ -214,6 +215,7 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 - Mobile-native applications
 - AI-generated content of any kind
 - Versioned history for documentation or board content
+- Hosting meetings in the app, including video/audio calls, live meeting notes, recordings, or a real-time meeting agenda board
 
 ## Success Criteria
 
@@ -221,6 +223,6 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 2. Tasks can be created, assigned, and tracked to completion.
 3. Financial transactions can be logged, attached with receipts, and reviewed by an admin.
 4. The shared calendar reflects meetings, milestones, and task deadlines.
-5. Members can propose agenda items and collaborate live on a meeting's agenda and notes, with quotes captured.
+5. Members can schedule meetings and propose agenda items, while only the Leader and Assistant Leader can curate the final agenda before the meeting happens externally.
 6. Admins can track penalties issued to members and manage the member roster from the Admin Side.
 7. Any member can post and browse ideas on the open, real-time Ideas board.

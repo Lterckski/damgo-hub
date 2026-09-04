@@ -87,7 +87,7 @@ Radius increases with surface depth — smaller for inner elements, larger for o
 
 ## Collaborative Boards
 
-Liveblocks + React Flow power three surfaces: the project roadmap, the meeting agenda, and the ideas board. All three share the same node/edge canvas styling.
+Liveblocks + React Flow power two surfaces: the project roadmap and the ideas board. Both share the same node/edge canvas styling. Meeting agendas use ordinary ordered page content, not a canvas.
 
 ### Node Color Palette
 

@@ -38,13 +38,6 @@ async function memberHasRoomAccess(room: string, member: Member): Promise<boolea
     return access !== null;
   }
 
-  if (room.startsWith("meeting:")) {
-    // 16-meeting-scheduling.md doesn't exist yet, so there's no
-    // participant list to check against — any authenticated member
-    // passes until then, exactly as this unit's spec calls for.
-    return true;
-  }
-
   // An unrecognized prefix isn't a surface this app knows about — deny
   // by default rather than falling through to an implicit allow.
   return false;
