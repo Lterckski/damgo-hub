@@ -30,17 +30,32 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ pe
   if (!existing) {
     return NextResponse.json({ error: "Penalty not found" }, { status: 404 });
   }
+  // Not the actual guard against a double-decide race — that check has to
+  // be atomic with the write itself (see the conditional updateMany
+  // below). This is just a cheap up-front 409 for the common case, so a
+  // normal "someone already decided this" doesn't need a full transaction
+  // to detect.
   if (existing.status !== "OPEN") {
     return NextResponse.json({ error: "This penalty has already been decided" }, { status: 409 });
   }
 
   const resolvedAt = new Date();
 
+  let lostRace = false;
   const penalty = await prisma.$transaction(async (tx) => {
-    const updated = await tx.penalty.update({
-      where: { id: penaltyId },
+    // Conditional on status: "OPEN" so two concurrent requests can't both
+    // observe OPEN and both create a ledger entry — only one `updateMany`
+    // can actually match and claim the row.
+    const claim = await tx.penalty.updateMany({
+      where: { id: penaltyId, status: "OPEN" },
       data: { status, resolvedAt },
     });
+    if (claim.count !== 1) {
+      lostRace = true;
+      return null;
+    }
+
+    const updated = await tx.penalty.findUniqueOrThrow({ where: { id: penaltyId } });
 
     // Only a monetary penalty being RESOLVED (not WAIVED) creates a
     // ledger entry — auto-approved, since only an Admin can reach this
@@ -61,6 +76,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ pe
 
     return tx.penalty.findUniqueOrThrow({ where: { id: penaltyId }, include: PENALTY_INCLUDE });
   });
+
+  if (lostRace || !penalty) {
+    return NextResponse.json({ error: "This penalty has already been decided" }, { status: 409 });
+  }
 
   return NextResponse.json({ penalty: serializePenalty(penalty) });
 }

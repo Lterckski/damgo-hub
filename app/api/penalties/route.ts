@@ -57,13 +57,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "memberId is not a real member" }, { status: 400 });
   }
 
+  // Postgres INTEGER's max — amountCents is stored in that column, and a
+  // value big enough to overflow it would otherwise surface as an opaque
+  // database error instead of a clean 400. A converted value below ₱0.01
+  // (e.g. 0.001) rounds to 0 centavos, which isn't a real monetary
+  // penalty either — reject it the same way.
+  const MAX_AMOUNT_CENTS = 2_147_483_647;
+
   let amountCents: number | null = null;
   if (amountPesos !== undefined && amountPesos !== null && amountPesos !== "") {
     const parsed = Number(amountPesos);
     if (!Number.isFinite(parsed) || parsed <= 0) {
       return NextResponse.json({ error: "amountPesos must be a positive number" }, { status: 400 });
     }
-    amountCents = pesosToCentavos(parsed);
+    const converted = pesosToCentavos(parsed);
+    if (!Number.isSafeInteger(converted) || converted < 1 || converted > MAX_AMOUNT_CENTS) {
+      return NextResponse.json({ error: "amountPesos is out of range" }, { status: 400 });
+    }
+    amountCents = converted;
   }
 
   const penalty = await prisma.penalty.create({
