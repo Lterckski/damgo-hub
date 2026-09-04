@@ -37,7 +37,10 @@ Create `POST /api/liveblocks-auth`.
 
 This route must:
 
-1. require Clerk authentication via `getCurrentMember()`
+1. require Clerk authentication and verify the signed-in user is a current
+   member of their active Clerk organization before calling
+   `getCurrentMember()` (which may auto-provision a local profile and therefore
+   is not itself proof of organization membership)
 2. parse the requested room ID and resolve which surface it belongs to (project/meeting/ideas) from its prefix
 3. verify access for that surface:
    - `project:*` — use `requireProjectAccess` from `lib/project-access.ts`
