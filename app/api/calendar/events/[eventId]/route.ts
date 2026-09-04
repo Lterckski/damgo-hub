@@ -45,6 +45,13 @@ export async function PATCH(
       ...(endAt !== undefined
         ? { endAt: typeof endAt === "string" && endAt !== "" ? new Date(endAt) : null }
         : {}),
+      // Cleared immediately, before the cancel/reschedule awaits below. If
+      // the old run fires in that window (cancellation hasn't taken effect
+      // yet), calendar-reminder.ts's `reminderRunId !== ctx.run.id` check
+      // now fails against `null` right away instead of still matching the
+      // stale id — closes the race a stale in-flight run could otherwise
+      // slip through.
+      reminderRunId: null,
     },
     include: { createdBy: { select: { displayName: true } } },
   });
@@ -55,7 +62,18 @@ export async function PATCH(
   // reminders — not conditioned on startAt specifically having changed.
   await cancelCalendarReminder(existing.reminderRunId);
   const reminderRunId = await scheduleCalendarReminder(event);
-  await prisma.calendarEvent.update({ where: { id: eventId }, data: { reminderRunId } });
+  if (reminderRunId) {
+    try {
+      await prisma.calendarEvent.update({ where: { id: eventId }, data: { reminderRunId } });
+    } catch (error) {
+      // Persisting the new id failed after the run was already created —
+      // cancel it rather than leave an orphaned scheduled run that will
+      // fire later and silently no-op (its id will never match what's in
+      // the database).
+      console.error("Failed to persist reminderRunId, cancelling orphaned reminder run", error);
+      await cancelCalendarReminder(reminderRunId);
+    }
+  }
 
   return NextResponse.json({ event: serializeCalendarEvent(event) });
 }

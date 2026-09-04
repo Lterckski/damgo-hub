@@ -134,12 +134,29 @@ export async function getRecentIdeas(limit = 5): Promise<RecentIdea[]> {
   });
   if (!board?.snapshotPath) return [];
 
-  const blob = await get(board.snapshotPath, { access: "private" });
-  if (!blob?.stream) return [];
+  // A Blob read/parse failure here shouldn't break the whole dashboard
+  // panel — this call sits inside MyDashboardPanel's Promise.all, so a
+  // thrown rejection would take every other widget down with it. Falls
+  // back to the same "nothing to show" empty state a missing snapshot
+  // already gets.
+  let nodes: IdeaNode[];
+  try {
+    const blob = await get(board.snapshotPath, { access: "private" });
+    if (!blob?.stream) return [];
 
-  const text = await new Response(blob.stream).text();
-  const snapshot = JSON.parse(text) as { nodes?: IdeaNode[] };
-  const notes = (snapshot.nodes ?? []).filter((node) => node.data.text.trim() !== "");
+    const text = await new Response(blob.stream).text();
+    const snapshot: unknown = JSON.parse(text);
+    const parsedNodes =
+      snapshot && typeof snapshot === "object" && Array.isArray((snapshot as { nodes?: unknown }).nodes)
+        ? (snapshot as { nodes: IdeaNode[] }).nodes
+        : [];
+    nodes = parsedNodes;
+  } catch (error) {
+    console.error("Failed to read ideas board snapshot for dashboard", error);
+    return [];
+  }
+
+  const notes = nodes.filter((node) => node.data.text.trim() !== "");
   if (notes.length === 0) return [];
 
   const recent = notes.slice(-limit).reverse();

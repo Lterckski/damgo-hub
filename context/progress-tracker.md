@@ -148,7 +148,7 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Next Up
 
-- `18`–`20` are complete and consolidated into `main`. `21-scheduled-reminders.md` and `22`'s "Recent Ideas" wiring are implemented and verified but not yet committed/merged — open a PR (branch off `main`) and check its `mergeStateStatus`/CodeRabbit review threads once CI runs, same as `16`/`17`/`18` needed. That closes out every buildable unit in the `01`–`22` sequence.
+- `18`–`20` are complete and consolidated into `main`. `21-scheduled-reminders.md` and `22`'s "Recent Ideas" wiring are implemented, verified, and up on PR `#20` (CodeRabbit findings addressed) — review and merge it. That closes out every buildable unit in the `01`–`22` sequence.
 
 ## Open Questions
 

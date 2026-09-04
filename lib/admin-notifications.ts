@@ -54,5 +54,11 @@ export async function logDeferredNotification(
   recipientEmails: string[],
   details: Record<string, unknown>,
 ): Promise<void> {
-  logger.info(`[deferred notification] ${subject}`, { recipientEmails, ...details });
+  // Recipient count only, not the actual addresses — Trigger.dev run logs
+  // aren't a place PII belongs, and nothing here needs the real emails to
+  // be useful (this is a log, not the send itself).
+  logger.info(`[deferred notification] ${subject}`, {
+    recipientCount: recipientEmails.length,
+    ...details,
+  });
 }
