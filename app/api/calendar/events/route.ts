@@ -5,23 +5,26 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
 import { enqueueGoogleCalendarSync } from "@/lib/sync-calendar";
 import { serializeCalendarEvent, type UnifiedCalendarItem } from "@/lib/calendar";
+import { getVisibleMeetingCalendarItems } from "@/lib/meetings";
 
 // GET /api/calendar/events — ?from=&to= range filters (ISO dates).
-// Returns CalendarEvent rows merged with task due dates into one unified
-// shape. Meeting dates join this merge once 16-meeting-scheduling.md
-// exists — TODO, revisit this route then.
+// Returns CalendarEvent rows merged with task due dates and meetings
+// visible to the caller into one unified shape — see
+// 16-meeting-scheduling.md's Calendar Integration section.
 export async function GET(request: Request) {
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const [member, isAdmin] = await Promise.all([getCurrentMember(), isCurrentMemberAdmin()]);
+
   const { searchParams } = new URL(request.url);
   const from = searchParams.get("from");
   const to = searchParams.get("to");
   const range = from && to ? { gte: new Date(from), lte: new Date(to) } : undefined;
 
-  const [events, tasksInRange] = await Promise.all([
+  const [events, tasksInRange, meetingItems] = await Promise.all([
     prisma.calendarEvent.findMany({
       where: range ? { startAt: range } : undefined,
       include: { createdBy: { select: { displayName: true } } },
@@ -34,6 +37,7 @@ export async function GET(request: Request) {
       where: range ? { startDate: { lte: range.lte }, dueDate: { gte: range.gte } } : undefined,
       select: { id: true, title: true, startDate: true, dueDate: true },
     }),
+    getVisibleMeetingCalendarItems(member.id, isAdmin, range),
   ]);
 
   const items: UnifiedCalendarItem[] = [
@@ -53,6 +57,7 @@ export async function GET(request: Request) {
       endAt: task.dueDate.toISOString(),
       creatorId: null,
     })),
+    ...meetingItems,
   ].sort((a, b) => a.startAt.localeCompare(b.startAt));
 
   return NextResponse.json({

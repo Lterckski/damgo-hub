@@ -42,6 +42,10 @@ model Member {
   googleCalendarSyncs   GoogleCalendarSyncedEvent[]
   ownedProjects         Project[]                    @relation("ProjectOwner")
   projectMemberships    ProjectMember[]
+  organizedMeetings     Meeting[]                     @relation("MeetingOrganizer")
+  meetingParticipations MeetingParticipant[]          @relation("MeetingParticipations")
+  proposedAgendaItems   AgendaProposal[]              @relation("AgendaProposalAuthor")
+  addedAgendaItems      AgendaItem[]                  @relation("AgendaItemAddedBy")
 
   @@index([clerkUserId])
 }

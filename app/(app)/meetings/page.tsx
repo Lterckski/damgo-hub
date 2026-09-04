@@ -1,17 +1,48 @@
+import { prisma } from "@/lib/prisma";
+import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
+import { getMemberPickerOptions } from "@/lib/members";
+import {
+  MEETING_LIST_INCLUDE,
+  meetingVisibilityWhere,
+  serializeMeetingListItem,
+  splitMeetingsByTime,
+} from "@/lib/meetings";
 import { BackButton } from "@/components/shared/back-button";
-import { ComingSoon } from "@/components/shared/coming-soon";
+import { MeetingsList } from "@/components/meetings/meetings-list";
 
-// 16-meeting-scheduling.md / 17-meeting-agenda-board.md haven't been built
-// yet — this route exists (the dock already links here) so visiting it
-// says so plainly instead of 404ing.
-export default function MeetingsPage() {
+export default async function MeetingsPage() {
+  const [member, isAdmin] = await Promise.all([getCurrentMember(), isCurrentMemberAdmin()]);
+
+  const [meetingRecords, memberOptions] = await Promise.all([
+    prisma.meeting.findMany({
+      where: meetingVisibilityWhere(member.id, isAdmin),
+      include: MEETING_LIST_INCLUDE,
+      orderBy: { scheduledAt: "desc" },
+    }),
+    getMemberPickerOptions(),
+  ]);
+
+  const meetings = meetingRecords.map(serializeMeetingListItem);
+  const { upcoming, past } = splitMeetingsByTime(meetings);
+
   return (
     <div className="p-6">
       <div className="flex items-center gap-2">
         <BackButton />
         <h1 className="font-display text-3xl text-copy-primary">Meetings</h1>
       </div>
-      <ComingSoon feature="Meetings" />
+      <p className="mt-1 text-sm text-copy-secondary">
+        Schedule meetings, invite the team, and plan the agenda ahead of time.
+      </p>
+
+      <div className="mt-6">
+        <MeetingsList
+          upcoming={upcoming}
+          past={past}
+          members={memberOptions}
+          currentMemberId={member.id}
+        />
+      </div>
     </div>
   );
 }

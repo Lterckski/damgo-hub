@@ -36,16 +36,19 @@ import type { SerializedTask, TaskDocOption, TaskMemberOption, TaskProjectOption
 const TYPE_DOT: Record<UnifiedCalendarItem["type"], string> = {
   event: "bg-brand",
   task: "bg-warning",
+  meeting: "bg-collab",
 };
 
 const TYPE_BAR: Record<UnifiedCalendarItem["type"], string> = {
   event: "bg-accent-dim text-brand hover:bg-accent-dim/70",
   task: "bg-warning/20 text-copy-primary",
+  meeting: "bg-collab/15 text-collab hover:bg-collab/25",
 };
 
 const TYPE_LABEL: Record<UnifiedCalendarItem["type"], string> = {
   event: "Event",
   task: "Task",
+  meeting: "Meeting",
 };
 
 // How many stacked lanes a week shows before collapsing the rest into a
@@ -249,7 +252,10 @@ export function CalendarView({
   const filteredItems = useMemo(() => {
     if (isDefaultFilterState(filters)) return items;
     return items.filter((item) => {
-      if (item.type === "event") return !filters.myTasksOnly;
+      // Events and meetings have none of Assignee/Project/Priority — only
+      // "My Tasks Only" (read literally) narrows the view to just tasks,
+      // so both drop out while it's active and are otherwise unaffected.
+      if (item.type !== "task") return !filters.myTasksOnly;
       const task = tasksById.get(item.id);
       return task ? taskMatchesFilters(task) : false;
     });
@@ -330,6 +336,7 @@ export function CalendarView({
 
   function openItem(bar: CalendarBar) {
     if (bar.type === "event") setOpenEventId(bar.itemId);
+    else if (bar.type === "meeting") router.push(`/meetings/${bar.itemId}`);
     else setOpenTaskId(bar.itemId);
   }
 

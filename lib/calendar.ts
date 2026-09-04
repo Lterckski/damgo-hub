@@ -34,20 +34,21 @@ export function serializeCalendarEvent(event: {
 
 /**
  * The unified shape `GET /api/calendar/events` returns — `CalendarEvent`
- * rows merged with task start/due dates (and, once 16-meeting-scheduling.md
- * exists, meeting dates too). `creatorId` is only meaningful for "event"
- * items (who can edit/delete it); tasks are managed on `/tasks`, not here.
+ * rows merged with task start/due dates and meeting schedules (as of
+ * 16-meeting-scheduling.md). `creatorId` is only meaningful for "event"
+ * items (who can edit/delete it); tasks are managed on `/tasks`, meetings
+ * on `/meetings/[id]` — not here.
  *
  * `endAt` makes a multi-day span explicit — a task's `startDate` through
- * `dueDate`, or an event's own `endAt` — so the calendar grid can render it
- * as one continuous bar across every day it covers (Google Calendar-style),
- * not just a chip on its start day. `null`/equal-to-`startAt` means a
- * single-point item.
+ * `dueDate`, a meeting's `scheduledAt` through `endsAt`, or an event's own
+ * `endAt` — so the calendar grid can render it as one continuous bar
+ * across every day it covers (Google Calendar-style), not just a chip on
+ * its start day. `null`/equal-to-`startAt` means a single-point item.
  */
 export interface UnifiedCalendarItem {
   id: string;
   title: string;
-  type: "event" | "task";
+  type: "event" | "task" | "meeting";
   startAt: string;
   endAt: string | null;
   creatorId: string | null;
