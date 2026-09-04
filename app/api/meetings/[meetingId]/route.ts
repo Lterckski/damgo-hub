@@ -231,7 +231,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ me
   }
   const { full, outboxIds, previousReminderRuns } = transactionResult;
 
-  await enqueueMeetingNotificationOutboxes(outboxIds);
+  try {
+    await enqueueMeetingNotificationOutboxes(outboxIds);
+  } catch (error) {
+    console.error("Failed to enqueue meeting notification outboxes after update", { meetingId, error });
+  }
 
   // Reschedule reminders on every successful edit, per this spec's
   // "Creating/updating a meeting schedules new reminder runs and cancels
@@ -239,8 +243,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ me
   // conditioned on scheduledAt specifically having changed.
   try {
     await cancelMeetingReminders(previousReminderRuns);
-    const { reminder24hRunId, reminder1hRunId } = await scheduleMeetingReminders(full);
-    await prisma.meeting.update({ where: { id: meetingId }, data: { reminder24hRunId, reminder1hRunId } });
+    const scheduledRuns = await scheduleMeetingReminders(full);
+    const stored = await prisma.meeting.updateMany({
+      where: { id: meetingId, notificationRevision: full.notificationRevision },
+      data: scheduledRuns,
+    });
+    if (stored.count === 0) {
+      await cancelMeetingReminders(scheduledRuns);
+    }
   } catch (error) {
     console.error("Failed to reconcile reminder runs after meeting update", { meetingId, error });
   }
