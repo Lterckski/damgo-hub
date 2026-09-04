@@ -9,8 +9,10 @@ import { Maximize, Plus, Redo2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BoardCursors } from "@/components/board/board-cursors";
 import { BoardPresence } from "@/components/board/board-presence";
+import { BoardSaveStatus } from "@/components/board/board-save-status";
 import { MilestoneEditDialog } from "@/components/roadmap/milestone-edit-dialog";
 import { MilestoneNode } from "@/components/roadmap/milestone-node";
+import { useBoardAutosave } from "@/hooks/use-board-autosave";
 import { createMilestoneNode, MILESTONE_NODE_TYPE, type MilestoneNode as MilestoneNodeType } from "@/types/roadmap";
 import type { ProjectMemberOption } from "@/lib/projects";
 
@@ -34,7 +36,13 @@ const DEFAULT_EDGE_OPTIONS = {
  * Split out from that wrapper because `useLiveblocksFlow`, `useReactFlow`,
  * and the presence hooks all need their respective providers above them.
  */
-export function RoadmapCanvas({ collaborators }: { collaborators: ProjectMemberOption[] }) {
+export function RoadmapCanvas({
+  projectId,
+  collaborators,
+}: {
+  projectId: string;
+  collaborators: ProjectMemberOption[];
+}) {
   const { nodes, edges, onNodesChange, onEdgesChange, onConnect, onDelete } = useLiveblocksFlow<MilestoneNodeType>({
     suspense: true,
     nodes: { initial: [] },
@@ -45,6 +53,20 @@ export function RoadmapCanvas({ collaborators }: { collaborators: ProjectMemberO
   const redo = useRedo();
   const canUndo = useCanUndo();
   const canRedo = useCanRedo();
+
+  const { status: saveStatus, canRetryLoad, retryLoad } = useBoardAutosave({
+    roomId: `project:${projectId}`,
+    nodes,
+    edges,
+    onLoadSnapshot: (snapshot) => {
+      if (snapshot.nodes.length > 0) {
+        onNodesChange(snapshot.nodes.map((item) => ({ type: "add" as const, item })));
+      }
+      if (snapshot.edges.length > 0) {
+        onEdgesChange(snapshot.edges.map((item) => ({ type: "add" as const, item })));
+      }
+    },
+  });
 
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const editingNode = nodes.find((n) => n.id === editingNodeId) ?? null;
@@ -111,6 +133,7 @@ export function RoadmapCanvas({ collaborators }: { collaborators: ProjectMemberO
               >
                 <Redo2 className="h-4 w-4" />
               </Button>
+              <BoardSaveStatus status={saveStatus} onRetryLoad={canRetryLoad ? retryLoad : undefined} />
             </div>
           </Panel>
         </ReactFlow>

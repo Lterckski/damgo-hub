@@ -1,47 +1,9 @@
 import { NextResponse } from "next/server";
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 
+import { hasVerifiedOrgMembership, memberHasRoomAccess } from "@/lib/board-access";
 import { getCurrentMember } from "@/lib/current-member";
 import { cursorColorForMember, liveblocksClient } from "@/lib/liveblocks";
-import { requireProjectAccess } from "@/lib/project-access";
-import type { Member } from "@/app/generated/prisma/client";
-
-/**
- * Confirms the signed-in user is still a member of their active Clerk
- * organization. This must run before `getCurrentMember()`, since that helper
- * creates a local profile and a local profile is not proof of org membership.
- */
-async function hasVerifiedOrgMembership(userId: string, orgId: string): Promise<boolean> {
-  const client = await clerkClient();
-  const { data } = await client.organizations.getOrganizationMembershipList({
-    organizationId: orgId,
-    userId: [userId],
-    limit: 1,
-  });
-
-  return data.some((membership) => membership.publicUserData?.userId === userId);
-}
-
-/**
- * Resolves a room ID to its collaboration surface and enforces that surface's
- * resource-level access rule.
- */
-async function memberHasRoomAccess(room: string, member: Member): Promise<boolean> {
-  if (room === "ideas") {
-    // Single global room, no suffix — any authenticated member passes.
-    return true;
-  }
-
-  if (room.startsWith("project:")) {
-    const projectId = room.slice("project:".length);
-    const access = await requireProjectAccess(projectId, member);
-    return access !== null;
-  }
-
-  // An unrecognized prefix isn't a surface this app knows about — deny
-  // by default rather than falling through to an implicit allow.
-  return false;
-}
 
 /**
  * Authorizes a verified organization member for one Liveblocks room.

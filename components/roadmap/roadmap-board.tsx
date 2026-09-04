@@ -44,7 +44,7 @@ export function RoadmapBoard({ projectId, collaborators }: RoadmapBoardProps) {
           >
             <RoadmapMembersProvider members={collaborators}>
               <ReactFlowProvider>
-                <RoadmapCanvas collaborators={collaborators} />
+                <RoadmapCanvas projectId={projectId} collaborators={collaborators} />
               </ReactFlowProvider>
             </RoadmapMembersProvider>
           </ClientSideSuspense>

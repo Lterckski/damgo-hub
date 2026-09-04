@@ -8,7 +8,7 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Current Goal
 
-- Move on to `15-board-autosave.md` — `12`, `13`, `14` are done.
+- Move on to `16-meeting-scheduling.md` — `12`–`15` are done.
 
 ## Completed
 
@@ -84,13 +84,18 @@ Update this file whenever the current phase, active feature, or implementation s
   - `npm run build` and `npm run lint` both clean (zero errors/warnings on every file touched). Not yet verified against a real live Liveblocks session (needs a real Clerk login + a second browser/account to see presence/cursors from another participant) — same category of gap `12`'s own entry already flagged for the auth route, now inherited by the surface that actually exercises it.
   - Merged to `main` in PR #7. The first production load exposed a missing React Flow provider: `RoadmapCanvas` called `useReactFlow()` before any `<ReactFlow>` instance existed, so React threw during render and the broad roadmap error boundary misleadingly presented it as a Liveblocks connection failure. Fixed by placing `ReactFlowProvider` above `RoadmapCanvas`; the fallback copy now accurately says the board failed to load because the boundary also catches non-network render errors.
 
+- **`15-board-autosave.md`**: `lib/board-access.ts` — extracted `hasVerifiedOrgMembership`/`memberHasRoomAccess` out of `/api/liveblocks-auth/route.ts` into a shared module (no behavior change) so the new snapshot route enforces the same room-access check required by the spec. `PUT`/`GET /api/boards/[roomId]/snapshot` is generic, resolves `project:{id}` → `Project.roadmapSnapshotPath`, and stores opaque node/edge JSON in private Vercel Blob objects. Snapshot pointer replacement now uses a database compare-and-swap: a concurrent loser or failed database update deletes its upload, while a winner advances the pointer before deleting the superseded Blob.
+  - `hooks/use-board-autosave.ts` (`useBoardAutosave`) — generic over node/edge type so `19-ideas-board.md` can reuse it as-is. Debounced saves remain blocked until the initial snapshot GET succeeds; a failed GET exposes an explicit retry instead of treating unknown server state as an empty board. The delayed response checks the latest committed Liveblocks nodes/edges before restoring, and changes made during loading are scheduled once loading safely completes.
+  - `components/board/board-save-status.tsx` — the small saving/saved/error readout (spec step 5), wired into the roadmap control bar. Load failures include a retry action. `hooks/use-board-autosave.test.ts` covers failed-load write blocking/recovery, deferred-load collision avoidance, and preservation of edits made while loading.
+  - `npm test`, `npm run build`, and targeted ESLint for every changed source/test file pass. Full `npm run lint` remains polluted by pre-existing generated `.trigger/tmp/**` output plus `src/trigger/example.ts`'s existing explicit `any`; neither is part of this unit's changes.
+
 ## In Progress
 
 - Meeting requirements revised on `docs/meeting-scheduling-requirements`: unit `16` now covers scheduling, participants, external meeting locations/links, and asynchronous agenda planning only; unit `17` is retired. `10`'s Google Calendar Sync piece is code-complete but still awaits its external Google Cloud/Clerk setup.
 
 ## Next Up
 
-- `15-board-autosave.md` next in the build sequence.
+- `16-meeting-scheduling.md` next in the build sequence.
 
 ## Open Questions
 
