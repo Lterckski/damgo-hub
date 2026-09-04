@@ -15,11 +15,9 @@ interface RoadmapErrorBoundaryState {
 }
 
 /**
- * Catches connection/auth failures thrown by ClientSideSuspense's
- * suspense-mode hooks (useLiveblocksFlow({ suspense: true }), etc.) — see
- * 13-roadmap-board.md's "an error fallback for connection issues". A
- * regular try/catch can't see these; React error boundaries are the only
- * mechanism that can.
+ * Catches render, connection, and auth failures anywhere in the roadmap
+ * provider tree. A regular try/catch can't see errors thrown while React
+ * renders descendants; an error boundary can.
  */
 export class RoadmapErrorBoundary extends Component<RoadmapErrorBoundaryProps, RoadmapErrorBoundaryState> {
   state: RoadmapErrorBoundaryState = { hasError: false, retryKey: 0 };
@@ -33,9 +31,9 @@ export class RoadmapErrorBoundary extends Component<RoadmapErrorBoundaryProps, R
       return (
         <div className="flex h-[34rem] flex-col items-center justify-center gap-3 rounded-2xl border border-surface-border bg-surface text-center">
           <AlertTriangle className="h-6 w-6 text-error" />
-          <p className="text-sm font-medium text-copy-primary">Couldn&apos;t connect to the roadmap board.</p>
+          <p className="text-sm font-medium text-copy-primary">Couldn&apos;t load the roadmap board.</p>
           <p className="max-w-xs text-xs text-copy-secondary">
-            This is usually a dropped connection — try reloading the page.
+            Try again or reload the page. If the problem continues, contact an admin.
           </p>
           <Button
             type="button"
