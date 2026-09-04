@@ -7,13 +7,17 @@ import { getCurrentMember } from "@/lib/current-member";
 import { prisma } from "@/lib/prisma";
 
 // Generic board save/load — see 15-board-autosave.md. Every collaborative
-// board surface (roadmap now, ideas later) stores its React Flow
-// nodes/edges as one JSON blob in Vercel Blob, with the returned blob
-// pathname kept on whichever Prisma record owns that room. This route
-// doesn't know or care about milestone-specific shapes — `nodes`/`edges`
-// pass through as opaque JSON, same as React Flow itself treats `data`.
+// board surface (roadmap, ideas) stores its React Flow nodes/edges as one
+// JSON blob in Vercel Blob, with the returned blob pathname kept on
+// whichever Prisma record owns that room. This route doesn't know or care
+// about milestone/idea-specific shapes — `nodes`/`edges` pass through as
+// opaque JSON, same as React Flow itself treats `data`.
 
 type BoardOwner = { kind: "project"; projectId: string } | { kind: "ideas" };
+
+// The single IdeasBoard row's fixed, known id — see 19-ideas-board.md and
+// its own migration's seed insert. Never generated, always this literal.
+const IDEAS_BOARD_ID = "ideas-board";
 
 /**
  * Resolves a room ID to the Prisma record that owns its saved snapshot.
@@ -27,6 +31,62 @@ function resolveBoardOwner(room: string): BoardOwner | null {
   if (room === "ideas") return { kind: "ideas" };
   if (room.startsWith("project:")) return { kind: "project", projectId: room.slice("project:".length) };
   return null;
+}
+
+/**
+ * One pointer read + compare-and-swap write per board surface, so PUT/GET
+ * below don't have to branch on `owner.kind` at every step. `read()`
+ * returns `null` for "the owning record itself doesn't exist" (only
+ * possible for a project — the IdeasBoard singleton is always seeded) so
+ * the caller can 404 distinctly from "no snapshot saved yet."
+ */
+interface SnapshotPointer {
+  blobKeyPrefix: string;
+  read(): Promise<{ exists: boolean; path: string | null }>;
+  /** Compare-and-swap: succeeds only if the stored path still matches `previousPath`. */
+  write(previousPath: string | null, newPath: string): Promise<boolean>;
+}
+
+function pointerFor(owner: BoardOwner): SnapshotPointer {
+  if (owner.kind === "project") {
+    return {
+      blobKeyPrefix: `boards/project-${owner.projectId}`,
+      async read() {
+        const project = await prisma.project.findUnique({
+          where: { id: owner.projectId },
+          select: { roadmapSnapshotPath: true },
+        });
+        return project ? { exists: true, path: project.roadmapSnapshotPath } : { exists: false, path: null };
+      },
+      async write(previousPath, newPath) {
+        const result = await prisma.project.updateMany({
+          where: { id: owner.projectId, roadmapSnapshotPath: previousPath },
+          data: { roadmapSnapshotPath: newPath },
+        });
+        return result.count === 1;
+      },
+    };
+  }
+
+  return {
+    blobKeyPrefix: "boards/ideas",
+    async read() {
+      const board = await prisma.ideasBoard.findUnique({
+        where: { id: IDEAS_BOARD_ID },
+        select: { snapshotPath: true },
+      });
+      // Always seeded by its own migration — `exists: false` here would
+      // mean the singleton row itself got deleted, not a normal state.
+      return { exists: board !== null, path: board?.snapshotPath ?? null };
+    },
+    async write(previousPath, newPath) {
+      const result = await prisma.ideasBoard.updateMany({
+        where: { id: IDEAS_BOARD_ID, snapshotPath: previousPath },
+        data: { snapshotPath: newPath },
+      });
+      return result.count === 1;
+    },
+  };
 }
 
 async function deleteSnapshotBlob(pathname: string) {
@@ -71,26 +131,17 @@ export async function PUT(request: Request, { params }: { params: Promise<{ room
     return NextResponse.json({ error: "nodes and edges arrays are required" }, { status: 400 });
   }
 
-  if (owner.kind === "ideas") {
-    // 19-ideas-board.md doesn't exist yet — no owning record to save
-    // against. Room-access already passed, so this is a "not built yet"
-    // response, not an authorization failure.
-    return NextResponse.json({ error: "Ideas board autosave isn't wired up yet" }, { status: 501 });
+  const pointer = pointerFor(owner);
+  const current = await pointer.read();
+  if (!current.exists) {
+    return NextResponse.json({ error: "Board owner not found" }, { status: 404 });
   }
 
-  const project = await prisma.project.findUnique({
-    where: { id: owner.projectId },
-    select: { roadmapSnapshotPath: true },
-  });
-  if (!project) {
-    return NextResponse.json({ error: "Project not found" }, { status: 404 });
-  }
-
-  const previousPath = project.roadmapSnapshotPath;
+  const previousPath = current.path;
   let blob: Awaited<ReturnType<typeof put>> | null = null;
 
   try {
-    blob = await put(`boards/project-${owner.projectId}-${Date.now()}.json`, JSON.stringify(body), {
+    blob = await put(`${pointer.blobKeyPrefix}-${Date.now()}.json`, JSON.stringify(body), {
       access: "private",
       contentType: "application/json",
       addRandomSuffix: true,
@@ -98,12 +149,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ room
 
     // Compare-and-swap the pointer. If another save advanced it while this
     // request was uploading, this stale request must not move it backwards.
-    const replacement = await prisma.project.updateMany({
-      where: { id: owner.projectId, roadmapSnapshotPath: previousPath },
-      data: { roadmapSnapshotPath: blob.pathname },
-    });
+    const swapped = await pointer.write(previousPath, blob.pathname);
 
-    if (replacement.count !== 1) {
+    if (!swapped) {
       await deleteSnapshotBlob(blob.pathname);
       return NextResponse.json({ error: "A newer board snapshot was already saved" }, { status: 409 });
     }
@@ -127,20 +175,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ room
   if ("error" in authResult) return authResult.error;
   const { owner } = authResult;
 
-  if (owner.kind === "ideas") {
-    return NextResponse.json({ error: "Ideas board autosave isn't wired up yet" }, { status: 501 });
-  }
-
-  const project = await prisma.project.findUnique({
-    where: { id: owner.projectId },
-    select: { roadmapSnapshotPath: true },
-  });
-
-  if (!project?.roadmapSnapshotPath) {
+  const pointer = pointerFor(owner);
+  const current = await pointer.read();
+  if (!current.exists || !current.path) {
     return NextResponse.json({ nodes: [], edges: [] });
   }
 
-  const blob = await get(project.roadmapSnapshotPath, { access: "private" });
+  const blob = await get(current.path, { access: "private" });
   if (!blob?.stream) {
     // The DB points at a path Blob no longer has — treat as "nothing
     // saved" rather than failing the board load outright.

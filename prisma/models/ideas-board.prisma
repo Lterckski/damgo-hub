@@ -1,0 +1,13 @@
+// Effectively a singleton — see 19-ideas-board.md. There is only ever one
+// row, seeded by this model's own migration with a fixed, known id
+// ("ideas-board", not the usual cuid()) so the snapshot route can look it
+// up directly instead of a separate "find the one row" query first.
+model IdeasBoard {
+  id           String   @id @default("ideas-board")
+  // Vercel Blob pathname for the board's autosaved JSON — same storage
+  // pattern 15-board-autosave.md already uses for Project.roadmapSnapshotPath,
+  // not a new one.
+  snapshotPath String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
