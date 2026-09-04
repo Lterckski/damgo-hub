@@ -3,7 +3,7 @@
 import { Filter, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { FilterMultiSelect, type FilterOption } from "@/components/calendar/filter-multi-select";
+import { FilterMultiSelect, type FilterOption } from "@/components/shared/filter-multi-select";
 import { TASK_PRIORITY_OPTIONS } from "@/lib/tasks";
 
 // Sentinel for "no project" — same pattern as NO_PROJECT in the task
