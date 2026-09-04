@@ -27,7 +27,7 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 5. Tasks are created and assigned to members, optionally linked to a project milestone.
 6. Members log financial transactions (dues, expenses, reimbursements) for the organization.
 7. Members check the shared calendar for upcoming meetings, milestones, and deadlines.
-8. Ahead of a meeting, members submit agenda proposals; the meeting organizer curates them into the final agenda.
+8. Ahead of a meeting, members submit agenda proposals; the Leader or Assistant Leader curates them into the final agenda.
 9. Participants use the prepared agenda while the actual meeting takes place outside Damgo Hub.
 10. Admins track penalties issued to members and monitor resolution.
 11. Admins manage the member roster, roles, and organization-wide oversight from the Admin Side.
@@ -94,7 +94,7 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 - Meeting scheduler (date, time, location/link)
 - Participant selection
 - Agenda proposals from participants
-- Organizer approval and ordering of the final agenda
+- Leader/Assistant Leader approval and ordering of the final agenda
 - Upcoming and past meeting views
 - External meeting link when applicable
 
@@ -129,8 +129,8 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 - Agenda item submission form
 - Participant proposals linked to a meeting
 - Status tracking (Pending/Accepted/Declined)
-- Organizer-only accept/decline controls
-- Organizer ordering of accepted items into the final agenda
+- Leader/Assistant Leader-only accept/decline controls
+- Leader/Assistant Leader ordering of accepted items into the final agenda
 
 ### Ideas (Open to All)
 
@@ -221,6 +221,6 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 2. Tasks can be created, assigned, and tracked to completion.
 3. Financial transactions can be logged, attached with receipts, and reviewed by an admin.
 4. The shared calendar reflects meetings, milestones, and task deadlines.
-5. Members can schedule meetings, propose agenda items, and view the organizer-curated final agenda before meeting externally.
+5. Members can schedule meetings and propose agenda items, while only the Leader and Assistant Leader can curate the final agenda before the meeting happens externally.
 6. Admins can track penalties issued to members and manage the member roster from the Admin Side.
 7. Any member can post and browse ideas on the open, real-time Ideas board.

@@ -68,7 +68,7 @@ Liveblocks + React Flow back two distinct collaborative surfaces. Both share the
 ### Meeting Planning
 
 - Meetings, participants, and agenda proposals are relational PostgreSQL records.
-- Accepted proposals form an ordered final agenda curated by the organizer.
+- Participants submit agenda proposals; only the Leader and Assistant Leader can accept them or add and order final agenda items.
 - An optional physical location or external meeting URL tells participants where to meet.
 - The meeting itself happens outside Damgo Hub; meeting pages do not initialize Liveblocks or provide calls, live notes, recording, or quote capture.
 

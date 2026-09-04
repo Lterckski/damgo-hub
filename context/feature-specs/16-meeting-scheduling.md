@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a place for members to schedule meetings, invite participants, and prepare an ordered agenda before the meeting starts.
+Build a place for members to schedule meetings, invite participants, and propose agenda topics before the meeting starts. Only the Leader and Assistant Leader may turn proposals into the final agenda or add agenda items directly.
 
 Damgo Hub does **not** host the meeting itself. The actual meeting happens in person or through an external service such as Google Meet, Zoom, or Microsoft Teams. This feature must not add video, audio, screen sharing, recording, live meeting notes, a Liveblocks room, or a React Flow agenda board.
 
@@ -36,18 +36,29 @@ Add `AgendaProposal`:
 - `proposedById` — relation to `Member`, `onDelete: Restrict`
 - `text`
 - `status` enum: `PENDING`, `ACCEPTED`, `DECLINED` — defaults to `PENDING`
-- `position` — optional integer; required for `ACCEPTED` items and `null` otherwise
 - timestamps
-- unique constraint on `meetingId`/`position` (PostgreSQL permits multiple `null` values)
 
-Accepted proposals are the meeting's final agenda. Accepted positions are contiguous, zero-based, and unique within the meeting. Accepting an item appends it at the next position; declining an accepted item clears its position and closes the gap; reordering rewrites all affected positions in one transaction. Queries sort accepted items by `position`, then `createdAt`, then `id` as a defensive stable fallback. They remain ordinary PostgreSQL records and do not seed a separate collaborative board.
+Add `AgendaItem`:
+
+- `id`
+- `meetingId` relation, cascade delete
+- `text`
+- `position` — required integer
+- `addedById` — relation to `Member`, `onDelete: Restrict`; always the Leader or Assistant Leader who added/accepted it
+- `sourceProposalId` — optional unique relation to `AgendaProposal`, `onDelete: SetNull`
+- timestamps
+- unique constraint on `meetingId`/`position`
+
+`AgendaItem` records are the meeting's final agenda. Positions are contiguous, zero-based, and unique within the meeting. Adding an item or accepting a proposal appends it at the next position; removing one closes the gap; reordering rewrites all affected positions in one transaction. Queries sort by `position`, then `createdAt`, then `id` as a defensive stable fallback.
+
+When the Leader or Assistant Leader accepts a pending proposal, update it to `ACCEPTED` and create its linked `AgendaItem` in the same transaction. Declining sets it to `DECLINED` without creating an item. A proposal that already has a linked agenda item cannot be accepted again. Agenda records remain ordinary PostgreSQL rows and never seed a collaborative board.
 
 ### Member deletion policy
 
 The existing Admin member-deletion transaction must handle meeting relations before deleting the member:
 
 - Reassign meetings organized by the deleted member to the acting Admin, and ensure that Admin has a deduplicated `MeetingParticipant` row for each reassigned meeting.
-- Reassign agenda proposals authored by the deleted member to the acting Admin so accepted and pending agenda content is preserved.
+- Reassign agenda proposals authored by the deleted member and agenda items added by them to the acting Admin so meeting content is preserved.
 - Delete the member's `MeetingParticipant` rows through the cascade relation.
 
 The `Restrict` relations intentionally prevent deleting a member without this reassignment. This follows the app's existing policy of preserving member-created organizational content under the acting Admin rather than silently deleting it.
@@ -57,9 +68,10 @@ The `Restrict` relations intentionally prevent deleting a member without this re
 - Any authenticated member can schedule a meeting and becomes its organizer.
 - The organizer chooses the participants and is automatically included as a participant.
 - A participant or an Admin can view the meeting detail page.
-- Any participant can propose an agenda item.
-- Only the organizer can edit the meeting, manage participants, accept or decline proposals, and reorder the accepted agenda.
-- Admin access allows oversight and viewing; it does not silently grant organizer mutation rights.
+- Any participant can submit a `PENDING` agenda proposal. Members cannot set its status or position and cannot add directly to the final agenda.
+- Only `org:admin` members—the Leader and Assistant Leader—can add final agenda items directly, accept or decline proposals, and edit, reorder, or remove final agenda items.
+- The organizer can edit the meeting details and manage participants, but receives no agenda-curation permission unless they are also the Leader or Assistant Leader.
+- Admin agenda authority does not grant permission to edit or delete another organizer's meeting details.
 
 ## Routes
 
@@ -70,8 +82,11 @@ Create REST endpoints under `app/api/meetings`:
 - `GET /api/meetings/[meetingId]` — requires participation or Admin
 - `PATCH /api/meetings/[meetingId]` — organizer only; edits details and participants. Normalize submitted participant IDs server-side by deduplicating them and always including `organizerId` before replacing participant rows.
 - `DELETE /api/meetings/[meetingId]` — organizer only
-- `POST /api/meetings/[meetingId]/agenda-proposals` — any participant can propose an item
-- `PATCH /api/meetings/[meetingId]/agenda-proposals/[proposalId]` — organizer only; accept, decline, edit, or change an accepted item's position
+- `POST /api/meetings/[meetingId]/agenda-proposals` — any participant can propose an item; always creates `PENDING` and ignores/rejects client-supplied status or position fields
+- `PATCH /api/meetings/[meetingId]/agenda-proposals/[proposalId]` — Leader or Assistant Leader only; accept or decline a pending proposal
+- `POST /api/meetings/[meetingId]/agenda-items` — Leader or Assistant Leader only; add an item directly to the end of the final agenda
+- `PATCH /api/meetings/[meetingId]/agenda-items/[agendaItemId]` — Leader or Assistant Leader only; edit text or move an item to a validated position
+- `DELETE /api/meetings/[meetingId]/agenda-items/[agendaItemId]` — Leader or Assistant Leader only; delete the item and compact the remaining positions transactionally. If it came from a proposal, set that proposal to `DECLINED` in the same transaction so `ACCEPTED` always means present on the final agenda.
 
 Validate that `endsAt`, when provided, is later than `scheduledAt`. Validate `meetingUrl` as an `http` or `https` URL.
 
@@ -102,9 +117,10 @@ Create `app/(app)/meetings/page.tsx` and `app/(app)/meetings/[meetingId]/page.ts
 - Header with title, description, date/time, organizer, participants, and optional location/external meeting link
 - Organizer-only Edit and Delete actions
 - "Proposed items" section where participants submit agenda suggestions and can see each proposal's status
-- Organizer-only Accept and Decline actions for pending proposals
-- "Final agenda" section containing accepted proposals in `position` order
-- Organizer controls to move accepted items up or down
+- Leader/Assistant Leader-only Accept and Decline actions for pending proposals
+- "Final agenda" section containing `AgendaItem` records in `position` order
+- Leader/Assistant Leader-only Add Agenda Item, Edit, Remove, Move Up, and Move Down controls
+- Regular members see the final agenda as read-only and only receive the proposal form
 - Helpful empty states when no proposals or accepted agenda items exist
 
 The detail page is an asynchronous planning page, not a live meeting workspace. It must not include a "Live Agenda" tab or initialize Liveblocks.
@@ -124,8 +140,10 @@ The detail page is an asynchronous planning page, not a live meeting workspace. 
 - Upcoming and past meetings are listed correctly.
 - Visible meetings appear on the shared calendar with their optional end time; inaccessible meetings are not leaked.
 - Participants can propose agenda items.
-- Only the organizer can accept, decline, and reorder agenda items or edit/delete the meeting.
-- Accepted proposals render as the ordered final agenda.
+- Regular members cannot directly add, edit, reorder, or remove final agenda items.
+- Only the Leader and Assistant Leader can accept/decline proposals and add, edit, reorder, or remove final agenda items.
+- The organizer alone can edit/delete meeting details, independently of agenda-curation permissions.
+- Accepted proposals create linked agenda items, and the final agenda renders in deterministic order.
 - Non-participants and non-Admins cannot view a meeting detail page.
 - No Liveblocks or in-app meeting experience is initialized from meeting pages.
 - `npm run build` passes.
