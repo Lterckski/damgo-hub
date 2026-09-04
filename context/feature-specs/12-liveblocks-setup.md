@@ -50,7 +50,14 @@ Return `403` for unauthorized access.
 
 ## Dependencies
 
-All required Liveblocks packages are already installed.
+~~All required Liveblocks packages are already installed.~~ Wasn't
+actually true when this unit was picked up — `package.json` had no
+`@liveblocks/*` packages at all. Installed `@liveblocks/client`,
+`@liveblocks/node`, and `@liveblocks/react` (all `^3.24.1`, the current
+published version) as part of this unit. `@liveblocks/react` isn't
+imported by anything yet — nothing needs its hooks until `13-roadmap-
+board.md` — installed now so all three collaborative-board units can
+build on it without a second install pass.
 
 ## Check When Done
 
