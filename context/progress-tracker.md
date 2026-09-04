@@ -108,7 +108,9 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## In Progress
 
-- None new. `10`'s Google Calendar Sync piece is still code-complete but unverified end-to-end, pending external Google Cloud/Clerk setup — unrelated to this pass.
+- **Production meeting-create repair:** the initial meeting migration had been applied manually to production, but the additive outbox/delivery-hardening migrations from unit `16` had not. Since meeting creation transactionally writes `MeetingNotificationOutbox`, production rolled back every new meeting and returned a non-JSON `500`, which the dialog could only display as "Something went wrong." `package.json` now defines a Vercel build command that runs `prisma migrate deploy` for production deployments before `next build`; preview deployments deliberately skip migrations so a preview cannot mutate the production database. `POST /api/meetings` also converts unexpected persistence failures into a stable JSON `500` response while logging the server-side cause. The fix takes effect after this branch is merged and Vercel's production deployment applies the pending migrations.
+
+- `10`'s Google Calendar Sync piece is still code-complete but unverified end-to-end, pending external Google Cloud/Clerk setup — unrelated to this pass.
 
 ## Next Up
 

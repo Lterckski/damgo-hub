@@ -112,54 +112,29 @@ export async function POST(request: Request) {
     ? normalizeAgendaItemDrafts(agendaItems.filter((item): item is string => typeof item === "string"))
     : [];
 
-  const { meeting, invitationOutboxId } = await prisma.$transaction(async (tx) => {
-    const meeting = await tx.meeting.create({
-      data: {
-        title: title.trim(),
-        description: typeof description === "string" && description.trim() !== "" ? description.trim() : null,
-        scheduledAt: scheduledAtDate,
-        endsAt: endsAtDate,
-        location: typeof location === "string" && location.trim() !== "" ? location.trim() : null,
-        meetingUrl: meetingUrlValue,
-        organizerId: organizer.id,
-        participants: { create: participantMemberIds.map((memberId) => ({ memberId })) },
-      },
-      include: MEETING_LIST_INCLUDE,
-    });
-
-    // Agenda items added while scheduling go straight onto the final
-    // agenda, in submission order, same as POST /agenda-items — this is
-    // just that same direct-add path, done inline during creation instead
-    // of as a separate follow-up request.
-    if (agendaItemTexts.length > 0) {
-      await tx.agendaItem.createMany({
-        data: agendaItemTexts.map((text, position) => ({
-          meetingId: meeting.id,
-          text,
-          position,
-          addedById: organizer.id,
-        })),
-      });
-    }
-
-    const invitationOutboxId = await createMeetingNotificationOutbox(
-      tx,
-      "INVITATION",
-      meeting.id,
-      meeting.notificationRevision,
+  let creationResult: Awaited<ReturnType<typeof createMeeting>>;
+  try {
+    creationResult = await createMeeting({
+      title: title.trim(),
+      description: typeof description === "string" && description.trim() !== "" ? description.trim() : null,
+      scheduledAt: scheduledAtDate,
+      endsAt: endsAtDate,
+      location: typeof location === "string" && location.trim() !== "" ? location.trim() : null,
+      meetingUrl: meetingUrlValue,
+      organizerId: organizer.id,
+      organizerName: organizer.displayName,
       participantMemberIds,
-      {
-        title: meeting.title,
-        description: meeting.description,
-        scheduledAt: meeting.scheduledAt.toISOString(),
-        endsAt: meeting.endsAt ? meeting.endsAt.toISOString() : null,
-        location: meeting.location,
-        meetingUrl: meeting.meetingUrl,
-        organizerName: meeting.organizer.displayName,
-      },
+      agendaItemTexts,
+    });
+  } catch (error) {
+    console.error("Failed to schedule meeting", { organizerId: organizer.id, error });
+    return NextResponse.json(
+      { error: "The meeting could not be scheduled. Please try again." },
+      { status: 500 },
     );
-    return { meeting, invitationOutboxId };
-  });
+  }
+
+  const { meeting, invitationOutboxId } = creationResult;
 
   // External side effects happen after the durable meeting + outbox commit.
   // Their failure is logged but never turns a successful create into a 500.
@@ -174,4 +149,67 @@ export async function POST(request: Request) {
   if (invitationOutboxId) await enqueueMeetingNotificationOutbox(invitationOutboxId);
 
   return NextResponse.json({ meeting: serializeMeetingListItem(meeting) }, { status: 201 });
+}
+
+interface CreateMeetingInput {
+  title: string;
+  description: string | null;
+  scheduledAt: Date;
+  endsAt: Date | null;
+  location: string | null;
+  meetingUrl: string | null;
+  organizerId: string;
+  organizerName: string;
+  participantMemberIds: string[];
+  agendaItemTexts: string[];
+}
+
+function createMeeting(input: CreateMeetingInput) {
+  return prisma.$transaction(async (tx) => {
+    const meeting = await tx.meeting.create({
+      data: {
+        title: input.title,
+        description: input.description,
+        scheduledAt: input.scheduledAt,
+        endsAt: input.endsAt,
+        location: input.location,
+        meetingUrl: input.meetingUrl,
+        organizerId: input.organizerId,
+        participants: {
+          create: input.participantMemberIds.map((memberId) => ({ memberId })),
+        },
+      },
+      include: MEETING_LIST_INCLUDE,
+    });
+
+    if (input.agendaItemTexts.length > 0) {
+      await tx.agendaItem.createMany({
+        data: input.agendaItemTexts.map((text, position) => ({
+          meetingId: meeting.id,
+          text,
+          position,
+          addedById: input.organizerId,
+        })),
+      });
+    }
+
+    const invitationOutboxId = await createMeetingNotificationOutbox(
+      tx,
+      "INVITATION",
+      meeting.id,
+      meeting.notificationRevision,
+      input.participantMemberIds,
+      {
+        title: meeting.title,
+        description: meeting.description,
+        scheduledAt: meeting.scheduledAt.toISOString(),
+        endsAt: meeting.endsAt ? meeting.endsAt.toISOString() : null,
+        location: meeting.location,
+        meetingUrl: meeting.meetingUrl,
+        organizerName: input.organizerName,
+      },
+    );
+
+    return { meeting, invitationOutboxId };
+  });
 }
