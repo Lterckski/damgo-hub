@@ -1,20 +1,20 @@
-import { isCurrentMemberAdmin } from "@/lib/current-member";
-import { AccessDenied } from "@/components/shared/access-denied";
-import { BackButton } from "@/components/shared/back-button";
-import { ComingSoon } from "@/components/shared/coming-soon";
+import { AlertTriangle, FolderKanban, ReceiptText, Users } from "lucide-react";
 
-// 20-admin-dashboard.md hasn't been built yet — this route exists (the
-// dock already links here, admin-only) so visiting it says so plainly
-// instead of 404ing. Gated the same way the dock icon itself is gated
-// (isAdmin), as defense in depth against a non-admin hitting the URL
-// directly. Member management (edit role tags, activate/deactivate,
-// delete) already lives on /members, not here — this page is reserved for
-// whatever unit 20 actually turns out to need beyond that.
-export default async function AdminPage() {
-  const isAdmin = await isCurrentMemberAdmin();
-  if (!isAdmin) {
-    return <AccessDenied backHref="/dashboard" backLabel="Back to Dashboard" />;
-  }
+import { prisma } from "@/lib/prisma";
+import { BackButton } from "@/components/shared/back-button";
+import { DashboardWidget } from "@/components/dashboard/dashboard-widget";
+
+// Admin overview — see 20-admin-dashboard.md. A thin aggregation layer:
+// four real counts, each card linking to the detail tab that actually
+// manages that data. No new domain model, no admin-only duplicate of
+// anything already built.
+export default async function AdminOverviewPage() {
+  const [totalMembers, openPenalties, pendingTransactions, activeProjects] = await Promise.all([
+    prisma.member.count(),
+    prisma.penalty.count({ where: { status: "OPEN" } }),
+    prisma.transaction.count({ where: { status: "PENDING" } }),
+    prisma.project.count({ where: { status: "ACTIVE" } }),
+  ]);
 
   return (
     <div className="p-6">
@@ -22,7 +22,22 @@ export default async function AdminPage() {
         <BackButton />
         <h1 className="font-display text-3xl text-copy-primary">Admin</h1>
       </div>
-      <ComingSoon feature="The admin dashboard" />
+      <p className="mt-1 text-sm text-copy-secondary">Oversight across members, finance, penalties, and projects.</p>
+
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <DashboardWidget title="Total Members" icon={Users} viewAllHref="/admin/members">
+          <p className="text-3xl font-bold text-copy-primary">{totalMembers}</p>
+        </DashboardWidget>
+        <DashboardWidget title="Open Penalties" icon={AlertTriangle} viewAllHref="/admin/penalties">
+          <p className="text-3xl font-bold text-copy-primary">{openPenalties}</p>
+        </DashboardWidget>
+        <DashboardWidget title="Pending Transactions" icon={ReceiptText} viewAllHref="/admin/finance">
+          <p className="text-3xl font-bold text-copy-primary">{pendingTransactions}</p>
+        </DashboardWidget>
+        <DashboardWidget title="Active Projects" icon={FolderKanban} viewAllHref="/admin/projects">
+          <p className="text-3xl font-bold text-copy-primary">{activeProjects}</p>
+        </DashboardWidget>
+      </div>
     </div>
   );
 }
