@@ -168,7 +168,7 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 
 ### Analytics / Reports
 
-- Meetings scheduled and completed over time
+- Meetings scheduled over time
 - Tasks finished vs. pending (per member, per project, team-wide)
 - Financial trends (spending over time, budget vs actual)
 - Penalty trends per member
