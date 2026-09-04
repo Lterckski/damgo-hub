@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
-import { nextAgendaPosition } from "@/lib/meetings";
+import { nextAgendaPosition, runSerializableMeetingTransaction } from "@/lib/meetings";
 import { prisma } from "@/lib/prisma";
 
 // POST /api/meetings/[meetingId]/agenda-items — Leader or Assistant
@@ -33,7 +33,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ mee
     return NextResponse.json({ error: "text is required" }, { status: 400 });
   }
 
-  const agendaItem = await prisma.$transaction(async (tx) => {
+  const agendaItem = await runSerializableMeetingTransaction(async (tx) => {
     const position = await nextAgendaPosition(tx, meetingId);
     return tx.agendaItem.create({
       data: { meetingId, text, position, addedById: member.id },

@@ -457,9 +457,9 @@ export function CalendarView({
                   }}
                 >
                   {segments.map(({ bar, startCol, span, continuesBefore, continuesAfter }) => (
-                    <div
+                    <button
                       key={bar.key}
-                      role="button"
+                      type="button"
                       onClick={() => openItem(bar)}
                       className={cn(
                         "pointer-events-auto flex cursor-pointer items-center truncate px-1.5 py-0.5 text-[11px] font-semibold",
@@ -473,7 +473,7 @@ export function CalendarView({
                       }}
                     >
                       {bar.title}
-                    </div>
+                    </button>
                   ))}
                 </div>
 
@@ -544,27 +544,27 @@ export function CalendarView({
                     : "Unassigned"
                   : null;
                 return (
-                  <li
-                    key={bar.key}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openItem(bar)}
-                    className="flex cursor-pointer items-center gap-3 rounded-xl border border-surface-border bg-surface px-3 py-2.5 transition-colors hover:border-brand/40"
-                  >
-                    <span className={cn("h-2 w-2 shrink-0 rounded-full", TYPE_DOT[bar.type])} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <p className="text-sm font-medium text-copy-primary">{bar.title}</p>
-                        {task && <TaskPriorityBadge priority={task.priority as TaskPriorityValue} />}
+                  <li key={bar.key}>
+                    <button
+                      type="button"
+                      onClick={() => openItem(bar)}
+                      className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-surface-border bg-surface px-3 py-2.5 text-left transition-colors hover:border-brand/40"
+                    >
+                      <span className={cn("h-2 w-2 shrink-0 rounded-full", TYPE_DOT[bar.type])} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="text-sm font-medium text-copy-primary">{bar.title}</p>
+                          {task && <TaskPriorityBadge priority={task.priority as TaskPriorityValue} />}
+                        </div>
+                        <p className="text-xs font-medium text-copy-secondary">
+                          {TYPE_LABEL[bar.type]}
+                          {multiDay
+                            ? ` · ${format(bar.start, "MMM d")} – ${format(bar.end, "MMM d")}`
+                            : ""}
+                          {assignedTo ? ` · Assigned to ${assignedTo}` : ""}
+                        </p>
                       </div>
-                      <p className="text-xs font-medium text-copy-secondary">
-                        {TYPE_LABEL[bar.type]}
-                        {multiDay
-                          ? ` · ${format(bar.start, "MMM d")} – ${format(bar.end, "MMM d")}`
-                          : ""}
-                        {assignedTo ? ` · Assigned to ${assignedTo}` : ""}
-                      </p>
-                    </div>
+                    </button>
                   </li>
                 );
               })}

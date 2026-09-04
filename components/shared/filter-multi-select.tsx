@@ -14,6 +14,7 @@ export interface FilterOption {
 }
 
 interface FilterMultiSelectProps {
+  id?: string;
   label: string;
   options: FilterOption[];
   selected: string[];
@@ -30,7 +31,7 @@ interface FilterMultiSelectProps {
  * controlled, teal-accented outline button so it reads as "filter," not
  * "form field."
  */
-export function FilterMultiSelect({ label, options, selected, onChange }: FilterMultiSelectProps) {
+export function FilterMultiSelect({ id, label, options, selected, onChange }: FilterMultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   function toggle(value: string) {
@@ -42,6 +43,7 @@ export function FilterMultiSelect({ label, options, selected, onChange }: Filter
       <PopoverTrigger
         render={
           <Button
+            id={id}
             type="button"
             variant="outline"
             size="sm"

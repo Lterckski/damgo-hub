@@ -20,6 +20,14 @@ enum MeetingEmailDeliveryStatus {
   SENDING
   SENT
   FAILED
+  SKIPPED
+}
+
+enum MeetingNotificationOutboxStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
 }
 
 model Meeting {
@@ -58,6 +66,7 @@ model Meeting {
   agendaItems       AgendaItem[]
 
   @@index([scheduledAt])
+  @@index([organizerId])
 }
 
 model MeetingParticipant {
@@ -88,6 +97,7 @@ model AgendaProposal {
   agendaItem AgendaItem?
 
   @@index([meetingId])
+  @@index([proposedById])
 }
 
 model AgendaItem {
@@ -117,6 +127,7 @@ model AgendaItem {
 
   @@unique([meetingId, position])
   @@index([meetingId])
+  @@index([addedById])
 }
 
 // Durable delivery/idempotency record for meeting email — see
@@ -146,4 +157,24 @@ model MeetingEmailDelivery {
   @@unique([meetingId, recipientMemberId, notificationType, meetingRevision])
   @@index([meetingId])
   @@index([status])
+}
+
+// Durable intent written in the same transaction as a meeting mutation.
+// Trigger.dev delivery can be retried from this record after an outage.
+model MeetingNotificationOutbox {
+  id                 String                          @id @default(cuid())
+  meetingId          String
+  notificationType   MeetingNotificationType
+  meetingRevision    Int
+  recipientMemberIds Json
+  snapshot           Json
+  status             MeetingNotificationOutboxStatus @default(PENDING)
+  attemptCount       Int                             @default(0)
+  lastError          String?
+  processedAt        DateTime?
+  createdAt          DateTime                        @default(now())
+  updatedAt          DateTime                        @updatedAt
+
+  @@index([meetingId])
+  @@index([status, updatedAt])
 }

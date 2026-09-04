@@ -1,44 +1,38 @@
-import { task } from "@trigger.dev/sdk";
+import { schedules, task, tasks } from "@trigger.dev/sdk";
 
-import { sendOneMeetingEmail, type MeetingSnapshot } from "@/lib/meeting-notifications";
-import type { MeetingNotificationType } from "@/app/generated/prisma/enums";
+import {
+  pendingMeetingNotificationOutboxIds,
+  processMeetingNotificationOutbox,
+} from "@/lib/meeting-notifications";
 
 // Immediate meeting email — invitation, update, participant-removed, or
 // full cancellation. See 16-meeting-scheduling.md's Email Notifications
-// section. `snapshot` is captured at enqueue time (lib/meeting-notifications
-// .ts's enqueueMeetingNotification), not re-read from the Meeting row here,
-// because a MEETING_CANCELLED notification's meeting has already been
-// deleted by the time this task actually runs.
+// section. The task receives only a durable outbox ID; the outbox retains
+// the immutable snapshot because a cancelled meeting row no longer exists
+// by the time this task runs.
 export interface MeetingNotificationPayload {
-  meetingId: string;
-  notificationType: Exclude<MeetingNotificationType, "REMINDER_24H" | "REMINDER_1H">;
-  meetingRevision: number;
-  recipientMemberIds: string[];
-  snapshot: MeetingSnapshot;
+  outboxId: string;
 }
 
 export const meetingNotificationTask = task({
   id: "meeting-notification",
   run: async (payload: MeetingNotificationPayload) => {
-    let anyFailed = false;
+    await processMeetingNotificationOutbox(payload.outboxId);
+  },
+});
 
-    for (const recipientMemberId of payload.recipientMemberIds) {
-      const ok = await sendOneMeetingEmail({
-        meetingId: payload.meetingId,
-        notificationType: payload.notificationType,
-        meetingRevision: payload.meetingRevision,
-        recipientMemberId,
-        snapshot: payload.snapshot,
-      });
-      if (!ok) anyFailed = true;
-    }
-
-    // Throwing (rather than swallowing) is what lets Trigger.dev's own
-    // configured retries (trigger.config.ts) actually re-run this task —
-    // a retry safely skips every recipient already marked SENT via the
-    // claim check in sendOneMeetingEmail.
-    if (anyFailed) {
-      throw new Error("One or more meeting notification emails failed to send");
-    }
+// Recovery path for an API-to-Trigger outage. The meeting mutation commits
+// its outbox row first; this sweep finds any intent whose fast-path enqueue
+// never arrived and dispatches it after Trigger.dev recovers.
+export const meetingNotificationOutboxSweepTask = schedules.task({
+  id: "meeting-notification-outbox-sweep",
+  cron: "*/5 * * * *",
+  run: async () => {
+    const outboxIds = await pendingMeetingNotificationOutboxIds();
+    if (outboxIds.length === 0) return;
+    await tasks.batchTrigger<typeof meetingNotificationTask>(
+      "meeting-notification",
+      outboxIds.map((outboxId) => ({ payload: { outboxId } })),
+    );
   },
 });

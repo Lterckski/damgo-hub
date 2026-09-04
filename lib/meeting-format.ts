@@ -26,7 +26,9 @@ const KNOWN_MEETING_SERVICES: { match: string; label: string }[] = [
 export function meetingServiceLabel(meetingUrl: string): string {
   try {
     const host = new URL(meetingUrl).hostname;
-    const known = KNOWN_MEETING_SERVICES.find((service) => host.endsWith(service.match));
+    const known = KNOWN_MEETING_SERVICES.find(
+      (service) => host === service.match || host.endsWith(`.${service.match}`),
+    );
     return known?.label ?? "External meeting";
   } catch {
     return "External meeting";

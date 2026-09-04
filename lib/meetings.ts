@@ -196,11 +196,13 @@ export function splitMeetingsByTime(
   now: Date = new Date(),
 ): { upcoming: SerializedMeetingListItem[]; past: SerializedMeetingListItem[] } {
   const nowMs = now.getTime();
+  const effectiveEnd = (meeting: SerializedMeetingListItem) =>
+    new Date(meeting.endsAt ?? meeting.scheduledAt).getTime();
   const upcoming = meetings
-    .filter((m) => new Date(m.scheduledAt).getTime() >= nowMs)
+    .filter((m) => effectiveEnd(m) >= nowMs)
     .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
   const past = meetings
-    .filter((m) => new Date(m.scheduledAt).getTime() < nowMs)
+    .filter((m) => effectiveEnd(m) < nowMs)
     .sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt));
   return { upcoming, past };
 }
@@ -247,6 +249,25 @@ export function isEndsAtValid(scheduledAt: Date, endsAt: Date | null): boolean {
 
 type TransactionClient = Prisma.TransactionClient;
 
+const SERIALIZABLE_TRANSACTION_ATTEMPTS = 3;
+
+/** Runs position allocation and its write as one serializable, retryable unit. */
+export async function runSerializableMeetingTransaction<T>(
+  operation: (tx: TransactionClient) => Promise<T>,
+): Promise<T> {
+  for (let attempt = 0; attempt < SERIALIZABLE_TRANSACTION_ATTEMPTS; attempt += 1) {
+    try {
+      return await prisma.$transaction(operation, { isolationLevel: "Serializable" });
+    } catch (error) {
+      const isWriteConflict =
+        typeof error === "object" && error !== null && "code" in error && error.code === "P2034";
+      if (!isWriteConflict || attempt === SERIALIZABLE_TRANSACTION_ATTEMPTS - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** attempt));
+    }
+  }
+  throw new Error("Serializable meeting transaction exhausted its retries");
+}
+
 export async function nextAgendaPosition(tx: TransactionClient, meetingId: string): Promise<number> {
   const last = await tx.agendaItem.findFirst({
     where: { meetingId },
@@ -262,13 +283,10 @@ export async function compactAgendaPositions(
   meetingId: string,
   removedPosition: number,
 ): Promise<void> {
-  const after = await tx.agendaItem.findMany({
+  await tx.agendaItem.updateMany({
     where: { meetingId, position: { gt: removedPosition } },
-    orderBy: { position: "asc" },
+    data: { position: { decrement: 1 } },
   });
-  for (const item of after) {
-    await tx.agendaItem.update({ where: { id: item.id }, data: { position: item.position - 1 } });
-  }
 }
 
 /**

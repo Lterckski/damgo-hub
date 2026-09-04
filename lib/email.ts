@@ -66,6 +66,9 @@ export async function sendEmail({ to, subject, html, idempotencyKey }: SendEmail
   if (!from) {
     return { ok: false, error: "MEETING_EMAIL_FROM is not set" };
   }
+  if (!process.env.APP_URL) {
+    return { ok: false, error: "APP_URL is not set" };
+  }
 
   try {
     const client = getResendClient();

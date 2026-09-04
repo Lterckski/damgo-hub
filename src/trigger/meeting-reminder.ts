@@ -18,12 +18,13 @@ import { sendOneMeetingEmail } from "@/lib/meeting-notifications";
 // error, since there's nothing left to remind anyone about.
 export interface MeetingReminderPayload {
   meetingId: string;
+  expectedNotificationRevision: number;
   reminderType: "REMINDER_24H" | "REMINDER_1H";
 }
 
 export const meetingReminderTask = task({
   id: "meeting-reminder",
-  run: async (payload: MeetingReminderPayload) => {
+  run: async (payload: MeetingReminderPayload, { ctx }) => {
     const meeting = await prisma.meeting.findUnique({
       where: { id: payload.meetingId },
       include: {
@@ -34,15 +35,21 @@ export const meetingReminderTask = task({
 
     if (!meeting) return;
 
+    const expectedRunId =
+      payload.reminderType === "REMINDER_24H" ? meeting.reminder24hRunId : meeting.reminder1hRunId;
+    if (meeting.notificationRevision !== payload.expectedNotificationRevision || expectedRunId !== ctx.run.id) {
+      return;
+    }
+
     const recipientMemberIds = meeting.participants.map((p) => p.memberId);
     if (recipientMemberIds.length === 0) return;
 
     let anyFailed = false;
     for (const recipientMemberId of recipientMemberIds) {
-      const ok = await sendOneMeetingEmail({
+      const result = await sendOneMeetingEmail({
         meetingId: meeting.id,
         notificationType: payload.reminderType,
-        meetingRevision: meeting.notificationRevision,
+        meetingRevision: payload.expectedNotificationRevision,
         recipientMemberId,
         snapshot: {
           title: meeting.title,
@@ -54,7 +61,7 @@ export const meetingReminderTask = task({
           organizerName: meeting.organizer.displayName,
         },
       });
-      if (!ok) anyFailed = true;
+      if (result === "transient-failure") anyFailed = true;
     }
 
     if (anyFailed) {

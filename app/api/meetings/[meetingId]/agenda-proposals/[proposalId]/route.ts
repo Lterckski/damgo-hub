@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
-import { nextAgendaPosition } from "@/lib/meetings";
-import { prisma } from "@/lib/prisma";
+import { nextAgendaPosition, runSerializableMeetingTransaction } from "@/lib/meetings";
 
 // PATCH /api/meetings/[meetingId]/agenda-proposals/[proposalId] — Leader
 // or Assistant Leader only. Accepts (creates the linked AgendaItem in the
@@ -32,31 +31,34 @@ export async function PATCH(
     return NextResponse.json({ error: "status must be ACCEPTED or DECLINED" }, { status: 400 });
   }
 
-  const proposal = await prisma.agendaProposal.findUnique({ where: { id: proposalId } });
-  if (!proposal || proposal.meetingId !== meetingId) {
-    return NextResponse.json({ error: "Proposal not found" }, { status: 404 });
-  }
-  // A proposal that already has a linked agenda item cannot be accepted
-  // again, per this spec — and a declined one can't be re-decided either;
-  // both cases collapse to "this proposal is no longer PENDING."
-  if (proposal.status !== "PENDING") {
-    return NextResponse.json({ error: "This proposal has already been decided" }, { status: 409 });
-  }
+  const result = await runSerializableMeetingTransaction(async (tx) => {
+    const proposal = await tx.agendaProposal.findUnique({ where: { id: proposalId } });
+    if (!proposal || proposal.meetingId !== meetingId) return { kind: "not-found" } as const;
 
-  if (status === "DECLINED") {
-    await prisma.agendaProposal.update({ where: { id: proposalId }, data: { status: "DECLINED" } });
-    return NextResponse.json({ ok: true });
-  }
+    const claim = await tx.agendaProposal.updateMany({
+      where: { id: proposalId, meetingId, status: "PENDING" },
+      data: { status },
+    });
+    if (claim.count === 0) return { kind: "conflict" } as const;
+    if (status === "DECLINED") return { kind: "declined" } as const;
 
-  const agendaItem = await prisma.$transaction(async (tx) => {
     const position = await nextAgendaPosition(tx, meetingId);
-    const item = await tx.agendaItem.create({
+    const agendaItem = await tx.agendaItem.create({
       data: { meetingId, text: proposal.text, position, addedById: member.id, sourceProposalId: proposal.id },
       include: { addedBy: { select: { displayName: true } } },
     });
-    await tx.agendaProposal.update({ where: { id: proposalId }, data: { status: "ACCEPTED" } });
-    return item;
+    return { kind: "accepted", agendaItem } as const;
   });
+
+  if (result.kind === "not-found") {
+    return NextResponse.json({ error: "Proposal not found" }, { status: 404 });
+  }
+  if (result.kind === "conflict") {
+    return NextResponse.json({ error: "This proposal has already been decided" }, { status: 409 });
+  }
+  if (result.kind === "declined") return NextResponse.json({ ok: true });
+
+  const agendaItem = result.agendaItem;
 
   return NextResponse.json({
     agendaItem: {

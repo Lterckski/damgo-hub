@@ -4,7 +4,8 @@ import { auth } from "@clerk/nextjs/server";
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
 import {
   cancelMeetingReminders,
-  enqueueMeetingNotification,
+  createMeetingNotificationOutbox,
+  enqueueMeetingNotificationOutboxes,
   scheduleMeetingReminders,
 } from "@/lib/meeting-notifications";
 import {
@@ -154,7 +155,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ me
   const emailRelevantChange = detailsChanged(existing, newDetails);
   const participantsChanged = addedIds.length > 0 || removedIds.length > 0;
 
-  const updated = await prisma.$transaction(async (tx) => {
+  const { full, outboxIds } = await prisma.$transaction(async (tx) => {
     const meeting = await tx.meeting.update({
       where: { id: meetingId },
       data: {
@@ -176,35 +177,53 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ me
       }
     }
 
-    return meeting;
+    const full = await tx.meeting.findUniqueOrThrow({ where: { id: meetingId }, include: MEETING_DETAIL_INCLUDE });
+    const snapshot = meetingSnapshot(full);
+    const outboxIds = await Promise.all([
+      createMeetingNotificationOutbox(
+        tx,
+        "INVITATION",
+        meetingId,
+        meeting.notificationRevision,
+        addedIds,
+        snapshot,
+      ),
+      createMeetingNotificationOutbox(
+        tx,
+        "PARTICIPANT_REMOVED",
+        meetingId,
+        meeting.notificationRevision,
+        removedIds,
+        snapshot,
+      ),
+      emailRelevantChange
+        ? createMeetingNotificationOutbox(
+            tx,
+            "UPDATED",
+            meetingId,
+            meeting.notificationRevision,
+            remainingIds,
+            snapshot,
+          )
+        : null,
+    ]);
+
+    return { full, outboxIds };
   });
 
-  const full = await prisma.meeting.findUniqueOrThrow({ where: { id: meetingId }, include: MEETING_DETAIL_INCLUDE });
-  const snapshot = meetingSnapshot(full);
-
-  if (addedIds.length > 0) {
-    await enqueueMeetingNotification("INVITATION", meetingId, updated.notificationRevision, addedIds, snapshot);
-  }
-  if (removedIds.length > 0) {
-    await enqueueMeetingNotification(
-      "PARTICIPANT_REMOVED",
-      meetingId,
-      updated.notificationRevision,
-      removedIds,
-      snapshot,
-    );
-  }
-  if (emailRelevantChange && remainingIds.length > 0) {
-    await enqueueMeetingNotification("UPDATED", meetingId, updated.notificationRevision, remainingIds, snapshot);
-  }
+  await enqueueMeetingNotificationOutboxes(outboxIds);
 
   // Reschedule reminders on every successful edit, per this spec's
   // "Creating/updating a meeting schedules new reminder runs and cancels
   // any still-pending reminder runs for the previous schedule" — not
   // conditioned on scheduledAt specifically having changed.
-  await cancelMeetingReminders(existing);
-  const { reminder24hRunId, reminder1hRunId } = await scheduleMeetingReminders(full);
-  await prisma.meeting.update({ where: { id: meetingId }, data: { reminder24hRunId, reminder1hRunId } });
+  try {
+    await cancelMeetingReminders(existing);
+    const { reminder24hRunId, reminder1hRunId } = await scheduleMeetingReminders(full);
+    await prisma.meeting.update({ where: { id: meetingId }, data: { reminder24hRunId, reminder1hRunId } });
+  } catch (error) {
+    console.error("Failed to reconcile reminder runs after meeting update", { meetingId, error });
+  }
 
   return NextResponse.json({ meeting: serializeMeeting(full) });
 }
@@ -227,8 +246,6 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     return NextResponse.json({ error: "Only the organizer can delete this meeting" }, { status: 403 });
   }
 
-  await cancelMeetingReminders(meeting);
-
   const participantIds = meeting.participants.map((p) => p.member.id);
   const snapshot = meetingSnapshot(meeting);
 
@@ -236,15 +253,23 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   // MeetingEmailDelivery rows deliberately survive (see
   // 16-meeting-scheduling.md's schema notes: it's durable delivery
   // history keyed on plain string columns, not a relation).
-  await prisma.meeting.delete({ where: { id: meetingId } });
+  const cancellationOutboxId = await prisma.$transaction(async (tx) => {
+    const outboxId = await createMeetingNotificationOutbox(
+      tx,
+      "MEETING_CANCELLED",
+      meetingId,
+      meeting.notificationRevision,
+      participantIds,
+      snapshot,
+    );
+    await tx.meeting.delete({ where: { id: meetingId } });
+    return outboxId;
+  });
 
-  await enqueueMeetingNotification(
-    "MEETING_CANCELLED",
-    meetingId,
-    meeting.notificationRevision,
-    participantIds,
-    snapshot,
-  );
+  await cancelMeetingReminders(meeting).catch((error) => {
+    console.error("Failed to cancel reminders after meeting deletion", { meetingId, error });
+  });
+  if (cancellationOutboxId) await enqueueMeetingNotificationOutboxes([cancellationOutboxId]);
 
   return NextResponse.json({ ok: true });
 }

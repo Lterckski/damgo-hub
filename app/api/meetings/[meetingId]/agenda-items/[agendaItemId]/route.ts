@@ -2,8 +2,14 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 import { isCurrentMemberAdmin } from "@/lib/current-member";
-import { compactAgendaPositions, moveAgendaItemToPosition } from "@/lib/meetings";
+import {
+  compactAgendaPositions,
+  moveAgendaItemToPosition,
+  runSerializableMeetingTransaction,
+} from "@/lib/meetings";
 import { prisma } from "@/lib/prisma";
+
+class AgendaItemNotFoundError extends Error {}
 
 // PATCH /api/meetings/[meetingId]/agenda-items/[agendaItemId] — Leader or
 // Assistant Leader only. Edits text and/or moves the item to a validated
@@ -24,11 +30,6 @@ export async function PATCH(
   }
 
   const { meetingId, agendaItemId } = await params;
-  const existing = await prisma.agendaItem.findUnique({ where: { id: agendaItemId } });
-  if (!existing || existing.meetingId !== meetingId) {
-    return NextResponse.json({ error: "Agenda item not found" }, { status: 404 });
-  }
-
   const body = await request.json().catch(() => null);
   const { text, position } = body ?? {};
 
@@ -39,19 +40,30 @@ export async function PATCH(
     return NextResponse.json({ error: "position must be a non-negative integer" }, { status: 400 });
   }
 
-  await prisma.$transaction(async (tx) => {
-    if (typeof position === "number") {
-      await moveAgendaItemToPosition(tx, meetingId, agendaItemId, position);
-    }
-    if (typeof text === "string") {
-      await tx.agendaItem.update({ where: { id: agendaItemId }, data: { text: text.trim() } });
-    }
-  });
+  try {
+    await runSerializableMeetingTransaction(async (tx) => {
+      const current = await tx.agendaItem.findUnique({ where: { id: agendaItemId } });
+      if (!current || current.meetingId !== meetingId) throw new AgendaItemNotFoundError();
 
-  const updated = await prisma.agendaItem.findUniqueOrThrow({
+      if (typeof position === "number") {
+        await moveAgendaItemToPosition(tx, meetingId, agendaItemId, position);
+      }
+      if (typeof text === "string") {
+        await tx.agendaItem.update({ where: { id: agendaItemId }, data: { text: text.trim() } });
+      }
+    });
+  } catch (error) {
+    if (error instanceof AgendaItemNotFoundError) {
+      return NextResponse.json({ error: "Agenda item not found" }, { status: 404 });
+    }
+    throw error;
+  }
+
+  const updated = await prisma.agendaItem.findUnique({
     where: { id: agendaItemId },
     include: { addedBy: { select: { displayName: true } } },
   });
+  if (!updated) return NextResponse.json({ error: "Agenda item not found" }, { status: 404 });
 
   return NextResponse.json({
     agendaItem: {
@@ -87,18 +99,26 @@ export async function DELETE(
   }
 
   const { meetingId, agendaItemId } = await params;
-  const existing = await prisma.agendaItem.findUnique({ where: { id: agendaItemId } });
-  if (!existing || existing.meetingId !== meetingId) {
-    return NextResponse.json({ error: "Agenda item not found" }, { status: 404 });
-  }
+  try {
+    await runSerializableMeetingTransaction(async (tx) => {
+      const current = await tx.agendaItem.findUnique({ where: { id: agendaItemId } });
+      if (!current || current.meetingId !== meetingId) throw new AgendaItemNotFoundError();
 
-  await prisma.$transaction(async (tx) => {
-    await tx.agendaItem.delete({ where: { id: agendaItemId } });
-    await compactAgendaPositions(tx, meetingId, existing.position);
-    if (existing.sourceProposalId) {
-      await tx.agendaProposal.update({ where: { id: existing.sourceProposalId }, data: { status: "DECLINED" } });
+      await tx.agendaItem.delete({ where: { id: agendaItemId } });
+      await compactAgendaPositions(tx, meetingId, current.position);
+      if (current.sourceProposalId) {
+        await tx.agendaProposal.updateMany({
+          where: { id: current.sourceProposalId },
+          data: { status: "DECLINED" },
+        });
+      }
+    });
+  } catch (error) {
+    if (error instanceof AgendaItemNotFoundError) {
+      return NextResponse.json({ error: "Agenda item not found" }, { status: 404 });
     }
-  });
+    throw error;
+  }
 
   return NextResponse.json({ ok: true });
 }

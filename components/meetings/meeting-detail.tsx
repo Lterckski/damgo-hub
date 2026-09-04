@@ -48,6 +48,20 @@ function initialsFor(name: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
+async function runMeetingMutation(url: string, init: RequestInit, fallbackMessage: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(url, init);
+  } catch {
+    throw new Error("Couldn't connect to Damgo Hub. Please try again.");
+  }
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.error ?? fallbackMessage);
+  }
+}
+
 /**
  * Owns the whole meeting detail page below the top nav — an asynchronous
  * planning page, not a live meeting workspace (no Liveblocks, no "Live
@@ -59,6 +73,7 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
   const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const [proposalText, setProposalText] = useState("");
   const [proposalError, setProposalError] = useState<string | null>(null);
@@ -75,9 +90,12 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
 
   async function deleteMeeting() {
     setIsSaving(true);
+    setActionError(null);
     try {
-      await fetch(`/api/meetings/${meeting.id}`, { method: "DELETE" });
+      await runMeetingMutation(`/api/meetings/${meeting.id}`, { method: "DELETE" }, "Couldn't delete this meeting.");
       router.push("/meetings");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Couldn't delete this meeting.");
     } finally {
       setIsSaving(false);
     }
@@ -88,18 +106,15 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
     setIsSubmittingProposal(true);
     setProposalError(null);
     try {
-      const response = await fetch(`/api/meetings/${meeting.id}/agenda-proposals`, {
+      await runMeetingMutation(`/api/meetings/${meeting.id}/agenda-proposals`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: proposalText.trim() }),
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        setProposalError(body?.error ?? "Couldn't submit this proposal.");
-        return;
-      }
+      }, "Couldn't submit this proposal.");
       setProposalText("");
       router.refresh();
+    } catch (error) {
+      setProposalError(error instanceof Error ? error.message : "Couldn't submit this proposal.");
     } finally {
       setIsSubmittingProposal(false);
     }
@@ -107,13 +122,16 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
 
   async function decideProposal(proposalId: string, status: "ACCEPTED" | "DECLINED") {
     setBusyProposalId(proposalId);
+    setActionError(null);
     try {
-      await fetch(`/api/meetings/${meeting.id}/agenda-proposals/${proposalId}`, {
+      await runMeetingMutation(`/api/meetings/${meeting.id}/agenda-proposals/${proposalId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
-      });
+      }, "Couldn't update this proposal.");
       router.refresh();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Couldn't update this proposal.");
     } finally {
       setBusyProposalId(null);
     }
@@ -122,16 +140,17 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
   async function addAgendaItem() {
     if (isAddingItem || newItemText.trim() === "") return;
     setIsAddingItem(true);
+    setActionError(null);
     try {
-      const response = await fetch(`/api/meetings/${meeting.id}/agenda-items`, {
+      await runMeetingMutation(`/api/meetings/${meeting.id}/agenda-items`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: newItemText.trim() }),
-      });
-      if (response.ok) {
-        setNewItemText("");
-        router.refresh();
-      }
+      }, "Couldn't add this agenda item.");
+      setNewItemText("");
+      router.refresh();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Couldn't add this agenda item.");
     } finally {
       setIsAddingItem(false);
     }
@@ -140,14 +159,17 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
   async function saveAgendaItemText(itemId: string) {
     if (editingText.trim() === "") return;
     setBusyItemId(itemId);
+    setActionError(null);
     try {
-      await fetch(`/api/meetings/${meeting.id}/agenda-items/${itemId}`, {
+      await runMeetingMutation(`/api/meetings/${meeting.id}/agenda-items/${itemId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: editingText.trim() }),
-      });
+      }, "Couldn't save this agenda item.");
       setEditingItemId(null);
       router.refresh();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Couldn't save this agenda item.");
     } finally {
       setBusyItemId(null);
     }
@@ -155,13 +177,16 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
 
   async function moveAgendaItem(item: SerializedAgendaItem, direction: -1 | 1) {
     setBusyItemId(item.id);
+    setActionError(null);
     try {
-      await fetch(`/api/meetings/${meeting.id}/agenda-items/${item.id}`, {
+      await runMeetingMutation(`/api/meetings/${meeting.id}/agenda-items/${item.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ position: item.position + direction }),
-      });
+      }, "Couldn't move this agenda item.");
       router.refresh();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Couldn't move this agenda item.");
     } finally {
       setBusyItemId(null);
     }
@@ -169,9 +194,16 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
 
   async function removeAgendaItem(itemId: string) {
     setBusyItemId(itemId);
+    setActionError(null);
     try {
-      await fetch(`/api/meetings/${meeting.id}/agenda-items/${itemId}`, { method: "DELETE" });
+      await runMeetingMutation(
+        `/api/meetings/${meeting.id}/agenda-items/${itemId}`,
+        { method: "DELETE" },
+        "Couldn't remove this agenda item.",
+      );
       router.refresh();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Couldn't remove this agenda item.");
     } finally {
       setBusyItemId(null);
     }
@@ -228,6 +260,8 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
           </div>
         )}
       </div>
+
+      {actionError && !isDeleting && <p role="alert" className="mt-4 text-sm font-medium text-error">{actionError}</p>}
 
       {meeting.description && (
         <div className="mt-6 rounded-2xl border border-surface-border bg-surface p-6">
@@ -455,6 +489,7 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
               Delete
             </Button>
           </DialogFooter>
+          {actionError && <p role="alert" className="text-sm font-medium text-error">{actionError}</p>}
         </DialogContent>
       </Dialog>
     </div>

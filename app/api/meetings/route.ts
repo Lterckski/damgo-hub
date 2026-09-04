@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
-import { enqueueMeetingNotification, scheduleMeetingReminders } from "@/lib/meeting-notifications";
+import {
+  createMeetingNotificationOutbox,
+  enqueueMeetingNotificationOutbox,
+  scheduleMeetingReminders,
+} from "@/lib/meeting-notifications";
 import {
   isEndsAtValid,
   isValidHttpUrl,
@@ -98,37 +102,51 @@ export async function POST(request: Request) {
   });
   const participantMemberIds = realMembers.map((m) => m.id);
 
-  const meeting = await prisma.meeting.create({
-    data: {
-      title: title.trim(),
-      description: typeof description === "string" && description.trim() !== "" ? description.trim() : null,
-      scheduledAt: scheduledAtDate,
-      endsAt: endsAtDate,
-      location: typeof location === "string" && location.trim() !== "" ? location.trim() : null,
-      meetingUrl: meetingUrlValue,
-      organizerId: organizer.id,
-      participants: { create: participantMemberIds.map((memberId) => ({ memberId })) },
-    },
-    include: MEETING_LIST_INCLUDE,
+  const { meeting, invitationOutboxId } = await prisma.$transaction(async (tx) => {
+    const meeting = await tx.meeting.create({
+      data: {
+        title: title.trim(),
+        description: typeof description === "string" && description.trim() !== "" ? description.trim() : null,
+        scheduledAt: scheduledAtDate,
+        endsAt: endsAtDate,
+        location: typeof location === "string" && location.trim() !== "" ? location.trim() : null,
+        meetingUrl: meetingUrlValue,
+        organizerId: organizer.id,
+        participants: { create: participantMemberIds.map((memberId) => ({ memberId })) },
+      },
+      include: MEETING_LIST_INCLUDE,
+    });
+
+    const invitationOutboxId = await createMeetingNotificationOutbox(
+      tx,
+      "INVITATION",
+      meeting.id,
+      meeting.notificationRevision,
+      participantMemberIds,
+      {
+        title: meeting.title,
+        description: meeting.description,
+        scheduledAt: meeting.scheduledAt.toISOString(),
+        endsAt: meeting.endsAt ? meeting.endsAt.toISOString() : null,
+        location: meeting.location,
+        meetingUrl: meeting.meetingUrl,
+        organizerName: meeting.organizer.displayName,
+      },
+    );
+    return { meeting, invitationOutboxId };
   });
 
-  const { reminder24hRunId, reminder1hRunId } = await scheduleMeetingReminders(meeting);
-  if (reminder24hRunId || reminder1hRunId) {
-    await prisma.meeting.update({ where: { id: meeting.id }, data: { reminder24hRunId, reminder1hRunId } });
+  // External side effects happen after the durable meeting + outbox commit.
+  // Their failure is logged but never turns a successful create into a 500.
+  try {
+    const { reminder24hRunId, reminder1hRunId } = await scheduleMeetingReminders(meeting);
+    if (reminder24hRunId || reminder1hRunId) {
+      await prisma.meeting.update({ where: { id: meeting.id }, data: { reminder24hRunId, reminder1hRunId } });
+    }
+  } catch (error) {
+    console.error("Failed to reconcile reminder runs after meeting creation", { meetingId: meeting.id, error });
   }
-
-  // Every initial participant gets an invitation — including the
-  // organizer, per this spec's explicit "including when the meeting is
-  // created."
-  await enqueueMeetingNotification("INVITATION", meeting.id, meeting.notificationRevision, participantMemberIds, {
-    title: meeting.title,
-    description: meeting.description,
-    scheduledAt: meeting.scheduledAt.toISOString(),
-    endsAt: meeting.endsAt ? meeting.endsAt.toISOString() : null,
-    location: meeting.location,
-    meetingUrl: meeting.meetingUrl,
-    organizerName: meeting.organizer.displayName,
-  });
+  if (invitationOutboxId) await enqueueMeetingNotificationOutbox(invitationOutboxId);
 
   return NextResponse.json({ meeting: serializeMeetingListItem(meeting) }, { status: 201 });
 }

@@ -82,7 +82,7 @@ Liveblocks + React Flow back two distinct collaborative surfaces. Both share the
 
 Background jobs are scheduled/reminder-driven, not AI generation. Current job types:
 
-- **Meeting notifications** — send participant invitations, changes, cancellations, and 24-hour/1-hour reminder emails through Resend.
+- **Meeting notifications** — send participant invitations, changes, cancellations, and 24-hour/1-hour reminder emails through Resend. Immediate notification intent is committed to a PostgreSQL outbox with the meeting mutation before Trigger.dev is called; a periodic worker recovers pending records after an enqueue outage.
 - **Calendar reminders** — notify members ahead of deadlines and calendar events.
 - **Penalty escalation checks** — recurring scan for unresolved or overdue penalties.
 - **Financial summaries** — recurring generation of budget/transaction summaries for admin review.

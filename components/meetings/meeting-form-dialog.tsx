@@ -89,6 +89,8 @@ export function MeetingFormDialog({ members, currentMemberId, meeting }: Meeting
       }
       setIsOpen(false);
       router.refresh();
+    } catch {
+      setError("Couldn't connect to Damgo Hub. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -129,8 +131,9 @@ export function MeetingFormDialog({ members, currentMemberId, meeting }: Meeting
 
           <div className="space-y-4">
             <div>
-              <label className={FIELD_LABEL_CLASS}>Title</label>
+              <label htmlFor="meeting-title" className={FIELD_LABEL_CLASS}>Title</label>
               <Input
+                id="meeting-title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Weekly sync"
@@ -139,8 +142,9 @@ export function MeetingFormDialog({ members, currentMemberId, meeting }: Meeting
             </div>
 
             <div>
-              <label className={FIELD_LABEL_CLASS}>Description (optional)</label>
+              <label htmlFor="meeting-description" className={FIELD_LABEL_CLASS}>Description (optional)</label>
               <Textarea
+                id="meeting-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
@@ -156,8 +160,9 @@ export function MeetingFormDialog({ members, currentMemberId, meeting }: Meeting
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={FIELD_LABEL_CLASS}>Location (optional)</label>
+                <label htmlFor="meeting-location" className={FIELD_LABEL_CLASS}>Location (optional)</label>
                 <Input
+                  id="meeting-location"
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   placeholder="Room 204"
@@ -165,8 +170,9 @@ export function MeetingFormDialog({ members, currentMemberId, meeting }: Meeting
                 />
               </div>
               <div>
-                <label className={FIELD_LABEL_CLASS}>External meeting link (optional)</label>
+                <label htmlFor="meeting-url" className={FIELD_LABEL_CLASS}>External meeting link (optional)</label>
                 <Input
+                  id="meeting-url"
                   value={meetingUrl}
                   onChange={(e) => setMeetingUrl(e.target.value)}
                   placeholder="https://meet.google.com/..."
@@ -176,8 +182,9 @@ export function MeetingFormDialog({ members, currentMemberId, meeting }: Meeting
             </div>
 
             <div>
-              <label className={FIELD_LABEL_CLASS}>Participants</label>
+              <label htmlFor="meeting-participants" className={FIELD_LABEL_CLASS}>Participants</label>
               <FilterMultiSelect
+                id="meeting-participants"
                 label="Select participants"
                 options={memberOptions}
                 selected={participantIds}
