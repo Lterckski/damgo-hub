@@ -30,6 +30,7 @@ export const meetingReminderTask = task({
       include: {
         organizer: { select: { displayName: true } },
         participants: { select: { memberId: true } },
+        agendaItems: { select: { text: true }, orderBy: [{ position: "asc" }, { createdAt: "asc" }, { id: "asc" }] },
       },
     });
 
@@ -59,6 +60,7 @@ export const meetingReminderTask = task({
           location: meeting.location,
           meetingUrl: meeting.meetingUrl,
           organizerName: meeting.organizer.displayName,
+          agendaItems: meeting.agendaItems.map((item) => item.text),
         },
       });
       if (result === "transient-failure") anyFailed = true;

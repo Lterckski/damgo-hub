@@ -147,7 +147,7 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 - Notification triggers for: task status change, upcoming deadlines, meeting reminders, milestone completion, proposal/expense approval or rejection
 - Centralized notification center/inbox (read/unread state)
 - System-wide announcements from Admin
-- Email delivery for meeting invitations, changes, cancellations, and reminders
+- Transactional email delivery through Resend for meeting invitations, changes, cancellations, and reminders
 - Optional later: push notification integration
 
 ### Dashboard / Home Overview

@@ -23,7 +23,7 @@
     "@prisma/client": "7.10.0",
     "@prisma/composer": "0.16.0",
     "@prisma/composer-prisma-cloud": "0.16.0",
-    "@trigger.dev/sdk": "^4.5.14",
+    "@trigger.dev/sdk": "4.5.16",
     "@vercel/blob": "^2.8.0",
     "@xyflow/react": "^12.11.6",
     "alchemy": "2.0.0-beta.74",
@@ -51,7 +51,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@testing-library/react": "^16.3.3",
-    "@trigger.dev/build": "^4.5.14",
+    "@trigger.dev/build": "4.5.16",
     "@types/node": "^20",
     "@types/pg": "^8.23.1",
     "@types/react": "^19",

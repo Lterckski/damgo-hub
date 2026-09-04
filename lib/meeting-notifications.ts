@@ -3,7 +3,12 @@ import { runs, tasks } from "@trigger.dev/sdk";
 import type { Prisma } from "@/app/generated/prisma/client";
 import type { MeetingNotificationType } from "@/app/generated/prisma/enums";
 import { sendEmail } from "@/lib/email";
-import { meetingEmailHtml, meetingEmailSubject, type MeetingEmailKind } from "@/lib/meeting-email-template";
+import {
+  meetingEmailHtml,
+  meetingEmailSubject,
+  meetingEmailText,
+  type MeetingEmailKind,
+} from "@/lib/meeting-email-template";
 import { prisma } from "@/lib/prisma";
 import type { meetingNotificationTask } from "@/src/trigger/meeting-notification";
 import type { meetingReminderTask } from "@/src/trigger/meeting-reminder";
@@ -20,6 +25,7 @@ export interface MeetingSnapshot {
   location: string | null;
   meetingUrl: string | null;
   organizerName: string;
+  agendaItems: string[];
 }
 
 export type ImmediateMeetingNotificationType = Exclude<
@@ -183,6 +189,9 @@ function parseMeetingNotificationPayload(value: {
       location: typeof record.location === "string" ? record.location : null,
       meetingUrl: typeof record.meetingUrl === "string" ? record.meetingUrl : null,
       organizerName: record.organizerName,
+      agendaItems: Array.isArray(record.agendaItems)
+        ? record.agendaItems.filter((item): item is string => typeof item === "string")
+        : [],
     },
   };
 }
@@ -323,7 +332,7 @@ export async function sendOneMeetingEmail(params: {
     return "permanent-failure";
   }
 
-  const html = meetingEmailHtml(notificationType, {
+  const details = {
     meetingId,
     title: snapshot.title,
     description: snapshot.description,
@@ -332,11 +341,14 @@ export async function sendOneMeetingEmail(params: {
     organizerName: snapshot.organizerName,
     location: snapshot.location,
     meetingUrl: snapshot.meetingUrl,
-  });
+    agendaItems: snapshot.agendaItems,
+  };
+  const html = meetingEmailHtml(notificationType, details);
+  const text = meetingEmailText(notificationType, details);
   const subject = meetingEmailSubject(notificationType, snapshot.title);
   const idempotencyKey = `${meetingId}:${recipientMemberId}:${notificationType}:${meetingRevision}`;
 
-  const result = await sendEmail({ to: email, subject, html, idempotencyKey });
+  const result = await sendEmail({ to: email, subject, html, text, idempotencyKey });
 
   if (result.ok) {
     await prisma.meetingEmailDelivery.update({
