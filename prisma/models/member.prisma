@@ -46,6 +46,8 @@ model Member {
   meetingParticipations MeetingParticipant[]          @relation("MeetingParticipations")
   proposedAgendaItems   AgendaProposal[]              @relation("AgendaProposalAuthor")
   addedAgendaItems      AgendaItem[]                  @relation("AgendaItemAddedBy")
+  penaltiesReceived     Penalty[]                     @relation("PenaltyRecipient")
+  penaltiesIssued       Penalty[]                     @relation("PenaltyIssuer")
 
   @@index([clerkUserId])
 }

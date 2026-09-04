@@ -96,6 +96,16 @@ export async function DELETE(
       });
       await tx.agendaItem.updateMany({ where: { addedById: target.id }, data: { addedById: actingAdmin.id } });
 
+      // Penalties reassign both directions — who it was issued against and
+      // who issued it — same uniform policy as everything else here.
+      // 18-penalty-tracker.md doesn't mention member deletion at all, but
+      // Penalty.memberId/issuedById are required relations with no
+      // onDelete override, so leaving this out would just turn into a raw
+      // FK-constraint 500 the first time someone tried to delete a member
+      // with any penalty history.
+      await tx.penalty.updateMany({ where: { memberId: target.id }, data: { memberId: actingAdmin.id } });
+      await tx.penalty.updateMany({ where: { issuedById: target.id }, data: { issuedById: actingAdmin.id } });
+
       // The deleted member's own MeetingParticipant rows cascade away via
       // the schema relation — nothing to do for those here.
       // MeetingEmailDelivery.recipientMemberId is intentionally left
