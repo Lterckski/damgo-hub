@@ -1,6 +1,7 @@
 "use client";
 
 import { ClientSideSuspense, LiveblocksProvider, RoomProvider } from "@liveblocks/react/suspense";
+import { ReactFlowProvider } from "@xyflow/react";
 import { Loader2 } from "lucide-react";
 
 import { RoadmapCanvas } from "@/components/roadmap/roadmap-canvas";
@@ -42,7 +43,9 @@ export function RoadmapBoard({ projectId, collaborators }: RoadmapBoardProps) {
             }
           >
             <RoadmapMembersProvider members={collaborators}>
-              <RoadmapCanvas collaborators={collaborators} />
+              <ReactFlowProvider>
+                <RoadmapCanvas collaborators={collaborators} />
+              </ReactFlowProvider>
             </RoadmapMembersProvider>
           </ClientSideSuspense>
         </RoomProvider>

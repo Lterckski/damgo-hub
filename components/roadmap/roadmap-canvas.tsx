@@ -30,9 +30,9 @@ const DEFAULT_EDGE_OPTIONS = {
 
 /**
  * The Roadmap tab's actual board — everything inside the RoomProvider /
- * ClientSideSuspense tree set up by roadmap-board.tsx. Split out from that
- * wrapper because `useLiveblocksFlow`, `useReactFlow`, and the presence
- * hooks all need to run *inside* a room, not around it.
+ * ClientSideSuspense / ReactFlowProvider tree set up by roadmap-board.tsx.
+ * Split out from that wrapper because `useLiveblocksFlow`, `useReactFlow`,
+ * and the presence hooks all need their respective providers above them.
  */
 export function RoadmapCanvas({ collaborators }: { collaborators: ProjectMemberOption[] }) {
   const { nodes, edges, onNodesChange, onEdgesChange, onConnect, onDelete } = useLiveblocksFlow<MilestoneNodeType>({
