@@ -52,6 +52,21 @@ Add `AgendaItem`:
 - timestamps
 - unique constraint on `meetingId`/`position`
 
+Add `MeetingEmailDelivery` as a durable delivery/idempotency record:
+
+- `id`
+- `meetingId` — plain string rather than a relation so cancellation-delivery history survives meeting deletion
+- `recipientMemberId` — plain string so delivery history does not block member deletion
+- `notificationType` enum: `INVITATION`, `UPDATED`, `PARTICIPANT_REMOVED`, `MEETING_CANCELLED`, `REMINDER_24H`, `REMINDER_1H`
+- `meetingRevision`
+- `status` enum: `PENDING`, `SENDING`, `SENT`, `FAILED`
+- `providerMessageId` — optional
+- `attemptCount` — defaults to `0`
+- `lastError` — optional sanitized provider error; never store API keys or full provider responses
+- `sentAt` — optional
+- timestamps
+- unique constraint on `meetingId`/`recipientMemberId`/`notificationType`/`meetingRevision`
+
 `AgendaItem` records are the meeting's final agenda. Positions are contiguous, zero-based, and unique within the meeting. Adding an item or accepting a proposal appends it at the next position; removing one closes the gap; reordering rewrites all affected positions in one transaction. Queries sort by `position`, then `createdAt`, then `id` as a defensive stable fallback.
 
 When the Leader or Assistant Leader accepts a pending proposal, update it to `ACCEPTED` and create its linked `AgendaItem` in the same transaction. Declining sets it to `DECLINED` without creating an item. A proposal that already has a linked agenda item cannot be accepted again. Agenda records remain ordinary PostgreSQL rows and never seed a collaborative board.
@@ -65,6 +80,8 @@ The existing Admin member-deletion transaction must handle meeting relations bef
 - Delete the member's `MeetingParticipant` rows through the cascade relation.
 
 The `Restrict` relations intentionally prevent deleting a member without this reassignment. This follows the app's existing policy of preserving member-created organizational content under the acting Admin rather than silently deleting it.
+
+`MeetingEmailDelivery.recipientMemberId` is intentionally not reassigned or deleted. It is immutable delivery history, not current ownership, and must retain the original recipient identifier for auditing and duplicate prevention.
 
 ## Permissions
 
@@ -114,7 +131,7 @@ Implementation:
 - Add server-only `RESEND_API_KEY`, `MEETING_EMAIL_FROM`, and canonical production `APP_URL` variables to `.env.example` and Vercel.
 - Create `lib/email.ts` as the typed, server-only Resend wrapper.
 - Create a reusable escaped meeting email template for invitations, updates, participant/meeting cancellations, and reminders.
-- Create `trigger/meeting-notification.ts` for immediate emails and `trigger/meeting-reminder.ts` for delayed 24-hour/1-hour reminders. Unit `21-scheduled-reminders.md` reuses these instead of creating a second meeting-notification system.
+- Create `src/trigger/meeting-notification.ts` for immediate emails and `src/trigger/meeting-reminder.ts` for delayed 24-hour/1-hour reminders. Unit `21-scheduled-reminders.md` reuses these instead of creating a second meeting-notification system.
 
 Send one email per recipient—never expose the participant list through a shared `To` or `CC` header:
 
@@ -136,7 +153,7 @@ Email behavior:
 
 - Use each participant's stored `Member.email`; skip missing/invalid addresses and log a structured delivery error without failing the meeting mutation.
 - Deduplicate recipient member IDs before enqueueing.
-- Use a stable idempotency key per meeting, recipient, notification type, and meeting revision so retries cannot send the same message twice.
+- Before sending, claim the unique `MeetingEmailDelivery` row for the meeting, recipient, notification type, and meeting revision. Skip rows already marked `SENT`; retry only a definitively `FAILED` attempt. Keep an ambiguous interrupted `SENDING` attempt for manual reconciliation rather than risking a duplicate. Use the same composite value as Resend's idempotency key as a secondary short-window safeguard, but rely on the database row for durable deduplication.
 - Treat meeting titles, descriptions, locations, and organizer names as untrusted text and escape them through the email template rather than interpolating raw HTML.
 - Creating/updating a meeting schedules new reminder runs and cancels any still-pending reminder runs for the previous schedule. Deleting the meeting cancels pending reminders.
 - Provider failures use Trigger.dev retries and are visible in task logs; they do not roll back an already-valid meeting mutation.
