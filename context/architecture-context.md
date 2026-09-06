@@ -31,6 +31,8 @@
 
 Damgo Hub is a single organization (per the out-of-scope note below) run entirely as one Clerk B2B Organization. There is no custom-built permission system — Clerk Organizations is the source of truth for who can act as Admin.
 
+**Planned extension, not implemented:** [unit 23 — Global Search, Notifications, and Header](feature-specs/23-global-search-notifications-header.md) records the Part 0 audit and approval decisions. Domain records currently lack organization IDs and a common visibility policy; adding an org switcher without fixing those boundaries would expose the shared dataset. Clerk remains the identity/role authority. The proposed server policy evaluates `user`/`org`/`project`/`role` resource scopes for search, notifications and the underlying routes, with no implicit admin bypass for personal tasks. This conflicts with some existing oversight/meeting/ledger behavior and must be confirmed before implementation; current behavior below remains an implementation description.
+
 ### Org Role (Clerk-native, binary)
 
 - Clerk provides identity for every member; only authenticated members can access protected routes. `proxy.ts` only establishes the Clerk auth context (`clerkMiddleware()`) — it does not gate access by path. Protection is resource-based: `app/(app)/layout.tsx` redirects unauthenticated visitors for every page under it, and every `app/api/*` route checks `auth()` itself and returns `401` when signed out. This follows Clerk's own current guidance away from `createRouteMatcher`-based middleware gating.
@@ -90,6 +92,12 @@ Background jobs are scheduled/reminder-driven, not AI generation. Current job ty
 - **Google Calendar sync** (`sync-calendar-item-to-google`, implemented in `10-calendar.md`) — request-triggered, not scheduled: pushes a `Task`'s due date or a `CalendarEvent` onto every relevant member's own Google Calendar (via their Clerk-held Google OAuth token). "Relevant" means a task's assignees, or every member for anything group-wide (unassigned task, or any `CalendarEvent` — those have no individual-assignment concept at all).
 
 Request handlers only enqueue these jobs; they never run the reminder/notification logic inline.
+
+## Planned Search and Notification Storage (Unit 23)
+
+The [unit 23 audit](feature-specs/23-global-search-notifications-header.md) proposes additive migrations, pending confirmation: organization ownership/audience grants; notification records with separate per-user read/dismiss, delivery eligibility and preferences; generalized durable delivery intent; and a server-only search projection with generated `tsvector`, GIN/trigram indexes and per-user open history. Search authorization must stay current even if projected text is stale. Existing broadcasts/read receipts and meeting outbox history need an explicit migration bridge, not replacement by an empty inbox.
+
+Recommended projection maintenance is transactional write-through for relational mutations plus reconciliation for missed writes and Liveblocks idea snapshots. Ideas remain collaborative canvas records; PostgreSQL gets a searchable projection, not a competing source of truth. Generated vectors update projected text automatically but do not synchronize domain tables. Proposed inbox delivery uses visible-tab polling (15 seconds, near-real-time) and the existing Trigger.dev/Resend stack for durable delivery. No external search service or Supabase dependency is needed. These are recommendations, not deployed infrastructure.
 
 ## Invariants
 

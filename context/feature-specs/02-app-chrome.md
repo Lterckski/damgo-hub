@@ -1,5 +1,7 @@
 Read `context/ui-context.md` before starting.
 
+**Implemented baseline:** this unit describes the existing shell. The proposed global search, notification inbox, org switcher, quick-create menu and account/theme controls are specified in [unit 23](23-global-search-notifications-header.md), whose audit must be confirmed before implementation. Preserve this unit's bottom dock and separate collaborative workspace chrome when extending the header.
+
 We need the base chrome that frames every authenticated screen — the top header and the bottom navigation dock. These are reused and extended by every feature area that follows. This is unrelated to the collaborative board chrome (built later in `13-roadmap-board.md`), which uses a separate floating side overlay layout.
 
 ### App Navbar (header)
