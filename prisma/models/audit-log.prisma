@@ -1,0 +1,57 @@
+// Append-only record of every admin action — see 20-admin-dashboard.md's
+// Zone 5. Written before any override capability shipped, deliberately:
+// an override without a trail is just an unlogged edit.
+//
+// Nothing in the app ever updates or deletes an AuditLog row. There is no
+// `updatedAt`, no PATCH route, and no DELETE route by design.
+enum AuditEntityType {
+  MEMBER
+  TRANSACTION
+  PENALTY
+  PROJECT
+  TASK
+  MEETING
+  AGENDA_PROPOSAL
+  MEMBER_REQUEST
+  BROADCAST
+  ORG_SETTINGS
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+
+  // SetNull, not the reassign-to-acting-admin policy the content tables use
+  // (see DELETE /api/members/[memberId]). Reassigning an audit entry's actor
+  // would make the log say someone did something they didn't — the exact
+  // failure an audit log exists to prevent. The denormalized actor fields
+  // below keep the entry readable after the Member row is gone.
+  actorId          String?
+  actor            Member? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorName        String
+  actorClerkUserId String
+
+  /// Dotted verb, e.g. "member.role.updated", "transaction.approved". Free
+  /// text rather than an enum: new admin actions shouldn't need a migration.
+  action      String
+  entityType  AuditEntityType
+  entityId    String
+  /// Human-readable identity of the entity at the time of the action, so the
+  /// feed still reads correctly after the entity is renamed or deleted.
+  entityLabel String
+
+  /// Changed fields only, before and after — never the whole record. Null on
+  /// a create (nothing before) or a pure action with no field diff.
+  before Json?
+  after  Json?
+
+  /// Required by the route for every override action (Part 2). Optional at
+  /// the schema level because routine, non-override actions (approving a
+  /// transaction from the Action Queue) don't ask for one.
+  reason String?
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@index([actorId])
+}

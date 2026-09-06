@@ -1,0 +1,36 @@
+// A member contesting a penalty issued against them — the "Dispute" action
+// on My Penalties.
+//
+// A separate record rather than a PenaltyStatus value, because disputing
+// does not change the penalty: it stays OPEN and still counts toward what
+// the member owes until an admin decides. Collapsing it into the status
+// enum would silently zero out a disputed penalty's balance the moment it
+// was questioned.
+enum PenaltyDisputeStatus {
+  OPEN
+  /// Upheld in the member's favour — the admin then waives the penalty.
+  ACCEPTED
+  REJECTED
+}
+
+model PenaltyDispute {
+  id String @id @default(cuid())
+
+  /// One open dispute per penalty; re-disputing reuses this row.
+  penaltyId String  @unique
+  penalty   Penalty @relation(fields: [penaltyId], references: [id], onDelete: Cascade)
+
+  raisedById String
+  raisedBy   Member @relation("PenaltyDisputes", fields: [raisedById], references: [id], onDelete: Cascade)
+
+  reason String
+  status PenaltyDisputeStatus @default(OPEN)
+
+  resolvedAt     DateTime?
+  resolutionNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}

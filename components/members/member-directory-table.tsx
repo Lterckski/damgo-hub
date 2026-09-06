@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { MoreHorizontal, Crown, ShieldCheck } from "lucide-react";
 
+import type { MemberStatus } from "@/app/generated/prisma/client";
+import { MEMBER_STATUS_LABEL } from "@/lib/member-status";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,7 +38,7 @@ export interface MemberRow {
   displayName: string;
   email: string;
   avatarUrl: string | null;
-  status: "ACTIVE" | "INACTIVE";
+  status: MemberStatus;
   isLeader: boolean;
   orgRole: string;
   functionalRoles: string[];
@@ -279,8 +281,16 @@ export function MemberDirectoryTable({
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant={member.status === "ACTIVE" ? "default" : "secondary"}>
-                    {member.status === "ACTIVE" ? "Active" : "Inactive"}
+                  <Badge
+                    variant={
+                      member.status === "ACTIVE"
+                        ? "default"
+                        : member.status === "REMOVED"
+                          ? "destructive"
+                          : "secondary"
+                    }
+                  >
+                    {MEMBER_STATUS_LABEL[member.status]}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-xs text-copy-muted">

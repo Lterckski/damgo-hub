@@ -52,13 +52,21 @@ model Project {
   // Vercel Blob URL for the roadmap board's saved snapshot — unused until
   // 15-board-autosave.md, nullable until then.
   roadmapSnapshotPath     String?
+  // Set when the project is stuck on something. Free text rather than a
+  // boolean: "blocked" with no reason is a flag nobody can act on, and the
+  // Team Overview project card renders this verbatim. Null means not
+  // blocked — there is no separate boolean to keep in sync with it.
+  blockedReason           String?
   createdAt               DateTime         @default(now())
   updatedAt               DateTime         @updatedAt
 
-  members ProjectMember[]
-  tasks   Task[]
-  docs    Doc[]
-  links   ProjectLink[]
+  members    ProjectMember[]
+  tasks      Task[]
+  docs       Doc[]
+  links      ProjectLink[]
+  broadcasts Broadcast[]
+  milestones ProjectMilestone[]
+  hackathons Hackathon[]
 
   @@index([ownerId])
   @@index([status])
@@ -93,4 +101,32 @@ model ProjectLink {
   createdAt DateTime @default(now())
 
   @@index([projectId])
+}
+
+// Dated checkpoints on a project — what "next milestone" on the dashboard's
+// project cards actually reads.
+//
+// The roadmap board (13-roadmap-board.md) already draws milestones, but
+// those live as React Flow nodes inside a Liveblocks room and its Blob
+// snapshot, so nothing can query them by date. This is the queryable half;
+// the board stays the place you arrange them visually.
+model ProjectMilestone {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  title String
+  dueAt DateTime
+  /// Null while outstanding. The dashboard's "next milestone" is the
+  /// earliest row where this is null.
+  completedAt DateTime?
+
+  /// Manual ordering for milestones sharing a date.
+  position Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, dueAt])
+  @@index([completedAt])
 }

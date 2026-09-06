@@ -1,0 +1,55 @@
+// Admin broadcast composer — Part 2 of the admin console rebuild. Before
+// this, lib/admin-notifications.ts only wrote to a Trigger.dev log; there
+// was no in-app notification record at all and nothing a member could read.
+enum BroadcastAudience {
+  ALL_MEMBERS
+  ROLE
+  PROJECT
+  /// A single person. Used by the composer's "one member" option and by the
+  /// Action Queue's "Request receipt", which is a nudge to exactly one
+  /// person and would otherwise have had to pretend to be a broadcast.
+  MEMBER
+}
+
+model Broadcast {
+  id      String @id @default(cuid())
+  subject String
+  body    String
+
+  audience BroadcastAudience
+  /// Set when audience is ROLE — the raw Clerk role string ("org:admin").
+  audienceRole String?
+  /// Set when audience is PROJECT.
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  /// Set when audience is MEMBER.
+  audienceMemberId String?
+  audienceMember   Member? @relation("BroadcastAudienceMember", fields: [audienceMemberId], references: [id], onDelete: SetNull)
+
+  // SetNull + denormalized name, same reasoning as AuditLog.actorId: a sent
+  // broadcast is history, not ownership, so it shouldn't be reassigned to
+  // whoever deletes the sender.
+  sentById   String?
+  sentBy     Member? @relation("BroadcastSender", fields: [sentById], references: [id], onDelete: SetNull)
+  sentByName String
+
+  createdAt DateTime @default(now())
+
+  recipients BroadcastRecipient[]
+
+  @@index([createdAt])
+}
+
+model BroadcastRecipient {
+  id          String    @id @default(cuid())
+  broadcastId String
+  broadcast   Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  memberId    String
+  // Cascade — a delivery link describes a relationship, not authorship, so
+  // it follows the same policy as TaskAssignee/ProjectMember.
+  member      Member    @relation("BroadcastRecipient", fields: [memberId], references: [id], onDelete: Cascade)
+  readAt      DateTime?
+
+  @@unique([broadcastId, memberId])
+  @@index([memberId, readAt])
+}

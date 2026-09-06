@@ -1,6 +1,13 @@
 enum MemberStatus {
   ACTIVE
   INACTIVE
+  /// Removed from the Clerk org but kept locally, because Task/Doc/
+  /// Transaction/Penalty all reference Member with `Restrict` and deleting
+  /// the row would take their authorship with it. Distinct from INACTIVE
+  /// ("on leave, still on the team") — the admin console's member count and
+  /// the Clerk sync action need to tell those two apart, which is exactly
+  /// what the silent count inflation came down to.
+  REMOVED
 }
 
 enum FunctionalRole {
@@ -48,8 +55,27 @@ model Member {
   addedAgendaItems      AgendaItem[]                  @relation("AgendaItemAddedBy")
   penaltiesReceived     Penalty[]                     @relation("PenaltyRecipient")
   penaltiesIssued       Penalty[]                     @relation("PenaltyIssuer")
+  auditLogEntries       AuditLog[]                    @relation("AuditActor")
+  roleChangeRequests    MemberRequest[]               @relation("MemberRequestSubject")
+  decidedMemberRequests MemberRequest[]               @relation("MemberRequestDecider")
+  sentBroadcasts        Broadcast[]                   @relation("BroadcastSender")
+  receivedBroadcasts    BroadcastRecipient[]          @relation("BroadcastRecipient")
+  targetedBroadcasts    Broadcast[]                   @relation("BroadcastAudienceMember")
+  duesAssessments       DuesAssessment[]              @relation("DuesAssessments")
+  announcements         Announcement[]                @relation("AnnouncementAuthor")
+  announcementDismissals AnnouncementDismissal[]      @relation("AnnouncementDismissals")
+  ideaVotes             IdeaVote[]                    @relation("IdeaVotes")
+  activityActed         ActivityEvent[]               @relation("ActivityActor")
+  activityReceived      ActivityEvent[]               @relation("ActivityAudience")
+  penaltyDisputes       PenaltyDispute[]              @relation("PenaltyDisputes")
+  createdHackathons     Hackathon[]                   @relation("HackathonCreator")
 
   @@index([clerkUserId])
+  // Member.email has no @unique — one person can legitimately hold two Clerk
+  // accounts. This index exists so the Clerk sync action can find same-email
+  // duplicates cheaply instead of scanning, since that's one of the shapes a
+  // wrong member count takes.
+  @@index([email])
 }
 
 model MemberFunctionalRole {
