@@ -1,6 +1,6 @@
 # Global Search, Notifications, and Header
 
-Status: **Implemented on `feat/global-search-notifications-header`; preparing the implementation PR against `main`.** The Part 0 audit was merged in PR #22. The user subsequently authorized “build it and pr it”; that supersedes the audit's confirmation gate. Production deployment and authenticated browser verification are not claimed.
+Status: **Implemented on `feat/global-search-notifications-header`; [implementation PR #23](https://github.com/Lterckski/damgo-hub/pull/23) is open against `main`.** The Part 0 audit was merged in PR #22. The user subsequently authorized “build it and pr it”; that supersedes the audit's confirmation gate. Production deployment and authenticated browser verification are not claimed.
 
 ## Implementation decisions and delivery (2026-09-06)
 

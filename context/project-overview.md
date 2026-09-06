@@ -143,7 +143,7 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 
 ### Notifications / Announcements Hub
 
-- [Unit 23](feature-specs/23-global-search-notifications-header.md) implements the header inbox with shared user/org/project/role visibility, per-user read/dismiss state, preferences, scoped polling and durable email delivery intent. Existing broadcasts preserve recipient/read history; meeting email retains its established outbox. The implementation PR and deployment are pending.
+- [Unit 23](feature-specs/23-global-search-notifications-header.md) implements the header inbox with shared user/org/project/role visibility, per-user read/dismiss state, preferences, scoped polling and durable email delivery intent. Existing broadcasts preserve recipient/read history; meeting email retains its established outbox. [Implementation PR #23](https://github.com/Lterckski/damgo-hub/pull/23) is open; production deployment is pending.
 - Real-time notification when a task is assigned to a member
 - Notification triggers for: task status change, upcoming deadlines, meeting reminders, milestone completion, proposal/expense approval or rejection
 - Centralized notification center/inbox (read/unread state)
