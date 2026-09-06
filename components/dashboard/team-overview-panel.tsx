@@ -1,5 +1,3 @@
-"use client";
-
 import type { RankedIdea } from "@/lib/dashboard/ideas";
 import type {
   AnnouncementRow,

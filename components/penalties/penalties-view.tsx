@@ -37,7 +37,8 @@ import { formatPHP } from "@/lib/currency";
 import type { MemberPickerOption } from "@/lib/members";
 import type { SerializedPenalty } from "@/lib/penalties";
 
-const FIELD_LABEL_CLASS = "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
+const FIELD_LABEL_CLASS =
+  "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
 
 interface PenaltiesViewProps {
   penalties: SerializedPenalty[];
@@ -46,12 +47,17 @@ interface PenaltiesViewProps {
 }
 
 function statusBadge(status: string) {
-  if (status === "RESOLVED") return <Badge className="bg-accent-dim text-success">Resolved</Badge>;
+  if (status === "RESOLVED")
+    return <Badge className="bg-accent-dim text-success">Resolved</Badge>;
   if (status === "WAIVED") return <Badge variant="secondary">Waived</Badge>;
   return <Badge variant="outline">Open</Badge>;
 }
 
-export function PenaltiesView({ penalties, isAdmin, members }: PenaltiesViewProps) {
+export function PenaltiesView({
+  penalties,
+  isAdmin,
+  members,
+}: PenaltiesViewProps) {
   if (!isAdmin) {
     return <MemberPenaltyList penalties={penalties} />;
   }
@@ -63,7 +69,9 @@ function MemberPenaltyList({ penalties }: { penalties: SerializedPenalty[] }) {
     return (
       <div className="flex flex-col items-center gap-2 py-10 text-center">
         <AlertTriangle className="h-8 w-8 text-copy-faint" />
-        <p className="text-sm text-copy-secondary">No penalties on your record.</p>
+        <p className="text-sm text-copy-secondary">
+          No penalties on your record.
+        </p>
       </div>
     );
   }
@@ -71,13 +79,20 @@ function MemberPenaltyList({ penalties }: { penalties: SerializedPenalty[] }) {
   return (
     <ul className="space-y-3">
       {penalties.map((penalty) => (
-        <li key={penalty.id} className="rounded-2xl border border-surface-border bg-surface p-4">
+        <li
+          key={penalty.id}
+          className="rounded-2xl border border-surface-border bg-surface p-4"
+        >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-copy-primary">{penalty.reason}</p>
+              <p className="text-sm font-medium text-copy-primary">
+                {penalty.reason}
+              </p>
               <p className="mt-1 text-xs text-copy-secondary">
                 Issued {new Date(penalty.createdAt).toLocaleDateString()}
-                {penalty.amountCentavos !== null ? ` · ${formatPHP(penalty.amountCentavos)}` : ""}
+                {penalty.amountCentavos !== null
+                  ? ` · ${formatPHP(penalty.amountCentavos)}`
+                  : ""}
               </p>
             </div>
             {statusBadge(penalty.status)}
@@ -96,13 +111,17 @@ function AdminPenaltiesView({
   members: MemberPickerOption[];
 }) {
   const router = useRouter();
-  const [decidingPenalty, setDecidingPenalty] = useState<SerializedPenalty | null>(null);
+  const [decidingPenalty, setDecidingPenalty] =
+    useState<SerializedPenalty | null>(null);
 
   return (
     <Tabs defaultValue="all">
       <div className="flex items-center justify-between gap-3">
         <TabsList>
-          <TabsTrigger value="all" className="data-active:bg-elevated data-active:text-brand">
+          <TabsTrigger
+            value="all"
+            className="data-active:bg-elevated data-active:text-brand"
+          >
             All Penalties
           </TabsTrigger>
         </TabsList>
@@ -113,10 +132,20 @@ function AdminPenaltiesView({
         {penalties.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-10 text-center">
             <AlertTriangle className="h-8 w-8 text-copy-faint" />
-            <p className="text-sm text-copy-secondary">No penalties issued yet.</p>
+            <p className="text-sm text-copy-secondary">
+              No penalties issued yet.
+            </p>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-2xl border border-surface-border bg-surface">
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label="Penalty records; scroll horizontally for more columns"
+            className="overflow-x-auto rounded-2xl border border-surface-border bg-surface"
+          >
+            <p className="px-3 py-2 text-xs text-copy-secondary sm:hidden">
+              Scroll sideways for more columns.
+            </p>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -132,10 +161,16 @@ function AdminPenaltiesView({
               <TableBody>
                 {penalties.map((penalty) => (
                   <TableRow key={penalty.id}>
-                    <TableCell className="font-medium text-copy-primary">{penalty.memberName}</TableCell>
-                    <TableCell className="max-w-xs truncate text-copy-secondary">{penalty.reason}</TableCell>
+                    <TableCell className="font-medium text-copy-primary">
+                      {penalty.memberName}
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate text-copy-secondary">
+                      {penalty.reason}
+                    </TableCell>
                     <TableCell className="text-copy-secondary">
-                      {penalty.amountCentavos !== null ? formatPHP(penalty.amountCentavos) : "—"}
+                      {penalty.amountCentavos !== null
+                        ? formatPHP(penalty.amountCentavos)
+                        : "—"}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1.5">
@@ -154,10 +189,17 @@ function AdminPenaltiesView({
                     <TableCell className="text-copy-secondary">
                       {new Date(penalty.createdAt).toLocaleDateString()}
                     </TableCell>
-                    <TableCell className="text-copy-secondary">{penalty.issuedByName}</TableCell>
+                    <TableCell className="text-copy-secondary">
+                      {penalty.issuedByName}
+                    </TableCell>
                     <TableCell className="text-right">
                       {penalty.status === "OPEN" && (
-                        <Button type="button" variant="outline" size="sm" onClick={() => setDecidingPenalty(penalty)}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setDecidingPenalty(penalty)}
+                        >
                           Resolve / Waive
                         </Button>
                       )}
@@ -192,7 +234,9 @@ function IssuePenaltyDialog({ members }: { members: MemberPickerOption[] }) {
   const [reason, setReason] = useState("");
   const [amountPesos, setAmountPesos] = useState("");
 
-  const memberItems = Object.fromEntries(members.map((m) => [m.id, m.displayName]));
+  const memberItems = Object.fromEntries(
+    members.map((m) => [m.id, m.displayName]),
+  );
 
   function reset() {
     setMemberId("");
@@ -247,13 +291,21 @@ function IssuePenaltyDialog({ members }: { members: MemberPickerOption[] }) {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-copy-primary">Issue Penalty</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-copy-primary">
+              Issue Penalty
+            </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="penalty-member" className={FIELD_LABEL_CLASS}>Member</label>
-              <Select items={memberItems} value={memberId} onValueChange={(v) => setMemberId(v ?? "")}>
+              <label htmlFor="penalty-member" className={FIELD_LABEL_CLASS}>
+                Member
+              </label>
+              <Select
+                items={memberItems}
+                value={memberId}
+                onValueChange={(v) => setMemberId(v ?? "")}
+              >
                 <SelectTrigger id="penalty-member" className="w-full">
                   <SelectValue placeholder="Select a member" />
                 </SelectTrigger>
@@ -268,7 +320,9 @@ function IssuePenaltyDialog({ members }: { members: MemberPickerOption[] }) {
             </div>
 
             <div>
-              <label htmlFor="penalty-reason" className={FIELD_LABEL_CLASS}>Reason</label>
+              <label htmlFor="penalty-reason" className={FIELD_LABEL_CLASS}>
+                Reason
+              </label>
               <Textarea
                 id="penalty-reason"
                 value={reason}
@@ -280,7 +334,9 @@ function IssuePenaltyDialog({ members }: { members: MemberPickerOption[] }) {
             </div>
 
             <div>
-              <label htmlFor="penalty-amount" className={FIELD_LABEL_CLASS}>Amount (₱) — optional</label>
+              <label htmlFor="penalty-amount" className={FIELD_LABEL_CLASS}>
+                Amount (₱) — optional
+              </label>
               <Input
                 id="penalty-amount"
                 type="number"
@@ -293,11 +349,19 @@ function IssuePenaltyDialog({ members }: { members: MemberPickerOption[] }) {
               />
             </div>
 
-            {error && <p className="text-sm font-medium text-error" role="alert">{error}</p>}
+            {error && (
+              <p className="text-sm font-medium text-error" role="alert">
+                {error}
+              </p>
+            )}
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setIsOpen(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setIsOpen(false)}
+            >
               Cancel
             </Button>
             <Button type="button" disabled={!canSubmit} onClick={submit}>
@@ -345,13 +409,16 @@ function ResolvePenaltyDialog({
     }
   }
 
-  const isMonetary = penalty?.amountCentavos !== null && penalty?.amountCentavos !== undefined;
+  const isMonetary =
+    penalty?.amountCentavos !== null && penalty?.amountCentavos !== undefined;
 
   return (
     <Dialog open={penalty !== null} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold text-copy-primary">Resolve or waive this penalty?</DialogTitle>
+          <DialogTitle className="text-lg font-bold text-copy-primary">
+            Resolve or waive this penalty?
+          </DialogTitle>
           <DialogDescription>
             {penalty?.reason}
             {isMonetary && penalty
@@ -360,17 +427,34 @@ function ResolvePenaltyDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {error && <p className="text-sm font-medium text-error" role="alert">{error}</p>}
+        {error && (
+          <p className="text-sm font-medium text-error" role="alert">
+            {error}
+          </p>
+        )}
 
         <DialogFooter className="sm:justify-between">
-          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </Button>
           <div className="flex gap-2">
-            <Button type="button" variant="outline" disabled={isSubmitting} onClick={() => decide("WAIVED")}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isSubmitting}
+              onClick={() => decide("WAIVED")}
+            >
               Waive
             </Button>
-            <Button type="button" disabled={isSubmitting} onClick={() => decide("RESOLVED")}>
+            <Button
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => decide("RESOLVED")}
+            >
               Resolve
             </Button>
           </div>

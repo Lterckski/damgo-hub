@@ -2,7 +2,13 @@
 
 import { useOthers } from "@liveblocks/react/suspense";
 
-import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarGroup,
+  AvatarGroupCount,
+  AvatarImage,
+} from "@/components/ui/avatar";
 
 const MAX_VISIBLE_AVATARS = 5;
 
@@ -32,18 +38,24 @@ export function BoardPresence() {
   const overflow = others.length - visible.length;
 
   return (
-    <div className="pointer-events-none absolute top-4 right-4 z-20">
+    <div className="board-presence pointer-events-none absolute top-4 right-4 z-20">
       <AvatarGroup className="pointer-events-auto">
         {visible.map((other) => (
           <Avatar key={other.connectionId} className="ring-2 ring-surface">
-            {other.info.avatar ? <AvatarImage src={other.info.avatar} alt={other.info.name} /> : null}
-            <AvatarFallback style={{ backgroundColor: other.info.color, color: "#0b1220" }}>
+            {other.info.avatar ? (
+              <AvatarImage src={other.info.avatar} alt={other.info.name} />
+            ) : null}
+            <AvatarFallback
+              style={{ backgroundColor: other.info.color, color: "#0b1220" }}
+            >
               {initialsFor(other.info.name)}
             </AvatarFallback>
           </Avatar>
         ))}
         {overflow > 0 && (
-          <AvatarGroupCount className="ring-2 ring-surface">+{overflow}</AvatarGroupCount>
+          <AvatarGroupCount className="ring-2 ring-surface">
+            +{overflow}
+          </AvatarGroupCount>
         )}
       </AvatarGroup>
     </div>

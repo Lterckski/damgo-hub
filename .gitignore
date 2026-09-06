@@ -46,3 +46,7 @@ next-env.d.ts
 .trigger
 .prisma-composer/
 .alchemy/
+
+# Browser verification artifacts
+/test-results/
+/playwright-report/

@@ -3,6 +3,7 @@
 import { createContext, useContext } from "react";
 
 interface IdeaActions {
+  deleteIdea: (nodeId: string) => void;
   /** Writes a note's text through to Liveblocks storage — no separate save step. */
   commitText: (nodeId: string, text: string) => void;
   /**
@@ -21,6 +22,7 @@ interface IdeaActions {
 
 const IdeaActionsContext = createContext<IdeaActions>({
   commitText: () => {},
+  deleteIdea: () => {},
   autoEditNodeId: null,
   clearAutoEdit: () => {},
 });
@@ -36,17 +38,21 @@ const IdeaActionsContext = createContext<IdeaActions>({
  */
 export function IdeaActionsProvider({
   commitText,
+  deleteIdea,
   autoEditNodeId,
   clearAutoEdit,
   children,
 }: {
   commitText: IdeaActions["commitText"];
+  deleteIdea: IdeaActions["deleteIdea"];
   autoEditNodeId: string | null;
   clearAutoEdit: () => void;
   children: React.ReactNode;
 }) {
   return (
-    <IdeaActionsContext.Provider value={{ commitText, autoEditNodeId, clearAutoEdit }}>
+    <IdeaActionsContext.Provider
+      value={{ commitText, deleteIdea, autoEditNodeId, clearAutoEdit }}
+    >
       {children}
     </IdeaActionsContext.Provider>
   );

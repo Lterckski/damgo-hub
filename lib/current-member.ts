@@ -1,8 +1,9 @@
 import { requireWorkspaceSession } from "@/lib/hub/context";
-import { auth, currentUser } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma";
-import type { Member } from "@/app/generated/prisma/client";
+import { cache } from "react";
+import { getCurrentMember } from "@/lib/member-session";
+
+export { getCurrentMember } from "@/lib/member-session";
 
 // The dev "View as Member" toggle (components/chrome/dev-user-button.tsx)
 // — a plain, unsigned cookie the client sets directly, deliberately safe
@@ -11,57 +12,10 @@ import type { Member } from "@/app/generated/prisma/client";
 // A non-admin setting this cookie has zero effect anywhere.
 const DEV_VIEW_AS_MEMBER_COOKIE = "damgo_dev_view_as_member";
 
-export async function isDevViewingAsMember(): Promise<boolean> {
+export const isDevViewingAsMember = cache(async (): Promise<boolean> => {
   const cookieStore = await cookies();
   return cookieStore.get(DEV_VIEW_AS_MEMBER_COOKIE)?.value === "1";
-}
-
-/**
- * Resolves the active Clerk identity to its `Member` record — creating one
- * on first sign-in if it doesn't exist yet.
- *
- * This only covers profile data (name, email, avatar, status, isLeader,
- * role tags). Admin/member permission is Clerk's org role, never stored
- * here — use `isCurrentMemberAdmin()` / `isCurrentMemberLeader()` for that.
- */
-export async function getCurrentMember(): Promise<Member> {
-  const { userId } = await auth();
-
-  if (!userId) {
-    throw new Error(
-      "getCurrentMember() called without an authenticated Clerk session",
-    );
-  }
-
-  const existing = await prisma.member.findUnique({
-    where: { clerkUserId: userId },
-  });
-
-  if (existing) {
-    return existing;
-  }
-
-  const user = await currentUser();
-  const primaryEmail = user?.emailAddresses.find(
-    (address) => address.id === user.primaryEmailAddressId,
-  )?.emailAddress;
-
-  // Another Server Component can reconcile the full Clerk roster during
-  // this same first request. Upsert makes both paths race-safe.
-  const created = await prisma.member.upsert({
-    where: { clerkUserId: userId },
-    update: {},
-    create: {
-      clerkUserId: userId,
-      email: primaryEmail ?? "",
-      displayName: user?.fullName ?? user?.username ?? "New Member",
-      avatarUrl: user?.imageUrl,
-      status: "ACTIVE",
-    },
-  });
-
-  return created;
-}
+});
 
 /**
  * Whether the current session holds the Clerk `org:admin` role — the

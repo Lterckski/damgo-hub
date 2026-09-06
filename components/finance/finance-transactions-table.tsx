@@ -57,11 +57,19 @@ export interface TransactionRow {
 // the same.
 const CATEGORY_PRESETS = {
   INCOME: ["Dues", "Penalty", "Sponsorship", "Other"],
-  EXPENSE: ["Event Cost", "Supplies", "Subscription", "Reimbursement", "Registration Fee", "Other"],
+  EXPENSE: [
+    "Event Cost",
+    "Supplies",
+    "Subscription",
+    "Reimbursement",
+    "Registration Fee",
+    "Other",
+  ],
 } as const;
 type TransactionType = keyof typeof CATEGORY_PRESETS;
 
-const FIELD_LABEL_CLASS = "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
+const FIELD_LABEL_CLASS =
+  "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
 
 function typeBadge(type: TransactionRow["type"]) {
   return type === "INCOME" ? (
@@ -73,7 +81,8 @@ function typeBadge(type: TransactionRow["type"]) {
 
 function statusBadge(status: TransactionRow["status"]) {
   if (status === "APPROVED") return <Badge>Approved</Badge>;
-  if (status === "REJECTED") return <Badge variant="destructive">Rejected</Badge>;
+  if (status === "REJECTED")
+    return <Badge variant="destructive">Rejected</Badge>;
   return <Badge variant="outline">Pending</Badge>;
 }
 
@@ -137,7 +146,9 @@ export function FinanceTransactionsTable({
   const [decidingId, setDecidingId] = useState<string | null>(null);
 
   const [type, setType] = useState<TransactionType>("EXPENSE");
-  const [categoryPreset, setCategoryPreset] = useState<string>(CATEGORY_PRESETS.EXPENSE[0]);
+  const [categoryPreset, setCategoryPreset] = useState<string>(
+    CATEGORY_PRESETS.EXPENSE[0],
+  );
   const [customCategory, setCustomCategory] = useState("");
 
   function selectType(value: string | null) {
@@ -168,7 +179,8 @@ export function FinanceTransactionsTable({
   async function submitTransaction(formData: FormData) {
     setIsSubmitting(true);
     try {
-      const finalCategory = categoryPreset === "Other" ? customCategory.trim() : categoryPreset;
+      const finalCategory =
+        categoryPreset === "Other" ? customCategory.trim() : categoryPreset;
       formData.set("category", finalCategory);
       formData.set("type", type);
 
@@ -188,7 +200,10 @@ export function FinanceTransactionsTable({
 
   const monthGroups = groupByMonth(transactions);
 
-  async function decide(transactionId: string, status: "APPROVED" | "REJECTED") {
+  async function decide(
+    transactionId: string,
+    status: "APPROVED" | "REJECTED",
+  ) {
     setDecidingId(transactionId);
     try {
       await fetch(`/api/finance/transactions/${transactionId}`, {
@@ -211,7 +226,15 @@ export function FinanceTransactionsTable({
       )}
 
       <div className="overflow-hidden rounded-2xl border border-surface-border">
-        <div className="overflow-x-auto">
+        <div
+          tabIndex={0}
+          role="region"
+          aria-label="Financial transactions; scroll horizontally for more columns"
+          className="overflow-x-auto"
+        >
+          <p className="px-3 py-2 text-xs text-copy-secondary sm:hidden">
+            Scroll sideways for more columns.
+          </p>
           <Table>
             <TableHeader>
               <TableRow className="bg-surface">
@@ -234,19 +257,26 @@ export function FinanceTransactionsTable({
                     >
                       {group.label}
                       <span className="ml-2 font-medium tracking-normal text-copy-secondary normal-case">
-                        · {group.rows.length} transaction{group.rows.length === 1 ? "" : "s"}
+                        · {group.rows.length} transaction
+                        {group.rows.length === 1 ? "" : "s"}
                       </span>
                     </TableCell>
                   </TableRow>
                   {group.rows.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="py-6 text-center text-sm text-copy-secondary">
+                      <TableCell
+                        colSpan={7}
+                        className="py-6 text-center text-sm text-copy-secondary"
+                      >
                         No transactions logged yet this month.
                       </TableCell>
                     </TableRow>
                   )}
                   {group.rows.map((transaction) => (
-                    <TableRow key={transaction.id} className="border-t border-surface-border-subtle">
+                    <TableRow
+                      key={transaction.id}
+                      className="border-t border-surface-border-subtle"
+                    >
                       <TableCell className="text-xs font-medium text-copy-secondary">
                         {new Date(transaction.createdAt).toLocaleDateString()}
                       </TableCell>
@@ -328,13 +358,17 @@ export function FinanceTransactionsTable({
           </DialogHeader>
 
           <form action={submitTransaction} className="grid gap-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={FIELD_LABEL_CLASS}>Type</label>
                 {/* items map — <Select.Value> needs it to show a label
                     instead of the raw "INCOME"/"EXPENSE" value before the
                     popup has opened. See new-task-dialog.tsx's comment. */}
-                <Select items={{ INCOME: "Income", EXPENSE: "Expense" }} value={type} onValueChange={selectType}>
+                <Select
+                  items={{ INCOME: "Income", EXPENSE: "Expense" }}
+                  value={type}
+                  onValueChange={selectType}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
@@ -383,8 +417,14 @@ export function FinanceTransactionsTable({
             </div>
 
             <div>
-              <label className={FIELD_LABEL_CLASS}>Description (optional)</label>
-              <Textarea name="description" rows={2} className="text-copy-primary!" />
+              <label className={FIELD_LABEL_CLASS}>
+                Description (optional)
+              </label>
+              <Textarea
+                name="description"
+                rows={2}
+                className="text-copy-primary!"
+              />
             </div>
 
             <div>
@@ -393,7 +433,11 @@ export function FinanceTransactionsTable({
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setIsLogging(false)}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setIsLogging(false)}
+              >
                 Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting}>

@@ -1,9 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { Background, MarkerType, Panel, ReactFlow, useReactFlow } from "@xyflow/react";
+import {
+  Background,
+  MarkerType,
+  Panel,
+  ReactFlow,
+  useReactFlow,
+} from "@xyflow/react";
 import { useLiveblocksFlow } from "@liveblocks/react-flow";
-import { useCanRedo, useCanUndo, useRedo, useUndo } from "@liveblocks/react/suspense";
+import {
+  useCanRedo,
+  useCanUndo,
+  useRedo,
+  useUndo,
+} from "@liveblocks/react/suspense";
 import { Maximize, Plus, Redo2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -11,9 +22,15 @@ import { BoardCursors } from "@/components/board/board-cursors";
 import { BoardPresence } from "@/components/board/board-presence";
 import { BoardSaveStatus } from "@/components/board/board-save-status";
 import { MilestoneEditDialog } from "@/components/roadmap/milestone-edit-dialog";
+import { RoadmapActionsProvider } from "./roadmap-actions-context";
+import { RoadmapConnections } from "./roadmap-connections";
 import { MilestoneNode } from "@/components/roadmap/milestone-node";
 import { useBoardAutosave } from "@/hooks/use-board-autosave";
-import { createMilestoneNode, MILESTONE_NODE_TYPE, type MilestoneNode as MilestoneNodeType } from "@/types/roadmap";
+import {
+  createMilestoneNode,
+  MILESTONE_NODE_TYPE,
+  type MilestoneNode as MilestoneNodeType,
+} from "@/types/roadmap";
 import type { ProjectMemberOption } from "@/lib/projects";
 
 import "@xyflow/react/dist/style.css";
@@ -27,7 +44,12 @@ const nodeTypes = { [MILESTONE_NODE_TYPE]: MilestoneNode };
 const DEFAULT_EDGE_OPTIONS = {
   type: "smoothstep",
   style: { stroke: "var(--border-default)", strokeWidth: 1.5 },
-  markerEnd: { type: MarkerType.ArrowClosed, color: "var(--border-default)", width: 16, height: 16 },
+  markerEnd: {
+    type: MarkerType.ArrowClosed,
+    color: "var(--border-default)",
+    width: 16,
+    height: 16,
+  },
 };
 
 /**
@@ -43,27 +65,36 @@ export function RoadmapCanvas({
   projectId: string;
   collaborators: ProjectMemberOption[];
 }) {
-  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, onDelete } = useLiveblocksFlow<MilestoneNodeType>({
-    suspense: true,
-    nodes: { initial: [] },
-    edges: { initial: [] },
-  });
+  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, onDelete } =
+    useLiveblocksFlow<MilestoneNodeType>({
+      suspense: true,
+      nodes: { initial: [] },
+      edges: { initial: [] },
+    });
   const { zoomIn, zoomOut, fitView } = useReactFlow();
   const undo = useUndo();
   const redo = useRedo();
   const canUndo = useCanUndo();
   const canRedo = useCanRedo();
 
-  const { status: saveStatus, canRetryLoad, retryLoad } = useBoardAutosave({
+  const {
+    status: saveStatus,
+    canRetryLoad,
+    retryLoad,
+  } = useBoardAutosave({
     roomId: `project:${projectId}`,
     nodes,
     edges,
     onLoadSnapshot: (snapshot) => {
       if (snapshot.nodes.length > 0) {
-        onNodesChange(snapshot.nodes.map((item) => ({ type: "add" as const, item })));
+        onNodesChange(
+          snapshot.nodes.map((item) => ({ type: "add" as const, item })),
+        );
       }
       if (snapshot.edges.length > 0) {
-        onEdgesChange(snapshot.edges.map((item) => ({ type: "add" as const, item })));
+        onEdgesChange(
+          snapshot.edges.map((item) => ({ type: "add" as const, item })),
+        );
       }
     },
   });
@@ -79,65 +110,101 @@ export function RoadmapCanvas({
   }
 
   return (
-    <div className="relative h-[34rem] overflow-hidden rounded-2xl border border-surface-border bg-surface">
-      <BoardCursors className="h-full w-full">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onDelete={onDelete}
-          onNodeDoubleClick={(_, node) => setEditingNodeId(node.id)}
-          nodeTypes={nodeTypes}
-          defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
-          fitView
-        >
-          <Background gap={20} size={1} />
+    <div className="board-canvas relative overflow-hidden rounded-2xl border border-surface-border bg-surface">
+      <RoadmapActionsProvider value={setEditingNodeId}>
+        <BoardCursors className="h-full w-full">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onDelete={onDelete}
+            onNodeDoubleClick={(_, node) => setEditingNodeId(node.id)}
+            nodeTypes={nodeTypes}
+            defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
+            fitView
+          >
+            <Background gap={20} size={1} />
 
-          <Panel position="top-left">
-            <Button type="button" size="sm" onClick={addMilestone}>
-              <Plus className="h-3.5 w-3.5" /> Add Milestone
-            </Button>
-          </Panel>
+            <Panel position="top-left" className="max-w-[calc(100%-1rem)]">
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" onClick={addMilestone}>
+                  <Plus className="h-3.5 w-3.5" /> Add Milestone
+                </Button>
+                <RoadmapConnections
+                  nodes={nodes}
+                  edges={edges}
+                  onConnect={onConnect}
+                  onRemove={(id) => onEdgesChange([{ type: "remove", id }])}
+                />
+              </div>
+            </Panel>
 
-          <Panel position="bottom-left">
-            <div className="flex items-center gap-1 rounded-xl border border-surface-border bg-surface p-1 shadow-sm">
-              <Button type="button" variant="ghost" size="icon" title="Zoom in" onClick={() => zoomIn()}>
-                <ZoomIn className="h-4 w-4" />
-              </Button>
-              <Button type="button" variant="ghost" size="icon" title="Zoom out" onClick={() => zoomOut()}>
-                <ZoomOut className="h-4 w-4" />
-              </Button>
-              <Button type="button" variant="ghost" size="icon" title="Fit view" onClick={() => fitView()}>
-                <Maximize className="h-4 w-4" />
-              </Button>
-              <div className="mx-1 h-4 w-px bg-surface-border" />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                title="Undo"
-                disabled={!canUndo}
-                onClick={() => undo()}
-              >
-                <Undo2 className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                title="Redo"
-                disabled={!canRedo}
-                onClick={() => redo()}
-              >
-                <Redo2 className="h-4 w-4" />
-              </Button>
-              <BoardSaveStatus status={saveStatus} onRetryLoad={canRetryLoad ? retryLoad : undefined} />
-            </div>
-          </Panel>
-        </ReactFlow>
-      </BoardCursors>
+            <Panel position="bottom-left" className="board-controls">
+              <div className="flex items-center gap-1 rounded-xl border border-surface-border bg-surface p-1 shadow-sm">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Zoom in"
+                  title="Zoom in"
+                  onClick={() => zoomIn()}
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Zoom out"
+                  title="Zoom out"
+                  onClick={() => zoomOut()}
+                >
+                  <ZoomOut className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Fit view"
+                  title="Fit view"
+                  onClick={() => fitView()}
+                >
+                  <Maximize className="h-4 w-4" />
+                </Button>
+                <div className="mx-1 h-4 w-px bg-surface-border" />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Undo"
+                  title="Undo"
+                  disabled={!canUndo}
+                  onClick={() => undo()}
+                >
+                  <Undo2 className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Redo"
+                  title="Redo"
+                  disabled={!canRedo}
+                  onClick={() => redo()}
+                >
+                  <Redo2 className="h-4 w-4" />
+                </Button>
+                <BoardSaveStatus
+                  status={saveStatus}
+                  onRetryLoad={canRetryLoad ? retryLoad : undefined}
+                />
+              </div>
+            </Panel>
+          </ReactFlow>
+        </BoardCursors>
+      </RoadmapActionsProvider>
 
       <BoardPresence />
 

@@ -1,5 +1,3 @@
-"use client";
-
 import { CalendarClock, ExternalLink, FolderKanban, Timer, Users } from "lucide-react";
 
 import { countdownLabel, dueLabel, relativeDateTimeLabel } from "@/lib/dashboard/relative-time";
@@ -25,8 +23,13 @@ export function TeamPulse({ pulse }: { pulse: TeamPulseData }) {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() =>
-                  window.open(pulse.nextMeeting!.joinUrl!, "_blank", "noopener,noreferrer")
+                nativeButton={false}
+                render={
+                  <a
+                    href={pulse.nextMeeting.joinUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  />
                 }
               >
                 <ExternalLink className="h-3.5 w-3.5" />

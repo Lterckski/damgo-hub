@@ -15,7 +15,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -25,13 +29,20 @@ import {
 } from "@/components/ui/select";
 import { FilterMultiSelect } from "@/components/shared/filter-multi-select";
 import type { ProjectMemberOption } from "@/lib/projects";
-import { MILESTONE_STATUS_OPTIONS, type MilestoneNode, type MilestoneStatus } from "@/types/roadmap";
+import {
+  MILESTONE_STATUS_OPTIONS,
+  type MilestoneNode,
+  type MilestoneStatus,
+} from "@/types/roadmap";
 
-const FIELD_LABEL_CLASS = "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
+const FIELD_LABEL_CLASS =
+  "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
 
 // See new-task-dialog.tsx's comment — <Select.Value> needs an `items` map
 // to show a label instead of the raw value before the popup has opened.
-const STATUS_ITEMS = Object.fromEntries(MILESTONE_STATUS_OPTIONS.map((o) => [o.value, o.label]));
+const STATUS_ITEMS = Object.fromEntries(
+  MILESTONE_STATUS_OPTIONS.map((o) => [o.value, o.label]),
+);
 
 // Derived straight from useLiveblocksFlow's own return type (same
 // instantiation roadmap-canvas.tsx uses) rather than hand-typed against
@@ -106,13 +117,18 @@ export function MilestoneEditDialog({
     onOpenChange(false);
   }
 
-  const collaboratorOptions = collaborators.map((c) => ({ value: c.id, label: c.displayName }));
+  const collaboratorOptions = collaborators.map((c) => ({
+    value: c.id,
+    label: c.displayName,
+  }));
 
   return (
     <Dialog open={node !== null} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold text-copy-primary">Edit Milestone</DialogTitle>
+          <DialogTitle className="text-lg font-bold text-copy-primary">
+            Edit Milestone
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -129,7 +145,7 @@ export function MilestoneEditDialog({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={FIELD_LABEL_CLASS}>Status</label>
               <Select
@@ -157,12 +173,23 @@ export function MilestoneEditDialog({
 
             <div>
               <label className={FIELD_LABEL_CLASS}>Due Date</label>
-              <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
+              <Popover
+                open={isDatePickerOpen}
+                onOpenChange={setIsDatePickerOpen}
+              >
                 <PopoverTrigger
-                  render={<Button type="button" variant="outline" className="w-full justify-start font-normal" />}
+                  render={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-start font-normal"
+                    />
+                  }
                 >
                   <CalendarIcon className="h-3.5 w-3.5" />
-                  {dueDate ? format(new Date(dueDate), "MMM d, yyyy") : "No due date"}
+                  {dueDate
+                    ? format(new Date(dueDate), "MMM d, yyyy")
+                    : "No due date"}
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-auto p-0">
                   <Calendar
@@ -212,7 +239,12 @@ export function MilestoneEditDialog({
         </div>
 
         <DialogFooter className="sm:justify-between">
-          <Button type="button" variant="ghost" className="text-error" onClick={handleDelete}>
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-error"
+            onClick={handleDelete}
+          >
             <Trash2 className="h-3.5 w-3.5" /> Delete
           </Button>
           <Button type="button" onClick={() => onOpenChange(false)}>

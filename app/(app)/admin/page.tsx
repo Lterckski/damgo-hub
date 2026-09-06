@@ -1,7 +1,4 @@
 import { requireWorkspacePage as requireWorkspaceSession } from "@/lib/hub/context";
-import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
-
 import { getAuditLog } from "@/lib/audit-log";
 import {
   getCurrentMember,
@@ -38,18 +35,19 @@ import { ToastProvider } from "@/components/ui/toast";
  * no longer linked from here.
  */
 export default async function AdminConsolePage() {
-  await requireWorkspaceSession();
+  const { orgId } = await requireWorkspaceSession();
 
-  const { userId, orgId } = await auth();
-
-  // The layout above already redirects an unauthenticated visitor, but
-  // Next renders layout and page in parallel — so without this the page
-  // still starts, and getCurrentMember() throws before the layout's
-  // redirect lands. Checking here also avoids running every query below
-  // for a request that was never going to render.
-  if (!userId) {
-    redirect("/sign-in");
-  }
+  const statsPromise = getAdminStats(orgId);
+  const reconciliationPromise = reconcileMembers(orgId).then(
+    (report): { report: MemberReconciliation | null; error: string | null } => ({
+      report,
+      error: null,
+    }),
+    (): { report: MemberReconciliation | null; error: string | null } => ({
+      report: null,
+      error: "Couldn't reach Clerk to compare the roster.",
+    }),
+  );
 
   const [
     tables,
@@ -75,33 +73,8 @@ export default async function AdminConsolePage() {
     // "Clerk unreachable" card rather than silently showing the unscoped
     // local count — the exact failure mode that made the member count
     // wrong in the first place.
-    orgId
-      ? getAdminStats(orgId)
-      : Promise.resolve({
-          cards: [],
-          exceptions: [],
-          memberCountDegraded: true,
-        }),
-    orgId
-      ? reconcileMembers(orgId).then(
-          (
-            report,
-          ): { report: MemberReconciliation | null; error: string | null } => ({
-            report,
-            error: null,
-          }),
-          (): {
-            report: MemberReconciliation | null;
-            error: string | null;
-          } => ({
-            report: null,
-            error: "Couldn't reach Clerk to compare the roster.",
-          }),
-        )
-      : Promise.resolve({
-          report: null,
-          error: "No active Clerk organization on this session.",
-        }),
+    statsPromise,
+    reconciliationPromise,
   ]);
 
   return (

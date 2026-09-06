@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -22,16 +23,25 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { SearchPalette, type CreateKind } from "./search-palette";
 import { NotificationBell } from "./notification-bell";
-import { HeaderCreate, createLabels } from "./header-create";
-import { NotificationPreferences } from "./notification-preferences";
+import { createLabels, type CreateKind } from "./header-create-types";
+
+const SearchPalette = dynamic(() =>
+  import("./search-palette").then((module) => module.SearchPalette),
+);
+const HeaderCreate = dynamic(() =>
+  import("./header-create").then((module) => module.HeaderCreate),
+);
+const NotificationPreferences = dynamic(() =>
+  import("./notification-preferences").then(
+    (module) => module.NotificationPreferences,
+  ),
+);
+const HeaderUtilityDialogs = dynamic(() =>
+  import("./header-utility-dialogs").then(
+    (module) => module.HeaderUtilityDialogs,
+  ),
+);
 
 export function AppHeader({
   isAdmin,
@@ -96,12 +106,12 @@ export function AppHeader({
   return (
     <>
       <header
-        className={`z-30 flex h-16 shrink-0 items-center gap-3 border-b border-surface-border px-3 sm:gap-5 sm:px-5 ${scrolled ? "bg-surface/90 shadow-sm backdrop-blur-xl" : "bg-surface"}`}
+        className={`app-header z-30 flex h-16 shrink-0 items-center gap-3 border-b border-surface-border px-3 sm:gap-5 sm:px-5 ${scrolled ? "bg-surface/90 shadow-sm backdrop-blur-xl" : "bg-surface"}`}
       >
         <div className="flex min-w-0 items-center gap-4">
           <Link
             href="/dashboard"
-            className="flex shrink-0 items-center gap-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            className="flex min-h-11 min-w-11 shrink-0 items-center gap-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             <Image
               src="/brand/logo.jpeg"
@@ -165,7 +175,7 @@ export function AppHeader({
                 {kinds.map((kind) => (
                   <button
                     key={kind}
-                    className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-accent-dim focus-visible:ring-2 focus-visible:ring-brand"
+                    className="block min-h-11 w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-accent-dim focus-visible:ring-2 focus-visible:ring-brand"
                     onClick={() => {
                       setCreateMenu(false);
                       setCreate(kind);
@@ -181,7 +191,7 @@ export function AppHeader({
           <span className="hidden rounded-md bg-accent-dim px-2 py-1 text-[10px] font-semibold text-brand xl:block">
             {isAdmin ? "Admin" : "Member"}
           </span>
-          <div className="ml-1 flex h-8 w-8 items-center justify-center">
+          <div className="ml-1 flex h-11 w-11 items-center justify-center">
             {!isLoaded ? (
               <div className="h-8 w-8 animate-pulse rounded-full bg-subtle" />
             ) : (
@@ -262,38 +272,17 @@ export function AppHeader({
       {preferences && (
         <NotificationPreferences onClose={() => setPreferences(false)} />
       )}
-      <Dialog open={orgPicker} onOpenChange={setOrgPicker}>
-        <DialogContent className="rounded-3xl">
-          <DialogTitle>Organization</DialogTitle>
-          <DialogDescription>
-            {organization?.name} · {isAdmin ? "Admin" : "Member"}
-          </DialogDescription>
-          <OrganizationSwitcher
-            hidePersonal
-            afterSelectOrganizationUrl="/dashboard"
-          />
-        </DialogContent>
-      </Dialog>
-      <Dialog open={themePicker} onOpenChange={setThemePicker}>
-        <DialogContent className="rounded-3xl">
-          <DialogTitle>Appearance</DialogTitle>
-          <DialogDescription>
-            Choose a theme for this browser.
-          </DialogDescription>
-          <div className="flex gap-2">
-            {["system", "light", "dark"].map((value) => (
-              <Button
-                key={value}
-                variant="outline"
-                onClick={() => theme(value)}
-                className="capitalize"
-              >
-                {value}
-              </Button>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
+      {(orgPicker || themePicker) && (
+        <HeaderUtilityDialogs
+          isAdmin={isAdmin}
+          organizationName={organization?.name ?? "Organization"}
+          orgPicker={orgPicker}
+          themePicker={themePicker}
+          onOrgPickerChange={setOrgPicker}
+          onThemePickerChange={setThemePicker}
+          onTheme={theme}
+        />
+      )}
     </>
   );
 }

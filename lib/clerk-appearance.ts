@@ -10,6 +10,12 @@ import type { Appearance } from "@clerk/ui";
  */
 export const clerkAppearance: Appearance = {
   theme: dark,
+  elements: {
+    userButtonTrigger: "min-h-11 min-w-11",
+    rootBox: "max-w-full",
+    cardBox: "w-full max-w-full sm:w-auto",
+    card: "max-w-full",
+  },
   variables: {
     colorPrimary: "var(--accent-primary)",
     colorPrimaryForeground: "var(--bg-elevated)",

@@ -1,8 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { cookies } from "next/headers";
 import "./globals.css";
+import { AppSpeedInsights } from "@/components/monitoring/speed-insights";
+import { BrowserViewport } from "@/components/chrome/browser-viewport";
 import { clerkAppearance } from "@/lib/clerk-appearance";
 
 const geistSans = Geist({
@@ -19,6 +21,13 @@ const playfairDisplay = Playfair_Display({
   variable: "--font-playfair-display",
   subsets: ["latin"],
 });
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
+};
 
 export const metadata: Metadata = {
   title: "Damgo Hub",
@@ -41,7 +50,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             h-full/overflow-y-auto containment chain further down and makes
             the whole page scroll (dragging the navbar with it) instead of
             just the content area scrolling internally. */}
-        <body className="flex h-full flex-col">{children}</body>
+        <body className="flex h-full min-w-0 flex-col">
+          <BrowserViewport />
+          {children}
+          <AppSpeedInsights />
+        </body>
       </html>
     </ClerkProvider>
   );

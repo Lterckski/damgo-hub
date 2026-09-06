@@ -1,6 +1,7 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
+import { cache } from "react";
 
-import { organizationMemberProfile } from "@/lib/member-profile";
+import { getClerkOrgMembers } from "@/lib/clerk-roster";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -24,43 +25,29 @@ async function getCurrentOrgId(): Promise<string> {
  * clerkUserId -> "org:admin" | "org:member" (or whatever role string Clerk
  * returns) for every member of the org.
  *
- * Was briefly wrapped in unstable_cache to avoid re-hitting Clerk's API on
- * every /members load — reverted after it broke that page in production
- * (crashed on load). Not yet root-caused (couldn't reproduce locally,
- * since local dev's database is a separate, already-broken issue), so
- * back to the plain uncached version that's known to work rather than
- * leave a live page down while investigating further.
+ * React cache deduplicates this work only within one server render. It does
+ * not persist Clerk membership data between requests, so role revocation is
+ * still observed on the next request.
  */
-export async function listOrgRoles(): Promise<Map<string, string>> {
+export const listOrgRoles = cache(async (): Promise<Map<string, string>> => {
   const orgId = await getCurrentOrgId();
-  const client = await clerkClient();
-
-  const roles = new Map<string, string>();
-  const profiles = [];
-  let offset = 0;
-  const limit = 100;
-
-  // Paginate — an org membership list can exceed a single page.
-  while (true) {
-    const { data } = await client.organizations.getOrganizationMembershipList(
-      { organizationId: orgId, limit, offset },
-    );
-
-    for (const membership of data) {
-      const publicUserData = membership.publicUserData;
-      if (!publicUserData) continue;
-
-      roles.set(publicUserData.userId, membership.role);
-      profiles.push(organizationMemberProfile(publicUserData));
-    }
-
-    if (data.length < limit) break;
-    offset += limit;
-  }
+  const profiles = await getClerkOrgMembers(orgId);
+  const roles = new Map(
+    profiles.map((profile) => [profile.clerkUserId, profile.role]),
+  );
 
   const existingMembers = await prisma.member.findMany({
-    where: { clerkUserId: { in: profiles.map((profile) => profile.clerkUserId) } },
-    select: { clerkUserId: true, email: true, displayName: true, avatarUrl: true },
+    where: {
+      clerkUserId: { in: profiles.map((profile) => profile.clerkUserId) },
+      status: { not: "REMOVED" },
+    },
+    select: {
+      id: true,
+      clerkUserId: true,
+      email: true,
+      displayName: true,
+      avatarUrl: true,
+    },
   });
   const existingByClerkId = new Map(existingMembers.map((member) => [member.clerkUserId, member]));
   const changedProfiles = profiles.filter((profile) => {
@@ -95,8 +82,56 @@ export async function listOrgRoles(): Promise<Map<string, string>> {
     );
   }
 
+  const reconciledMembers = changedProfiles.length
+    ? await prisma.member.findMany({
+        where: {
+          clerkUserId: { in: profiles.map((profile) => profile.clerkUserId) },
+          status: { not: "REMOVED" },
+        },
+        select: { id: true, clerkUserId: true },
+      })
+    : existingMembers;
+  const desiredMemberships = new Map(
+    reconciledMembers.map((member) => [
+      member.id,
+      roles.get(member.clerkUserId)!,
+    ]),
+  );
+  const currentMemberships = await prisma.hubMembership.findMany({
+    where: { orgId },
+    select: { memberId: true, role: true },
+  });
+  const currentByMember = new Map(
+    currentMemberships.map((membership) => [membership.memberId, membership]),
+  );
+  const removedMemberIds = currentMemberships
+    .filter((membership) => !desiredMemberships.has(membership.memberId))
+    .map((membership) => membership.memberId);
+  const changedMemberships = [...desiredMemberships].filter(
+    ([memberId, role]) => currentByMember.get(memberId)?.role !== role,
+  );
+
+  if (removedMemberIds.length > 0 || changedMemberships.length > 0) {
+    await prisma.$transaction([
+      ...(removedMemberIds.length > 0
+        ? [
+            prisma.hubMembership.deleteMany({
+              where: { orgId, memberId: { in: removedMemberIds } },
+            }),
+          ]
+        : []),
+      ...changedMemberships.map(([memberId, role]) =>
+        prisma.hubMembership.upsert({
+          where: { memberId },
+          create: { memberId, orgId, role },
+          update: { orgId, role },
+        }),
+      ),
+    ]);
+  }
+
   return roles;
-}
+});
 
 /** Grants org:admin to a member — the "Assign Assistant Leader" action. Caller must have already verified isCurrentMemberLeader(). */
 export async function grantOrgAdmin(clerkUserId: string): Promise<void> {

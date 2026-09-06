@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { audienceGrants, recordWhere, canSee, type Viewer } from "./visibility";
-import { visibleRecord } from "./search";
 
 export function notificationWhere(viewer: Viewer) {
   return {
@@ -20,44 +19,69 @@ export async function importBroadcasts(viewer: Viewer) {
     where: { memberId: viewer.memberId },
     include: { broadcast: true },
   });
-  for (const receipt of broadcasts) {
-    const recordId = `broadcast:${receipt.broadcastId}`;
-    if (!(await visibleRecord(viewer, recordId))) continue;
-    const eventKey = `legacy:${receipt.id}`;
-    const existing = await prisma.hubNotification.findUnique({
-      where: { eventKey },
+  if (broadcasts.length === 0) return;
+
+  const recordIds = broadcasts.map(
+    (receipt) => `broadcast:${receipt.broadcastId}`,
+  );
+  const eventKeys = broadcasts.map((receipt) => `legacy:${receipt.id}`);
+  const [visibleRecords, imported, native] = await Promise.all([
+    prisma.hubRecord.findMany({
+      where: { id: { in: recordIds }, ...recordWhere(viewer) },
       select: { id: true },
-    });
-    if (existing) continue;
-    // Native broadcast writes already emit notifications. Import only rows
-    // that have no live notification for this concrete recipient.
-    if (
-      await prisma.hubNotification.findFirst({
-        where: { recordId, recipientId: viewer.memberId },
-      })
-    )
-      continue;
-    await prisma.hubNotification.upsert({
-      where: { eventKey },
-      update: {},
-      create: {
-        orgId: viewer.orgId,
-        recordId,
-        visibilityScope: "user",
+    }),
+    prisma.hubNotification.findMany({
+      where: { eventKey: { in: eventKeys } },
+      select: { eventKey: true },
+    }),
+    prisma.hubNotification.findMany({
+      where: {
+        recordId: { in: recordIds },
         recipientId: viewer.memberId,
-        actorId: receipt.broadcast.sentById,
-        action: "broadcast.posted",
-        title: receipt.broadcast.subject,
-        body: receipt.broadcast.body,
-        url: `/records/${recordId}`,
-        eventKey,
-        createdAt: receipt.broadcast.createdAt,
-        states: {
-          create: { memberId: viewer.memberId, readAt: receipt.readAt },
-        },
+        eventKey: { not: { startsWith: "legacy:" } },
       },
-    });
-  }
+      select: { recordId: true },
+    }),
+  ]);
+  const visibleIds = new Set(visibleRecords.map((record) => record.id));
+  const importedKeys = new Set(imported.map((row) => row.eventKey));
+  const nativeRecordIds = new Set(native.map((row) => row.recordId));
+  const missing = broadcasts.filter((receipt) => {
+    const recordId = `broadcast:${receipt.broadcastId}`;
+    return (
+      visibleIds.has(recordId) &&
+      !importedKeys.has(`legacy:${receipt.id}`) &&
+      !nativeRecordIds.has(recordId)
+    );
+  });
+  if (missing.length === 0) return;
+
+  await prisma.$transaction(
+    missing.map((receipt) => {
+      const recordId = `broadcast:${receipt.broadcastId}`;
+      const eventKey = `legacy:${receipt.id}`;
+      return prisma.hubNotification.upsert({
+        where: { eventKey },
+        update: {},
+        create: {
+          orgId: viewer.orgId,
+          recordId,
+          visibilityScope: "user",
+          recipientId: viewer.memberId,
+          actorId: receipt.broadcast.sentById,
+          action: "broadcast.posted",
+          title: receipt.broadcast.subject,
+          body: receipt.broadcast.body,
+          url: `/records/${recordId}`,
+          eventKey,
+          createdAt: receipt.broadcast.createdAt,
+          states: {
+            create: { memberId: viewer.memberId, readAt: receipt.readAt },
+          },
+        },
+      });
+    }),
+  );
 }
 
 export async function notifications(viewer: Viewer, filter: string) {

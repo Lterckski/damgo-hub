@@ -1,6 +1,8 @@
-import { entityVisibilityWhere } from "@/lib/hub/context";
-import { taskVisibilityWhere } from "@/lib/hub/context";
-import { clerkClient } from "@clerk/nextjs/server";
+import { entityVisibilityWheres } from "@/lib/hub/context";
+import {
+  getClerkOrgMembers,
+  getClerkPendingInvitations,
+} from "@/lib/clerk-roster";
 
 import { formatPHP } from "@/lib/currency";
 import { prisma } from "@/lib/prisma";
@@ -54,38 +56,14 @@ async function getClerkMembershipCounts(
   orgId: string,
 ): Promise<{ clerkUserIds: string[]; pendingInvitations: number } | null> {
   try {
-    const client = await clerkClient();
-    const clerkUserIds: string[] = [];
-    const limit = 100;
-    let offset = 0;
-
-    while (true) {
-      const { data } = await client.organizations.getOrganizationMembershipList(
-        {
-          organizationId: orgId,
-          limit,
-          offset,
-        },
-      );
-      for (const membership of data) {
-        if (membership.publicUserData)
-          clerkUserIds.push(membership.publicUserData.userId);
-      }
-      if (data.length < limit) break;
-      offset += limit;
-    }
-
-    const { data: invitations } =
-      await client.organizations.getOrganizationInvitationList({
-        organizationId: orgId,
-        limit: 100,
-      });
+    const [members, invitations] = await Promise.all([
+      getClerkOrgMembers(orgId),
+      getClerkPendingInvitations(orgId),
+    ]);
 
     return {
-      clerkUserIds,
-      pendingInvitations: invitations.filter(
-        (invitation) => invitation.status === "pending",
-      ).length,
+      clerkUserIds: members.map((member) => member.clerkUserId),
+      pendingInvitations: invitations.length,
     };
   } catch (error) {
     console.error("Clerk membership count failed", error);
@@ -102,7 +80,11 @@ export interface AdminStats {
 }
 
 export async function getAdminStats(orgId: string): Promise<AdminStats> {
-  const settings = await getOrgSettings();
+  const clerkCountsPromise = getClerkMembershipCounts(orgId);
+  const [settings, visibility] = await Promise.all([
+    getOrgSettings(),
+    entityVisibilityWheres(["penalty", "transaction", "task"]),
+  ]);
   const since = weekAgo();
   const staleBefore = new Date(
     Date.now() - settings.projectStaleDays * 24 * 60 * 60 * 1000,
@@ -122,14 +104,14 @@ export async function getAdminStats(orgId: string): Promise<AdminStats> {
     overdueTasks,
     membersWithUnpaidPenalties,
   ] = await Promise.all([
-    getClerkMembershipCounts(orgId),
+    clerkCountsPromise,
     prisma.member.findMany({
       select: { clerkUserId: true, status: true, createdAt: true },
     }),
     prisma.penalty.findMany({
       where: {
         ...{ status: "OPEN" },
-        AND: [await entityVisibilityWhere("penalty")],
+        AND: [visibility.penalty],
       },
       select: { dueAt: true, createdAt: true, amountCents: true },
     }),
@@ -138,7 +120,7 @@ export async function getAdminStats(orgId: string): Promise<AdminStats> {
     prisma.transaction.findMany({
       where: {
         ...{ status: "APPROVED" },
-        AND: [await entityVisibilityWhere("transaction")],
+        AND: [visibility.transaction],
       },
       select: { type: true, amount: true },
     }),
@@ -161,7 +143,7 @@ export async function getAdminStats(orgId: string): Promise<AdminStats> {
     prisma.task.count({
       where: {
         AND: [
-          await taskVisibilityWhere(),
+          visibility.task,
           { status: { not: "DONE" }, dueDate: { lt: new Date() } },
         ],
       },

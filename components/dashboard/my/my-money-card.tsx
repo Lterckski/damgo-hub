@@ -7,6 +7,7 @@ import { formatPHP } from "@/lib/currency";
 import type { MyMoney } from "@/lib/dashboard/types";
 import { Button } from "@/components/ui/button";
 import { PanelCard } from "@/components/dashboard/panel-card";
+import { useDashboardCapture } from "@/components/dashboard/my/dashboard-capture";
 
 /**
  * My Money — replaces the old Financial Snapshot, which showed the *team's*
@@ -20,12 +21,8 @@ import { PanelCard } from "@/components/dashboard/panel-card";
  * problem state, and amber there would compete with genuine urgency.
  */
 
-interface MyMoneyCardProps {
-  money: MyMoney;
-  onLogExpense: () => void;
-}
-
-export function MyMoneyCard({ money, onLogExpense }: MyMoneyCardProps) {
+export function MyMoneyCard({ money }: { money: MyMoney }) {
+  const { openCapture } = useDashboardCapture();
   const { penaltiesCents, duesCents } = money.owedBreakdown;
 
   return (
@@ -74,7 +71,7 @@ export function MyMoneyCard({ money, onLogExpense }: MyMoneyCardProps) {
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-2">
-        <Button size="sm" onClick={onLogExpense}>
+        <Button size="sm" onClick={() => openCapture("expense")}>
           <Plus className="h-4 w-4" />
           Log an expense
         </Button>

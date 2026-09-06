@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { FolderKanban, Link as LinkIcon, Pencil, Trash2 } from "lucide-react";
@@ -23,13 +24,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { BackButton } from "@/components/shared/back-button";
-import { DateTimePicker } from "@/components/shared/date-time-picker";
 import { ManageCollaboratorsDialog } from "@/components/projects/manage-collaborators-dialog";
 import { ProjectStatusBadge } from "@/components/projects/project-status-badge";
-import { RoadmapBoard } from "@/components/roadmap/roadmap-board";
 import { formatPHP } from "@/lib/currency";
 import {
   PROJECT_CATEGORY_OPTIONS,
@@ -41,9 +39,43 @@ import {
   type SerializedProject,
 } from "@/lib/projects";
 
-const FIELD_LABEL_CLASS = "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
+const DateTimePicker = dynamic(
+  () =>
+    import("@/components/shared/date-time-picker").then(
+      (module) => module.DateTimePicker,
+    ),
+  {
+    loading: () => (
+      <div
+        role="status"
+        className="flex h-10 items-center rounded-xl border border-surface-border bg-subtle px-3 text-sm text-copy-secondary"
+      >
+        Loading date picker…
+      </div>
+    ),
+  },
+);
+const RoadmapBoard = dynamic(
+  () =>
+    import("@/components/roadmap/roadmap-board").then(
+      (module) => module.RoadmapBoard,
+    ),
+  {
+    loading: () => (
+      <div className="flex h-[34rem] items-center justify-center rounded-2xl border border-surface-border bg-surface text-sm text-copy-secondary">
+        Loading roadmap…
+      </div>
+    ),
+  },
+);
 
-const PRIORITY_VARIANT: Record<string, "outline" | "secondary" | "destructive"> = {
+const FIELD_LABEL_CLASS =
+  "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
+
+const PRIORITY_VARIANT: Record<
+  string,
+  "outline" | "secondary" | "destructive"
+> = {
   LOW: "outline",
   MEDIUM: "secondary",
   HIGH: "destructive",
@@ -51,9 +83,15 @@ const PRIORITY_VARIANT: Record<string, "outline" | "secondary" | "destructive"> 
 
 // See new-task-dialog.tsx's comment — <Select.Value> needs an `items` map
 // to show a label instead of the raw value before the popup has opened.
-const STATUS_ITEMS = Object.fromEntries(PROJECT_STATUS_OPTIONS.map((o) => [o.value, o.label]));
-const PRIORITY_ITEMS = Object.fromEntries(PROJECT_PRIORITY_OPTIONS.map((o) => [o.value, o.label]));
-const CATEGORY_ITEMS = Object.fromEntries(PROJECT_CATEGORY_OPTIONS.map((o) => [o.value, o.label]));
+const STATUS_ITEMS = Object.fromEntries(
+  PROJECT_STATUS_OPTIONS.map((o) => [o.value, o.label]),
+);
+const PRIORITY_ITEMS = Object.fromEntries(
+  PROJECT_PRIORITY_OPTIONS.map((o) => [o.value, o.label]),
+);
+const CATEGORY_ITEMS = Object.fromEntries(
+  PROJECT_CATEGORY_OPTIONS.map((o) => [o.value, o.label]),
+);
 
 interface ProjectDetailProps {
   project: SerializedProject;
@@ -68,11 +106,20 @@ interface ProjectDetailProps {
  * into editable inputs in place, no popup. Team Lead (owner) and Supporting
  * Links aren't editable here — see the API route's own comment for why.
  */
-export function ProjectDetail({ project, allMembers, isOwner }: ProjectDetailProps) {
+export function ProjectDetail({
+  project,
+  allMembers,
+  isOwner,
+}: ProjectDetailProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<"overview" | "roadmap">(
+    "overview",
+  );
+  const overviewTabRef = useRef<HTMLButtonElement>(null);
+  const roadmapTabRef = useRef<HTMLButtonElement>(null);
 
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description ?? "");
@@ -81,9 +128,13 @@ export function ProjectDetail({ project, allMembers, isOwner }: ProjectDetailPro
   const [priority, setPriority] = useState(project.priority);
   const [category, setCategory] = useState(project.category ?? "");
   const [startDate, setStartDate] = useState(project.startDate ?? "");
-  const [targetEndDate, setTargetEndDate] = useState(project.targetEndDate ?? "");
+  const [targetEndDate, setTargetEndDate] = useState(
+    project.targetEndDate ?? "",
+  );
   const [budget, setBudget] = useState(
-    project.estimatedBudgetCentavos !== null ? String(project.estimatedBudgetCentavos / 100) : "",
+    project.estimatedBudgetCentavos !== null
+      ? String(project.estimatedBudgetCentavos / 100)
+      : "",
   );
 
   function startEditing() {
@@ -95,7 +146,11 @@ export function ProjectDetail({ project, allMembers, isOwner }: ProjectDetailPro
     setCategory(project.category ?? "");
     setStartDate(project.startDate ?? "");
     setTargetEndDate(project.targetEndDate ?? "");
-    setBudget(project.estimatedBudgetCentavos !== null ? String(project.estimatedBudgetCentavos / 100) : "");
+    setBudget(
+      project.estimatedBudgetCentavos !== null
+        ? String(project.estimatedBudgetCentavos / 100)
+        : "",
+    );
     setIsEditing(true);
   }
 
@@ -136,9 +191,22 @@ export function ProjectDetail({ project, allMembers, isOwner }: ProjectDetailPro
     }
   }
 
+  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+      return;
+    }
+    event.preventDefault();
+    const nextTab =
+      event.key === "ArrowLeft" || event.key === "Home"
+        ? "overview"
+        : "roadmap";
+    setActiveTab(nextTab);
+    (nextTab === "overview" ? overviewTabRef : roadmapTabRef).current?.focus();
+  }
+
   return (
     <div className="mx-auto max-w-3xl p-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <BackButton />
@@ -153,12 +221,18 @@ export function ProjectDetail({ project, allMembers, isOwner }: ProjectDetailPro
                 className="font-display h-auto py-1 text-3xl text-copy-primary!"
               />
             ) : (
-              <h1 className="font-display text-3xl text-copy-primary">{project.name}</h1>
+              <h1 className="font-display text-3xl text-copy-primary">
+                {project.name}
+              </h1>
             )}
           </div>
           <div className="mt-2 ml-10 flex flex-wrap items-center gap-2">
             {isEditing ? (
-              <Select items={STATUS_ITEMS} value={status} onValueChange={(value) => value && setStatus(value)}>
+              <Select
+                items={STATUS_ITEMS}
+                value={status}
+                onValueChange={(value) => value && setStatus(value)}
+              >
                 <SelectTrigger className="h-7 w-36 text-xs">
                   <SelectValue />
                 </SelectTrigger>
@@ -174,7 +248,11 @@ export function ProjectDetail({ project, allMembers, isOwner }: ProjectDetailPro
               <ProjectStatusBadge status={project.status} />
             )}
             {isEditing ? (
-              <Select items={PRIORITY_ITEMS} value={priority} onValueChange={(value) => value && setPriority(value)}>
+              <Select
+                items={PRIORITY_ITEMS}
+                value={priority}
+                onValueChange={(value) => value && setPriority(value)}
+              >
                 <SelectTrigger className="h-7 w-32 text-xs">
                   <SelectValue />
                 </SelectTrigger>
@@ -192,10 +270,16 @@ export function ProjectDetail({ project, allMembers, isOwner }: ProjectDetailPro
               </Badge>
             )}
             {!isEditing && project.category && (
-              <Badge variant="outline">{projectCategoryLabel(project.category)}</Badge>
+              <Badge variant="outline">
+                {projectCategoryLabel(project.category)}
+              </Badge>
             )}
             {isEditing && (
-              <Select items={CATEGORY_ITEMS} value={category} onValueChange={(value) => setCategory(value ?? "")}>
+              <Select
+                items={CATEGORY_ITEMS}
+                value={category}
+                onValueChange={(value) => setCategory(value ?? "")}
+              >
                 <SelectTrigger className="h-7 w-40 text-xs">
                   <SelectValue placeholder="No category" />
                 </SelectTrigger>
@@ -208,11 +292,13 @@ export function ProjectDetail({ project, allMembers, isOwner }: ProjectDetailPro
                 </SelectContent>
               </Select>
             )}
-            <p className="text-sm font-medium text-copy-secondary">Led by {project.ownerName}</p>
+            <p className="text-sm font-medium text-copy-secondary">
+              Led by {project.ownerName}
+            </p>
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <ManageCollaboratorsDialog
             projectId={project.id}
             ownerName={project.ownerName}
@@ -223,16 +309,31 @@ export function ProjectDetail({ project, allMembers, isOwner }: ProjectDetailPro
           {isOwner &&
             (isEditing ? (
               <>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsEditing(false)}
+                >
                   Cancel
                 </Button>
-                <Button type="button" size="sm" disabled={isSaving || name.trim() === ""} onClick={save}>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={isSaving || name.trim() === ""}
+                  onClick={save}
+                >
                   Save
                 </Button>
               </>
             ) : (
               <>
-                <Button type="button" variant="outline" size="sm" onClick={startEditing}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={startEditing}
+                >
                   <Pencil className="h-3.5 w-3.5" /> Edit
                 </Button>
                 <Button
@@ -249,17 +350,49 @@ export function ProjectDetail({ project, allMembers, isOwner }: ProjectDetailPro
         </div>
       </div>
 
-      <Tabs defaultValue="overview" className="mt-6">
-        <TabsList>
-          <TabsTrigger value="overview" className="data-active:bg-elevated data-active:text-brand">
+      <div className="mt-6">
+        <div
+          role="tablist"
+          aria-label="Project sections"
+          className="inline-flex min-h-11 items-center gap-1 rounded-lg bg-subtle p-1 sm:h-9 sm:min-h-0"
+        >
+          <button
+            ref={overviewTabRef}
+            id="project-overview-tab"
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "overview"}
+            aria-controls="project-overview-panel"
+            tabIndex={activeTab === "overview" ? 0 : -1}
+            onClick={() => setActiveTab("overview")}
+            onKeyDown={handleTabKeyDown}
+            className="min-h-11 rounded-md px-3 text-sm font-medium text-copy-secondary outline-none aria-selected:bg-elevated aria-selected:text-brand focus-visible:ring-2 focus-visible:ring-brand sm:min-h-7"
+          >
             Overview
-          </TabsTrigger>
-          <TabsTrigger value="roadmap" className="data-active:bg-elevated data-active:text-brand">
+          </button>
+          <button
+            ref={roadmapTabRef}
+            id="project-roadmap-tab"
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "roadmap"}
+            aria-controls="project-roadmap-panel"
+            tabIndex={activeTab === "roadmap" ? 0 : -1}
+            onClick={() => setActiveTab("roadmap")}
+            onKeyDown={handleTabKeyDown}
+            className="min-h-11 rounded-md px-3 text-sm font-medium text-copy-secondary outline-none aria-selected:bg-elevated aria-selected:text-brand focus-visible:ring-2 focus-visible:ring-brand sm:min-h-7"
+          >
             Roadmap
-          </TabsTrigger>
-        </TabsList>
+          </button>
+        </div>
 
-        <TabsContent value="overview" className="mt-4 space-y-4">
+        {activeTab === "overview" && (
+          <div
+            id="project-overview-panel"
+            role="tabpanel"
+            aria-labelledby="project-overview-tab"
+            className="mt-4 space-y-4"
+          >
           <div className="rounded-2xl border border-surface-border bg-surface p-6">
             <p className={FIELD_LABEL_CLASS}>Description</p>
             {isEditing ? (
@@ -292,7 +425,9 @@ export function ProjectDetail({ project, allMembers, isOwner }: ProjectDetailPro
                 {project.objectives}
               </p>
             ) : (
-              <p className="text-sm text-copy-secondary">No objectives set yet.</p>
+              <p className="text-sm text-copy-secondary">
+                No objectives set yet.
+              </p>
             )}
           </div>
 
@@ -310,7 +445,9 @@ export function ProjectDetail({ project, allMembers, isOwner }: ProjectDetailPro
                   <>
                     <p className={FIELD_LABEL_CLASS}>Proposed Start</p>
                     <p className="text-sm font-medium text-copy-primary">
-                      {project.startDate ? format(new Date(project.startDate), "MMM d, yyyy") : "Not set"}
+                      {project.startDate
+                        ? format(new Date(project.startDate), "MMM d, yyyy")
+                        : "Not set"}
                     </p>
                   </>
                 )}
@@ -327,7 +464,9 @@ export function ProjectDetail({ project, allMembers, isOwner }: ProjectDetailPro
                   <>
                     <p className={FIELD_LABEL_CLASS}>Target End</p>
                     <p className="text-sm font-medium text-copy-primary">
-                      {project.targetEndDate ? format(new Date(project.targetEndDate), "MMM d, yyyy") : "Not set"}
+                      {project.targetEndDate
+                        ? format(new Date(project.targetEndDate), "MMM d, yyyy")
+                        : "Not set"}
                     </p>
                   </>
                 )}
@@ -375,26 +514,49 @@ export function ProjectDetail({ project, allMembers, isOwner }: ProjectDetailPro
               </ul>
             </div>
           )}
-        </TabsContent>
+          </div>
+        )}
 
-        <TabsContent value="roadmap" className="mt-4">
-          <RoadmapBoard projectId={project.id} collaborators={project.members} />
-        </TabsContent>
-      </Tabs>
+        {activeTab === "roadmap" && (
+          <div
+            id="project-roadmap-panel"
+            role="tabpanel"
+            aria-labelledby="project-roadmap-tab"
+            className="mt-4"
+          >
+            <RoadmapBoard
+              projectId={project.id}
+              collaborators={project.members}
+            />
+          </div>
+        )}
+      </div>
 
       <Dialog open={isDeleting} onOpenChange={setIsDeleting}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-copy-primary">Delete this proposal?</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-copy-primary">
+              Delete this proposal?
+            </DialogTitle>
             <DialogDescription>
-              This can&apos;t be undone. Tasks and docs linked to it stay, just unlinked.
+              This can&apos;t be undone. Tasks and docs linked to it stay, just
+              unlinked.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setIsDeleting(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setIsDeleting(false)}
+            >
               Cancel
             </Button>
-            <Button type="button" variant="destructive" disabled={isSaving} onClick={deleteProject}>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={isSaving}
+              onClick={deleteProject}
+            >
               <Trash2 className="h-3.5 w-3.5" /> Delete
             </Button>
           </DialogFooter>

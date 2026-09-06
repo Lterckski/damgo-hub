@@ -2,6 +2,8 @@
 
 Read `context/ui-context.md` before starting.
 
+**Mobile requirement (2026-09-06):** the shell and navigation must work in mobile browsers using touch. The dock's hover/focus-only behavior below describes the desktop baseline. Mobile must provide an explicit tap-to-open control or visible navigation, keep every permitted destination reachable, and account for safe areas and the on-screen keyboard. See [the project-wide requirements](../ui-context.md#mobile-browser-requirements); the touch navigation and viewport changes are implemented, with authenticated device QA pending.
+
 **Implemented baseline:** this unit describes the existing shell. The proposed global search, notification inbox, org switcher, quick-create menu and account/theme controls are specified in [unit 23](23-global-search-notifications-header.md), whose audit must be confirmed before implementation. Preserve this unit's bottom dock and separate collaborative workspace chrome when extending the header.
 
 We need the base chrome that frames every authenticated screen — the top header and the bottom navigation dock. These are reused and extended by every feature area that follows. This is unrelated to the collaborative board chrome (built later in `13-roadmap-board.md`), which uses a separate floating side overlay layout.
@@ -28,8 +30,8 @@ Requirements:
 - a floating, centered, pill-shaped bar fixed to the **bottom** of the viewport (`bg-elevated`, `border-default`, `rounded-full`, soft shadow) — not a side sidebar
 - one icon per nav destination, `lucide-react`, `h-5 w-5`: Dashboard, Projects, Tasks, Finance, Documentation, Calendar, Meetings, Penalties, Members, Ideas
 - an `isAdmin` prop; only render the Admin icon when true, separated from the rest by a thin vertical divider (real role resolution is wired in `05-member-directory.md`)
-- **icon-only, always** — no persistent text labels
-- **collapsed by default, hover/focus to reveal**: only a small handle (a short pill) sits at the bottom edge of the viewport when idle; the dock itself slides up and fades in when the pointer is anywhere in the bottom strip of the viewport (not just over the handle) and slides back down on mouse-out — pure CSS `group`/`group-hover` + `group-focus-within` (for keyboard users tabbing to a nav item), no JS state, no tooltip/animation library
+- **Desktop icons** use hover labels; mobile/coarse-pointer navigation uses a visible Navigate button and a labeled destination dialog.
+- **Desktop: collapsed by default, hover/focus to reveal**: only a small handle (a short pill) sits at the bottom edge of the viewport when idle; the dock itself slides up and fades in when the pointer is anywhere in the bottom strip of the viewport (not just over the handle) and slides back down on mouse-out — pure CSS `group`/`group-hover` + `group-focus-within` (for keyboard users tabbing to a nav item), no JS state, no tooltip/animation library
 - hovering an icon (once the dock is revealed) shows its label as a small tooltip positioned above it (same CSS `group`/`group-hover` pattern)
 - the active route's icon is visually distinguished with the accent color (`bg-accent-dim` / `text-brand`), not just a background tint
 

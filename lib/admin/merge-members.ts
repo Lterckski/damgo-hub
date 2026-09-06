@@ -180,6 +180,8 @@ export async function mergeMember(
     const droppedSyncs = await tx.googleCalendarSyncedEvent.deleteMany({ where: { memberId: sourceId } });
     deduplicated += droppedSyncs.count;
 
+    await tx.hubMembership.deleteMany({ where: { memberId: sourceId } });
+
     // The source row itself stays, marked REMOVED — AuditLog entries point
     // at it, and the merge has to remain auditable. Its email is prefixed
     // so it can never collide with a future real signup.

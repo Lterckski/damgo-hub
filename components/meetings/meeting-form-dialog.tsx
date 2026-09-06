@@ -281,7 +281,7 @@ export function MeetingFormDialog({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label htmlFor="meeting-location" className={FIELD_LABEL_CLASS}>
                   Location (optional)

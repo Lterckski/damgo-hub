@@ -120,10 +120,7 @@ export function MemberDirectoryTable({
     });
   }
 
-  function toggleRole(
-    kind: "functional" | "workDistribution",
-    value: string,
-  ) {
+  function toggleRole(kind: "functional" | "workDistribution", value: string) {
     setPendingRoles((prev) => {
       const set = new Set(prev[kind]);
       if (set.has(value)) set.delete(value);
@@ -195,7 +192,9 @@ export function MemberDirectoryTable({
     setIsDeleting(true);
     setDeleteError(null);
     try {
-      const response = await fetch(`/api/members/${deletingMember.id}`, { method: "DELETE" });
+      const response = await fetch(`/api/members/${deletingMember.id}`, {
+        method: "DELETE",
+      });
       if (response.ok) {
         setDeletingMember(null);
         router.refresh();
@@ -221,7 +220,15 @@ export function MemberDirectoryTable({
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-2xl border border-surface-border">
+      <div
+        tabIndex={0}
+        role="region"
+        aria-label="Member directory; scroll horizontally for more columns"
+        className="overflow-x-auto rounded-2xl border border-surface-border"
+      >
+        <p className="px-3 py-2 text-xs text-copy-secondary sm:hidden">
+          Scroll sideways for more columns.
+        </p>
         <Table>
           <TableHeader>
             <TableRow className="bg-surface">
@@ -236,7 +243,10 @@ export function MemberDirectoryTable({
           </TableHeader>
           <TableBody>
             {members.map((member) => (
-              <TableRow key={member.id} className="border-t border-surface-border-subtle">
+              <TableRow
+                key={member.id}
+                className="border-t border-surface-border-subtle"
+              >
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <Avatar className="h-8 w-8">
@@ -249,7 +259,9 @@ export function MemberDirectoryTable({
                       <div className="text-sm font-medium text-copy-primary">
                         {member.displayName}
                       </div>
-                      <div className="text-xs text-copy-muted">{member.email}</div>
+                      <div className="text-xs text-copy-muted">
+                        {member.email}
+                      </div>
                     </div>
                   </div>
                 </TableCell>
@@ -307,7 +319,9 @@ export function MemberDirectoryTable({
                         }
                       />
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => openEditDialog(member)}>
+                        <DropdownMenuItem
+                          onClick={() => openEditDialog(member)}
+                        >
                           Edit role tags
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => toggleStatus(member)}>
@@ -337,7 +351,10 @@ export function MemberDirectoryTable({
       </div>
 
       {/* Edit role tags */}
-      <Dialog open={editingMember !== null} onOpenChange={(open) => !open && setEditingMember(null)}>
+      <Dialog
+        open={editingMember !== null}
+        onOpenChange={(open) => !open && setEditingMember(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-copy-primary">
@@ -345,8 +362,8 @@ export function MemberDirectoryTable({
             </DialogTitle>
             <DialogDescription>
               {editingMember?.displayName} — Member Roles and Work Distribution.
-              Admin access itself isn&apos;t set here; use &ldquo;Assign Assistant
-              Leader&rdquo; for that.
+              Admin access itself isn&apos;t set here; use &ldquo;Assign
+              Assistant Leader&rdquo; for that.
             </DialogDescription>
           </DialogHeader>
 
@@ -355,7 +372,7 @@ export function MemberDirectoryTable({
               <p className="mb-2 text-xs font-bold tracking-wide text-copy-primary uppercase">
                 Member Roles
               </p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {FUNCTIONAL_ROLE_OPTIONS.map((option) => (
                   <label
                     key={option.value}
@@ -363,7 +380,9 @@ export function MemberDirectoryTable({
                   >
                     <Checkbox
                       checked={pendingRoles.functional.includes(option.value)}
-                      onCheckedChange={() => toggleRole("functional", option.value)}
+                      onCheckedChange={() =>
+                        toggleRole("functional", option.value)
+                      }
                     />
                     {option.label}
                   </label>
@@ -375,14 +394,16 @@ export function MemberDirectoryTable({
               <p className="mb-2 text-xs font-bold tracking-wide text-copy-primary uppercase">
                 Work Distribution
               </p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {WORK_DISTRIBUTION_OPTIONS.map((option) => (
                   <label
                     key={option.value}
                     className="flex items-center gap-2 text-sm text-copy-primary"
                   >
                     <Checkbox
-                      checked={pendingRoles.workDistribution.includes(option.value)}
+                      checked={pendingRoles.workDistribution.includes(
+                        option.value,
+                      )}
                       onCheckedChange={() =>
                         toggleRole("workDistribution", option.value)
                       }
@@ -474,19 +495,28 @@ export function MemberDirectoryTable({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-copy-primary">Delete member?</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-copy-primary">
+              Delete member?
+            </DialogTitle>
             <DialogDescription>
-              This permanently removes {deletingMember?.displayName} from the org — they&apos;ll lose
-              access immediately. Anything they created (tasks, docs, transactions, events, projects)
-              stays, reassigned to you, so nothing is lost. This can&apos;t be undone.
+              This permanently removes {deletingMember?.displayName} from the
+              org — they&apos;ll lose access immediately. Anything they created
+              (tasks, docs, transactions, events, projects) stays, reassigned to
+              you, so nothing is lost. This can&apos;t be undone.
             </DialogDescription>
           </DialogHeader>
-          {deleteError && <p className="text-sm font-medium text-error">{deleteError}</p>}
+          {deleteError && (
+            <p className="text-sm font-medium text-error">{deleteError}</p>
+          )}
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDeletingMember(null)}>
               Cancel
             </Button>
-            <Button variant="destructive" disabled={isDeleting} onClick={deleteMember}>
+            <Button
+              variant="destructive"
+              disabled={isDeleting}
+              onClick={deleteMember}
+            >
               Delete member
             </Button>
           </DialogFooter>

@@ -157,6 +157,12 @@ export async function DELETE(
       // untouched (see prisma/models/meeting.prisma) — it's immutable
       // delivery history, not current ownership.
 
+      // HubMembership intentionally has no Prisma relation to the legacy
+      // Member model, so remove its projection explicitly before deleting
+      // the profile. Search/recommendations use this row as the live local
+      // membership filter.
+      await tx.hubMembership.deleteMany({ where: { memberId: target.id } });
+
       await tx.member.delete({ where: { id: target.id } });
     });
   } catch (error) {

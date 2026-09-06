@@ -98,7 +98,7 @@ export async function search(viewer: Viewer, input: string) {
 }
 
 export async function recommendations(viewer: Viewer) {
-  const [recents, urgent] = await Promise.all([
+  const [recents, urgent, memberships] = await Promise.all([
     prisma.hubRecent.findMany({
       where: {
         orgId: viewer.orgId,
@@ -110,40 +110,67 @@ export async function recommendations(viewer: Viewer) {
       take: 5,
     }),
     getNeedsYouToday(viewer.memberId),
+    prisma.hubMembership.findMany({
+      where: { orgId: viewer.orgId },
+      select: { memberId: true },
+    }),
   ]);
-  const needs = [];
-  for (const item of urgent) {
-    if (!item.action || item.kind === "AWAITING_YOU") continue;
-    const record = await visibleRecord(viewer, item.id);
-    if (
-      record &&
+  const memberIds = new Set(memberships.map(({ memberId }) => memberId));
+  const actionable = urgent.filter(
+    (item) =>
+      item.action &&
       (item.kind === "OVERDUE_TASK" ||
         item.kind === "UNPAID_PENALTY" ||
-        item.kind === "MEETING_SOON")
-    )
-      needs.push({
+        item.kind === "MEETING_SOON"),
+  );
+  const visibleNeeds = await prisma.hubRecord.findMany({
+    where: {
+      id: { in: actionable.map((item) => item.id) },
+      ...recordWhere(viewer),
+    },
+    include: { grants: true },
+  });
+  const recordsById = new Map(
+    visibleNeeds
+      .filter(
+        (record) =>
+          (record.entityType !== "member" || memberIds.has(record.entityId)) &&
+          canSee(viewer, record.orgId, record.grants),
+      )
+      .map((record) => [record.id, record]),
+  );
+  const needs = actionable.flatMap((item) => {
+    const record = recordsById.get(item.id);
+    return record
+      ? [
+          {
+            id: record.id,
+            title: record.title,
+            body: item.detail,
+            entityType: record.entityType,
+            status: record.status,
+            url: recordUrl(record.id),
+          },
+        ]
+      : [];
+  }).slice(0, 3);
+  return {
+    // The relation filter above evaluates visibility in the same database
+    // statement that returns the records, so a per-row recheck only added an
+    // N+1 query without closing a revocation window.
+    recents: recents
+      .filter(
+        ({ record }) =>
+          record.entityType !== "member" || memberIds.has(record.entityId),
+      )
+      .map(({ record }) => ({
         id: record.id,
         title: record.title,
-        body: item.detail,
-        entityType: record.entityType,
+        body: record.body.slice(0, 160),
         status: record.status,
+        entityType: record.entityType,
         url: recordUrl(record.id),
-      });
-    if (needs.length === 3) break;
-  }
-  const allowedRecents = [];
-  for (const recent of recents)
-    if (await visibleRecord(viewer, recent.recordId))
-      allowedRecents.push(recent);
-  return {
-    recents: allowedRecents.map(({ record }) => ({
-      id: record.id,
-      title: record.title,
-      body: record.body.slice(0, 160),
-      status: record.status,
-      entityType: record.entityType,
-      url: recordUrl(record.id),
-    })),
+      })),
     needs,
   };
 }

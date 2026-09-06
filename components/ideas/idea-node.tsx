@@ -1,6 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import type { NodeProps } from "@xyflow/react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -27,13 +37,15 @@ function initialsFor(name: string): string {
  */
 export function IdeaNode({ id, data, selected }: NodeProps<IdeaNodeType>) {
   const author = useBoardMember(data.authorId);
-  const { commitText, autoEditNodeId, clearAutoEdit } = useIdeaActions();
+  const { commitText, deleteIdea, autoEditNodeId, clearAutoEdit } =
+    useIdeaActions();
 
   // Lazy initializer, not an effect: a brand-new note mounts a fresh
   // IdeaNode instance in the exact same render where IdeasCanvas sets
   // `autoEditNodeId` to its id (see 19-ideas-board.md step 5's "immediately
   // focused"), so reading it once at mount already gets the right answer
   // — no synchronous setState-in-effect needed to react to it.
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(() => autoEditNodeId === id);
   const [draft, setDraft] = useState(data.text);
   // Tracks which `data.text` `draft` was last synced from, so the render-
@@ -46,7 +58,7 @@ export function IdeaNode({ id, data, selected }: NodeProps<IdeaNodeType>) {
   // Picks up a text change made by someone else while this note isn't
   // being locally edited — never overwrites what the member is actively
   // typing. Adjusted during render, not in a useEffect.
-  if (!isEditing && data.text !== syncedText) {
+  if (!isEditing && !dialogOpen && data.text !== syncedText) {
     setSyncedText(data.text);
     setDraft(data.text);
   }
@@ -78,71 +90,151 @@ export function IdeaNode({ id, data, selected }: NodeProps<IdeaNodeType>) {
   }
 
   return (
-    <div
-      className={cn(
-        "flex min-h-[6rem] w-52 flex-col justify-between rounded-2xl p-3 shadow-sm transition-shadow",
-        !isEditing && "cursor-text",
-        selected && "ring-2 ring-brand ring-offset-2 ring-offset-base",
-      )}
-      style={{
-        backgroundColor: `var(--idea-color-${data.colorIndex}-fill)`,
-        color: `var(--idea-color-${data.colorIndex}-text)`,
-      }}
-      onDoubleClick={() => setIsEditing(true)}
-      // Double-click is a pointer-only interaction — a keyboard user
-      // tabbing to this note has no other way to reach edit mode after
-      // its initial auto-edit session ends. role="button" + Enter/Space
-      // matches the keyboard convention every other clickable card in
-      // this app already gets for free from a real <button>; this one
-      // can't just be a <button> since it also needs to host a <textarea>
-      // once editing starts.
-      role={isEditing ? undefined : "button"}
-      tabIndex={isEditing ? undefined : 0}
-      aria-label={isEditing ? undefined : `Edit idea: ${data.text || "empty note"}`}
-      onKeyDown={(e) => {
-        if (isEditing) return;
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          setIsEditing(true);
+    <>
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) setDraft(data.text);
+        }}
+      >
+        <DialogContent className="rounded-3xl sm:max-w-lg">
+          <DialogTitle>Edit idea</DialogTitle>
+          <DialogDescription>
+            Update the note shared with your team.
+          </DialogDescription>
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              commitText(id, draft);
+              setDialogOpen(false);
+            }}
+          >
+            <Textarea
+              aria-label="Idea text"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              rows={6}
+              className="text-copy-primary!"
+            />
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-error"
+                onClick={() => {
+                  if (window.confirm("Delete this idea?")) {
+                    deleteIdea(id);
+                    setDialogOpen(false);
+                  }
+                }}
+              >
+                Delete idea
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setDialogOpen(false);
+                  setDraft(data.text);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">Save idea</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <div
+        className={cn(
+          "flex min-h-[6rem] w-52 flex-col justify-between rounded-2xl p-3 shadow-sm transition-shadow",
+          !isEditing && "cursor-text",
+          selected && "ring-2 ring-brand ring-offset-2 ring-offset-base",
+        )}
+        style={{
+          backgroundColor: `var(--idea-color-${data.colorIndex}-fill)`,
+          color: `var(--idea-color-${data.colorIndex}-text)`,
+        }}
+        onDoubleClick={() => setIsEditing(true)}
+        // Double-click is a pointer-only interaction — a keyboard user
+        // tabbing to this note has no other way to reach edit mode after
+        // its initial auto-edit session ends. role="button" + Enter/Space
+        // matches the keyboard convention every other clickable card in
+        // this app already gets for free from a real <button>; this one
+        // can't just be a <button> since it also needs to host a <textarea>
+        // once editing starts.
+        role={isEditing ? undefined : "button"}
+        tabIndex={isEditing ? undefined : 0}
+        aria-label={
+          isEditing ? undefined : `Edit idea: ${data.text || "empty note"}`
         }
-      }}
-    >
-      {isEditing ? (
-        <textarea
-          ref={textareaRef}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              e.preventDefault();
-              cancel();
-            }
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault();
-              commit();
-            }
-          }}
-          placeholder="Type an idea…"
-          // nodrag/nowheel — React Flow's own convention for interactive
-          // content inside a node that shouldn't drag or pan the canvas.
-          className="nodrag nowheel h-20 w-full resize-none bg-transparent text-sm font-medium leading-snug outline-none placeholder:opacity-60"
-        />
-      ) : (
-        <p className="text-sm font-medium leading-snug whitespace-pre-wrap">
-          {data.text || <span className="opacity-60">Double-click to add an idea…</span>}
-        </p>
-      )}
+        onKeyDown={(e) => {
+          if (isEditing || e.target !== e.currentTarget) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setIsEditing(true);
+          }
+        }}
+      >
+        {isEditing ? (
+          <textarea
+            ref={textareaRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                cancel();
+              }
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                commit();
+              }
+            }}
+            placeholder="Type an idea…"
+            // nodrag/nowheel — React Flow's own convention for interactive
+            // content inside a node that shouldn't drag or pan the canvas.
+            className="nodrag nowheel h-20 w-full resize-none bg-transparent text-sm font-medium leading-snug outline-none placeholder:opacity-60"
+          />
+        ) : (
+          <p className="text-sm font-medium leading-snug whitespace-pre-wrap">
+            {data.text || (
+              <span className="opacity-60">Tap Edit to add an idea…</span>
+            )}
+          </p>
+        )}
 
-      <div className="mt-2 flex items-center gap-1.5 self-end">
-        <Avatar size="sm" className="ring-2 ring-white/30">
-          {author?.avatarUrl ? <AvatarImage src={author.avatarUrl} alt={author.displayName} /> : null}
-          <AvatarFallback className="bg-white/25 text-[9px]">
-            {initialsFor(author?.displayName ?? "?")}
-          </AvatarFallback>
-        </Avatar>
-        <span className="text-[10px] font-semibold opacity-80">{author?.displayName ?? "Unknown"}</span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="nodrag nopan mt-2 min-h-11 self-start text-inherit"
+          aria-label={`Edit idea: ${data.text || "empty note"}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            setDraft(data.text);
+            setDialogOpen(true);
+          }}
+        >
+          <Pencil className="h-4 w-4" /> Edit
+        </Button>
+        <div className="mt-2 flex items-center gap-1.5 self-end">
+          <Avatar size="sm" className="ring-2 ring-white/30">
+            {author?.avatarUrl ? (
+              <AvatarImage src={author.avatarUrl} alt={author.displayName} />
+            ) : null}
+            <AvatarFallback className="bg-white/25 text-[9px]">
+              {initialsFor(author?.displayName ?? "?")}
+            </AvatarFallback>
+          </Avatar>
+          <span className="text-[10px] font-semibold opacity-80">
+            {author?.displayName ?? "Unknown"}
+          </span>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

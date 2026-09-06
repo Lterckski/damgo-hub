@@ -1,7 +1,5 @@
 import { requireWorkspacePage as requireWorkspaceSession } from "@/lib/hub/context";
 import { Suspense } from "react";
-import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
 import { getCurrentMember } from "@/lib/current-member";
@@ -63,16 +61,6 @@ function PanelFallback() {
  */
 export default async function DashboardPage() {
   await requireWorkspaceSession();
-
-  const { userId } = await auth();
-  // The (app) layout redirects an unauthenticated visitor, but Next renders
-  // layout and page in parallel, so without this getCurrentMember() throws
-  // before that redirect lands — and every query below runs for a request
-  // that was never going to render.
-  if (!userId) {
-    redirect("/sign-in");
-  }
-
   const member = await getCurrentMember();
 
   return (

@@ -3,7 +3,6 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, CheckCheck, X, User } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -11,6 +10,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { hubGet, hubPost } from "./hub-client";
+import { agoLabel } from "@/lib/dashboard/relative-time";
 interface Notice {
   id: string;
   recordId: string;
@@ -29,12 +29,11 @@ const inlineLabels: Record<string, string> = {
   approve: "Approve transaction",
   join: "Join meeting",
 };
-const day = (value: string | Date) =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(
-    new Date(value),
-  );
+const dayFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" });
+const day = (value: string | Date) => dayFormatter.format(new Date(value));
 export function NotificationBell() {
   const router = useRouter();
+  const today = day(new Date());
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("all");
   const [data, setData] = useState<{ unread: number; items: Notice[] } | null>(
@@ -167,7 +166,7 @@ export function NotificationBell() {
         align="end"
         className="w-[min(26rem,calc(100vw-1rem))] overflow-hidden rounded-2xl p-0"
       >
-        <div className="flex items-center justify-between px-4 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-4">
           <h2 className="font-semibold text-copy-primary">Notifications</h2>
           <Button
             size="sm"
@@ -189,7 +188,7 @@ export function NotificationBell() {
               key={tab}
               aria-pressed={filter === tab}
               onClick={() => setFilter(tab)}
-              className={`rounded-lg px-3 py-1.5 text-sm capitalize outline-none focus-visible:ring-2 focus-visible:ring-brand ${tab === filter ? "bg-accent-dim text-brand" : "text-copy-secondary"}`}
+              className={`min-h-11 rounded-lg px-3 py-1.5 text-sm capitalize outline-none focus-visible:ring-2 focus-visible:ring-brand ${tab === filter ? "bg-accent-dim text-brand" : "text-copy-secondary"}`}
             >
               {tab}
             </button>
@@ -221,7 +220,7 @@ export function NotificationBell() {
             const items =
               data?.items.filter(
                 (n) =>
-                  (day(n.createdAt) === day(new Date())) ===
+                  (day(n.createdAt) === today) ===
                   (group === "Today"),
               ) ?? [];
             return (
@@ -274,9 +273,7 @@ export function NotificationBell() {
                             {n.body}
                           </p>
                           <p className="mt-2 text-[11px] text-copy-secondary">
-                            {formatDistanceToNow(new Date(n.createdAt), {
-                              addSuffix: true,
-                            })}
+                            {agoLabel(n.createdAt)}
                           </p>
                         </button>
                         {n.inline && (

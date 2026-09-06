@@ -1,6 +1,5 @@
-import { taskInclude } from "@/lib/hub/task-include";
-import { entityVisibilityWhere } from "@/lib/hub/context";
-import { taskVisibilityWhere } from "@/lib/hub/context";
+import { taskIncludeWithVisibility } from "@/lib/hub/task-include";
+import { entityVisibilityWheres } from "@/lib/hub/context";
 import { requireWorkspacePage as requireWorkspaceSession } from "@/lib/hub/context";
 import { prisma } from "@/lib/prisma";
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
@@ -13,29 +12,37 @@ import { TaskBoard } from "@/components/tasks/task-board";
 export default async function TasksPage() {
   await requireWorkspaceSession();
 
-  const [tasks, members, linkableProjects, docs, currentMember, isAdmin] =
+  const [members, currentMember, isAdmin, visibility] = await Promise.all([
+    getMemberPickerOptions(),
+    getCurrentMember(),
+    isCurrentMemberAdmin(),
+    entityVisibilityWheres(["task", "project", "document"]),
+  ]);
+  const include = taskIncludeWithVisibility(
+    visibility.project,
+    visibility.document,
+  );
+
+  const [tasks, linkableProjects, docs] =
     await Promise.all([
       prisma.task.findMany({
-        where: await taskVisibilityWhere(),
-        include: await taskInclude(),
+        where: visibility.task,
+        include,
         orderBy: { createdAt: "desc" },
       }),
-      getMemberPickerOptions(),
       prisma.project.findMany({
         where: {
           ...{ status: { in: [...TASK_LINKABLE_PROJECT_STATUSES] } },
-          AND: [await entityVisibilityWhere("project")],
+          AND: [visibility.project],
         },
         select: { id: true, name: true },
         orderBy: { name: "asc" },
       }),
       prisma.doc.findMany({
-        where: await entityVisibilityWhere("document"),
+        where: visibility.document,
         select: { id: true, title: true, projectId: true },
         orderBy: { title: "asc" },
       }),
-      getCurrentMember(),
-      isCurrentMemberAdmin(),
     ]);
 
   return (
