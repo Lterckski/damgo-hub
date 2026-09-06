@@ -8,6 +8,7 @@ import type { TimelineItem } from "@/lib/dashboard/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CardEmptyState, PanelCard } from "@/components/dashboard/panel-card";
+import { useDashboardCapture } from "@/components/dashboard/my/dashboard-capture";
 
 /**
  * Upcoming — one unified timeline for the next 7 days: meetings, task
@@ -27,12 +28,8 @@ const KIND_LABEL: Record<TimelineItem["kind"], string> = {
   DUES: "Dues",
 };
 
-interface UpcomingCardProps {
-  items: TimelineItem[];
-  onCreateTask: () => void;
-}
-
-export function UpcomingCard({ items, onCreateTask }: UpcomingCardProps) {
+export function UpcomingCard({ items }: { items: TimelineItem[] }) {
+  const { openCapture } = useDashboardCapture();
   // Group by team-local day, preserving chronological order.
   const groups: { day: string; rows: TimelineItem[] }[] = [];
   for (const item of items) {
@@ -55,7 +52,11 @@ export function UpcomingCard({ items, onCreateTask }: UpcomingCardProps) {
         <CardEmptyState
           message="Nothing scheduled in the next 7 days — no meetings, deadlines or dues."
           action={
-            <Button size="sm" variant="outline" onClick={onCreateTask}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => openCapture("task")}
+            >
               <Plus className="h-4 w-4" />
               Create task
             </Button>

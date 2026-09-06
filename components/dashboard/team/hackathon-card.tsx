@@ -1,5 +1,3 @@
-"use client";
-
 import { ExternalLink, Trophy } from "lucide-react";
 
 import { cn } from "@/lib/utils";

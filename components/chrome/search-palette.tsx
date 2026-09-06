@@ -21,13 +21,9 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { hubGet, hubPost, type HubResult } from "./hub-client";
-export type CreateKind =
-  | "task"
-  | "expense"
-  | "idea"
-  | "meeting"
-  | "doc"
-  | "announcement";
+import type { CreateKind } from "./header-create-types";
+
+export type { CreateKind } from "./header-create-types";
 const icons = {
   task: CheckSquare,
   transaction: Receipt,

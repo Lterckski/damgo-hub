@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
 import { serializeAttachment, serializeDoc } from "@/lib/docs";
 import { DocDetail } from "@/components/docs/doc-detail";
+import { MarkdownContent } from "@/components/docs/markdown-content";
 
 export default async function DocDetailPage({
   params,
@@ -41,7 +42,12 @@ export default async function DocDetailPage({
   return (
     <>
       <RecordOpenTracker id={`document:${docId}`} />
-      <DocDetail doc={doc} attachments={attachments} canEdit={canEdit} />
+      <DocDetail
+        doc={doc}
+        attachments={attachments}
+        canEdit={canEdit}
+        renderedContent={<MarkdownContent content={doc.content} />}
+      />
     </>
   );
 }

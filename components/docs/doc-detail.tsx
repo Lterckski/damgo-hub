@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import {
   ExternalLink,
@@ -24,20 +25,23 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { BackButton } from "@/components/shared/back-button";
-import {
-  DriveFilePicker,
-  type PickedDriveFile,
-} from "@/components/docs/drive-file-picker";
-import { MarkdownContent } from "@/components/docs/markdown-content";
+import type { PickedDriveFile } from "@/components/docs/drive-file-picker";
 import { collapseDocImages, expandDocImages } from "@/lib/collapse-doc-images";
 import { getGoogleDriveEmbedUrl } from "@/lib/google-drive-embed";
 import { cn } from "@/lib/utils";
 import type { SerializedDoc, SerializedDocAttachment } from "@/lib/docs";
 
+const DriveFilePicker = dynamic(() =>
+  import("@/components/docs/drive-file-picker").then(
+    (module) => module.DriveFilePicker,
+  ),
+);
+
 interface DocDetailProps {
   doc: SerializedDoc;
   attachments: SerializedDocAttachment[];
   canEdit: boolean;
+  renderedContent: React.ReactNode;
 }
 
 /**
@@ -47,7 +51,12 @@ interface DocDetailProps {
  * long extracted document is awkward to edit in a small modal; editing where
  * it's actually read fixes that, per the user's explicit request.
  */
-export function DocDetail({ doc, attachments, canEdit }: DocDetailProps) {
+export function DocDetail({
+  doc,
+  attachments,
+  canEdit,
+  renderedContent,
+}: DocDetailProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -338,7 +347,7 @@ export function DocDetail({ doc, attachments, canEdit }: DocDetailProps) {
             This doc has no content yet.
           </p>
         ) : (
-          <MarkdownContent content={doc.content} />
+          renderedContent
         )}
       </div>
 

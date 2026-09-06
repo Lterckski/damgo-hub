@@ -1,5 +1,8 @@
 import { defineConfig } from "vite";
 import { fileURLToPath } from "node:url";
+import { readFile } from "node:fs/promises";
+import React from "react";
+import { renderToString } from "react-dom/server";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const local = (name: string) => fileURLToPath(new URL(name, import.meta.url));
 export default defineConfig({
@@ -24,4 +27,39 @@ export default defineConfig({
     strictPort: true,
     fs: { allow: [root] },
   },
+  plugins: [
+    {
+      name: "hydration-trace-fixtures",
+      configureServer(server) {
+        server.middlewares.use(async (request, response, next) => {
+          const route = request.url?.split("?")[0];
+          if (route !== "/hydrate/dashboard" && route !== "/hydrate/admin") {
+            next();
+            return;
+          }
+
+          const modulePath =
+            route === "/hydrate/dashboard"
+              ? "/dashboard-hydration-fixture.tsx"
+              : "/admin-hydration-fixture.tsx";
+          const exportName =
+            route === "/hydrate/dashboard"
+              ? "DashboardHydrationFixture"
+              : "AdminHydrationFixture";
+          const fixture = await server.ssrLoadModule(modulePath);
+          const markup = renderToString(
+            React.createElement(fixture[exportName]),
+          );
+          const template = await readFile(local("index.html"), "utf8");
+          const html = template.replace(
+            '<div id="root"></div>',
+            `<div id="root" data-hydration-route="${route.endsWith("dashboard") ? "dashboard" : "admin"}">${markup}</div>`,
+          );
+          response.statusCode = 200;
+          response.setHeader("Content-Type", "text/html; charset=utf-8");
+          response.end(await server.transformIndexHtml(route, html));
+        });
+      },
+    },
+  ],
 });

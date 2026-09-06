@@ -3,7 +3,6 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, CheckCheck, X, User } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -11,6 +10,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { hubGet, hubPost } from "./hub-client";
+import { agoLabel } from "@/lib/dashboard/relative-time";
 interface Notice {
   id: string;
   recordId: string;
@@ -273,9 +273,7 @@ export function NotificationBell() {
                             {n.body}
                           </p>
                           <p className="mt-2 text-[11px] text-copy-secondary">
-                            {formatDistanceToNow(new Date(n.createdAt), {
-                              addSuffix: true,
-                            })}
+                            {agoLabel(n.createdAt)}
                           </p>
                         </button>
                         {n.inline && (

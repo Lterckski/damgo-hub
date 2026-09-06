@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { FolderKanban, Link as LinkIcon, Pencil, Trash2 } from "lucide-react";
@@ -23,13 +24,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { BackButton } from "@/components/shared/back-button";
-import { DateTimePicker } from "@/components/shared/date-time-picker";
 import { ManageCollaboratorsDialog } from "@/components/projects/manage-collaborators-dialog";
 import { ProjectStatusBadge } from "@/components/projects/project-status-badge";
-import { RoadmapBoard } from "@/components/roadmap/roadmap-board";
 import { formatPHP } from "@/lib/currency";
 import {
   PROJECT_CATEGORY_OPTIONS,
@@ -40,6 +38,25 @@ import {
   type ProjectMemberOption,
   type SerializedProject,
 } from "@/lib/projects";
+
+const DateTimePicker = dynamic(() =>
+  import("@/components/shared/date-time-picker").then(
+    (module) => module.DateTimePicker,
+  ),
+);
+const RoadmapBoard = dynamic(
+  () =>
+    import("@/components/roadmap/roadmap-board").then(
+      (module) => module.RoadmapBoard,
+    ),
+  {
+    loading: () => (
+      <div className="flex h-[34rem] items-center justify-center rounded-2xl border border-surface-border bg-surface text-sm text-copy-secondary">
+        Loading roadmap…
+      </div>
+    ),
+  },
+);
 
 const FIELD_LABEL_CLASS =
   "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
@@ -87,6 +104,11 @@ export function ProjectDetail({
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<"overview" | "roadmap">(
+    "overview",
+  );
+  const overviewTabRef = useRef<HTMLButtonElement>(null);
+  const roadmapTabRef = useRef<HTMLButtonElement>(null);
 
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description ?? "");
@@ -156,6 +178,19 @@ export function ProjectDetail({
     } finally {
       setIsSaving(false);
     }
+  }
+
+  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+      return;
+    }
+    event.preventDefault();
+    const nextTab =
+      event.key === "ArrowLeft" || event.key === "Home"
+        ? "overview"
+        : "roadmap";
+    setActiveTab(nextTab);
+    (nextTab === "overview" ? overviewTabRef : roadmapTabRef).current?.focus();
   }
 
   return (
@@ -304,23 +339,49 @@ export function ProjectDetail({
         </div>
       </div>
 
-      <Tabs defaultValue="overview" className="mt-6">
-        <TabsList>
-          <TabsTrigger
-            value="overview"
-            className="data-active:bg-elevated data-active:text-brand"
+      <div className="mt-6">
+        <div
+          role="tablist"
+          aria-label="Project sections"
+          className="inline-flex min-h-11 items-center gap-1 rounded-lg bg-subtle p-1 sm:h-9 sm:min-h-0"
+        >
+          <button
+            ref={overviewTabRef}
+            id="project-overview-tab"
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "overview"}
+            aria-controls="project-overview-panel"
+            tabIndex={activeTab === "overview" ? 0 : -1}
+            onClick={() => setActiveTab("overview")}
+            onKeyDown={handleTabKeyDown}
+            className="min-h-11 rounded-md px-3 text-sm font-medium text-copy-secondary outline-none aria-selected:bg-elevated aria-selected:text-brand focus-visible:ring-2 focus-visible:ring-brand sm:min-h-7"
           >
             Overview
-          </TabsTrigger>
-          <TabsTrigger
-            value="roadmap"
-            className="data-active:bg-elevated data-active:text-brand"
+          </button>
+          <button
+            ref={roadmapTabRef}
+            id="project-roadmap-tab"
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "roadmap"}
+            aria-controls="project-roadmap-panel"
+            tabIndex={activeTab === "roadmap" ? 0 : -1}
+            onClick={() => setActiveTab("roadmap")}
+            onKeyDown={handleTabKeyDown}
+            className="min-h-11 rounded-md px-3 text-sm font-medium text-copy-secondary outline-none aria-selected:bg-elevated aria-selected:text-brand focus-visible:ring-2 focus-visible:ring-brand sm:min-h-7"
           >
             Roadmap
-          </TabsTrigger>
-        </TabsList>
+          </button>
+        </div>
 
-        <TabsContent value="overview" className="mt-4 space-y-4">
+        {activeTab === "overview" && (
+          <div
+            id="project-overview-panel"
+            role="tabpanel"
+            aria-labelledby="project-overview-tab"
+            className="mt-4 space-y-4"
+          >
           <div className="rounded-2xl border border-surface-border bg-surface p-6">
             <p className={FIELD_LABEL_CLASS}>Description</p>
             {isEditing ? (
@@ -442,15 +503,23 @@ export function ProjectDetail({
               </ul>
             </div>
           )}
-        </TabsContent>
+          </div>
+        )}
 
-        <TabsContent value="roadmap" className="mt-4">
-          <RoadmapBoard
-            projectId={project.id}
-            collaborators={project.members}
-          />
-        </TabsContent>
-      </Tabs>
+        {activeTab === "roadmap" && (
+          <div
+            id="project-roadmap-panel"
+            role="tabpanel"
+            aria-labelledby="project-roadmap-tab"
+            className="mt-4"
+          >
+            <RoadmapBoard
+              projectId={project.id}
+              collaborators={project.members}
+            />
+          </div>
+        )}
+      </div>
 
       <Dialog open={isDeleting} onOpenChange={setIsDeleting}>
         <DialogContent>

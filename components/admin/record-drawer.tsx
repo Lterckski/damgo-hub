@@ -46,7 +46,7 @@ export interface DrawerAction {
   onRun: () => void;
 }
 
-interface RecordDrawerProps {
+export interface RecordDrawerProps {
   target: AdminDrawerTarget | null;
   onClose: () => void;
   /** Built by the console — it owns the mutation handlers, not the drawer. */

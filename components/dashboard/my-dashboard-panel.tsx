@@ -1,7 +1,3 @@
-"use client";
-
-import * as React from "react";
-
 import type {
   ActivityRow,
   MyMoney,
@@ -17,8 +13,8 @@ import { MyPenaltiesCard } from "@/components/dashboard/my/my-penalties-card";
 import { MyProjectsCard } from "@/components/dashboard/my/my-projects-card";
 import { MyTasksCard } from "@/components/dashboard/my/my-tasks-card";
 import { NeedsYouToday } from "@/components/dashboard/my/needs-you-today";
-import { QuickCapture, type CaptureKind } from "@/components/dashboard/my/quick-capture";
 import { UpcomingCard } from "@/components/dashboard/my/upcoming-card";
+import { DashboardCaptureProvider } from "@/components/dashboard/my/dashboard-capture";
 
 /**
  * My Dashboard.
@@ -38,9 +34,9 @@ import { UpcomingCard } from "@/components/dashboard/my/upcoming-card";
  * permissions — Part 4's requirement, and the reason the team ledger and
  * approvals live on Team Overview and /admin instead.
  *
- * A client component only because Quick Capture is shared state: "Create
- * task" in an empty My Tasks and "Log an expense" in My Money both open
- * the same dialogs the header's Quick Capture owns.
+ * Quick Capture's shared state lives in a narrow client provider. The panel
+ * itself and its read-only cards remain Server Components; interactive cards
+ * opt into the client independently.
  */
 
 export interface MyDashboardData {
@@ -56,20 +52,12 @@ export interface MyDashboardData {
 }
 
 export function MyDashboardPanel({ data }: { data: MyDashboardData }) {
-  const [captureKind, setCaptureKind] = React.useState<CaptureKind | null>(null);
-
   return (
-    <div className="flex flex-col gap-4">
-      {/* Quick Capture is pinned above the content, not inside a card —
-          it belongs to the whole tab, not to any one section. */}
-      <div className="flex items-center justify-between gap-3">
-        <QuickCapture
-          financeCategories={data.financeCategories}
-          ideasEnabled={data.ideasEnabled}
-          openKind={captureKind}
-          onOpenKindChange={setCaptureKind}
-        />
-      </div>
+    <DashboardCaptureProvider
+      financeCategories={data.financeCategories}
+      ideasEnabled={data.ideasEnabled}
+    >
+      <div className="flex flex-col gap-4">
 
       {/* Row 1 — full width, collapses when clear. */}
       <NeedsYouToday items={data.urgent} />
@@ -77,10 +65,10 @@ export function MyDashboardPanel({ data }: { data: MyDashboardData }) {
       {/* Rows 2–3 — tasks dominate, upcoming beside it. */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         <div className="lg:col-span-3">
-          <MyTasksCard tasks={data.tasks} onCreateTask={() => setCaptureKind("task")} />
+          <MyTasksCard tasks={data.tasks} />
         </div>
         <div className="lg:col-span-2">
-          <UpcomingCard items={data.upcoming} onCreateTask={() => setCaptureKind("task")} />
+          <UpcomingCard items={data.upcoming} />
         </div>
       </div>
 
@@ -90,7 +78,7 @@ export function MyDashboardPanel({ data }: { data: MyDashboardData }) {
           <MyPenaltiesCard penalties={data.penalties} />
         </div>
         <div className="lg:col-span-2">
-          <MyMoneyCard money={data.money} onLogExpense={() => setCaptureKind("expense")} />
+          <MyMoneyCard money={data.money} />
         </div>
       </div>
 
@@ -99,6 +87,7 @@ export function MyDashboardPanel({ data }: { data: MyDashboardData }) {
         <MyProjectsCard projects={data.projects} />
         <MyActivityCard events={data.activity} />
       </div>
-    </div>
+      </div>
+    </DashboardCaptureProvider>
   );
 }

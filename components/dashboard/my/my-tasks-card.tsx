@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/components/ui/toast";
 import { CardEmptyState, PanelCard } from "@/components/dashboard/panel-card";
+import { useDashboardCapture } from "@/components/dashboard/my/dashboard-capture";
 
 /**
  * My Tasks — the tallest card on the tab, because it's the one people
@@ -42,14 +43,10 @@ const BUCKET_HEADER_CLASS: Record<TaskBucket, string> = {
 
 const VISIBLE_LIMIT = 5;
 
-interface MyTasksCardProps {
-  tasks: MyTaskRow[];
-  onCreateTask: () => void;
-}
-
-export function MyTasksCard({ tasks, onCreateTask }: MyTasksCardProps) {
+export function MyTasksCard({ tasks }: { tasks: MyTaskRow[] }) {
   const router = useRouter();
   const { toast } = useToast();
+  const { openCapture } = useDashboardCapture();
   const [completed, setCompleted] = React.useState<Set<string>>(new Set());
   const [showAll, setShowAll] = React.useState(false);
 
@@ -134,7 +131,7 @@ export function MyTasksCard({ tasks, onCreateTask }: MyTasksCardProps) {
               : "Everything assigned to you is done."
           }
           action={
-            <Button size="sm" onClick={onCreateTask}>
+            <Button size="sm" onClick={() => openCapture("task")}>
               <Plus className="h-4 w-4" />
               Create task
             </Button>

@@ -1,5 +1,3 @@
-"use client";
-
 import { Activity } from "lucide-react";
 
 import { agoLabel } from "@/lib/dashboard/relative-time";

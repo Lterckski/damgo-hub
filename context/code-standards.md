@@ -63,4 +63,8 @@
 - Bound DOM output for growing tables/lists. Keep selection, filtering and exports explicit about whether they span the current page or all matching records.
 - Preserve stable derived-data dependencies across unrelated dialog/tab state changes; avoid reparsing unchanged Markdown or rebuilding unchanged boards.
 - Large client exports must yield during projection/encoding and show progress/errors. Debouncing delays work but does not make synchronous work interruptible.
+- Keep `"use client"` at the smallest component that owns browser state or an event. Pass Server Component output through narrow client wrappers instead of moving an entire read-only panel into the client graph.
+- Conditionally mount hidden overlays and dynamically import substantial dialog, picker, editor, or board implementations when they are not part of the initial view. A dynamic component rendered on initial load is still requested; split trigger/controller state from the deferred implementation when necessary.
+- Render display-only Markdown on the server. Keep heavy canvas/collaboration libraries route-local, and do not load a hidden board for an inactive tab.
+- Measure route JavaScript with `npm run analyze:client`; compare production file unions rather than unstable hashed chunk counts. See the [client bundle audit](current-issues/current-issues-client-bundle.md).
 - Validate interaction refactors with representative workloads and behavior checks. Record source-level risks separately from measured browser durations; fixture timing is not field INP. See the [interaction audit](current-issues/current-issues-interaction-performance.md).

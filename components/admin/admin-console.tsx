@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { Megaphone, Plus, Search, UserPlus } from "lucide-react";
 
@@ -28,19 +29,15 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { ActionQueue } from "@/components/admin/action-queue";
 import { AuditLogFeed } from "@/components/admin/audit-log-feed";
-import { BroadcastComposer } from "@/components/admin/broadcast-composer";
-import { CommandPalette } from "@/components/admin/command-palette";
 import { DangerZone } from "@/components/admin/danger-zone";
 import { DataTable, type BulkActionDef } from "@/components/admin/data-table";
 import { OrgSettingsPanel } from "@/components/admin/org-settings-panel";
-import {
-  RecordDrawer,
-  type DrawerAction,
+import type {
+  DrawerAction,
+  RecordDrawerProps,
 } from "@/components/admin/record-drawer";
-import {
-  ReasonDialog,
-  type ReasonRequest,
-} from "@/components/admin/reason-dialog";
+import type { ReasonRequest } from "@/components/admin/reason-dialog";
+import type { RecordDetail } from "@/lib/admin/detail";
 import { StatCards } from "@/components/admin/stat-cards";
 import { SyncWithClerk } from "@/components/admin/sync-with-clerk";
 import { ViewAsToggle } from "@/components/admin/view-as-toggle";
@@ -52,6 +49,27 @@ import {
   projectsConfig,
   type CellHandlers,
 } from "@/components/admin/table-configs";
+
+const RecordDrawer = dynamic(() =>
+  import("@/components/admin/record-drawer").then(
+    (module) => module.RecordDrawer,
+  ),
+);
+const CommandPalette = dynamic(() =>
+  import("@/components/admin/command-palette").then(
+    (module) => module.CommandPalette,
+  ),
+);
+const BroadcastComposer = dynamic(() =>
+  import("@/components/admin/broadcast-composer").then(
+    (module) => module.BroadcastComposer,
+  ),
+);
+const ReasonDialog = dynamic(() =>
+  import("@/components/admin/reason-dialog").then(
+    (module) => module.ReasonDialog,
+  ),
+);
 
 /**
  * The admin console. Five zones on one page, and nothing here navigates.
@@ -320,15 +338,13 @@ export function AdminConsole({
   // -------------------------------------------------------------------------
 
   function buildDrawerActions(
-    detail: Parameters<typeof buildActionsImpl>[0],
+    detail: RecordDetail,
   ): DrawerAction[] {
     return buildActionsImpl(detail);
   }
 
   function buildActionsImpl(
-    detail: Parameters<
-      React.ComponentProps<typeof RecordDrawer>["buildActions"]
-    >[0],
+    detail: Parameters<RecordDrawerProps["buildActions"]>[0],
   ): DrawerAction[] {
     switch (detail.kind) {
       case "finance": {
@@ -821,70 +837,78 @@ export function AdminConsole({
       </section>
 
       {/* Overlays ---------------------------------------------------- */}
-      <RecordDrawer
-        target={drawer}
-        onClose={() => setDrawer(null)}
-        buildActions={buildDrawerActions}
-        refreshToken={drawerToken}
-      />
+      {drawer && (
+        <RecordDrawer
+          target={drawer}
+          onClose={() => setDrawer(null)}
+          buildActions={buildDrawerActions}
+          refreshToken={drawerToken}
+        />
+      )}
 
-      <CommandPalette
-        open={paletteOpen}
-        onOpenChange={setPaletteOpen}
-        entries={searchIndex}
-        onSelect={openDrawer}
-        quickActions={[
-          {
-            id: "broadcast",
-            label: "Compose a broadcast",
-            run: () => setBroadcastOpen(true),
-          },
-          {
-            id: "queue",
-            label: "Jump to the action queue",
-            run: () =>
-              document
-                .querySelector("h2")
-                ?.scrollIntoView({ behavior: "smooth" }),
-          },
-          {
-            id: "pending-finance",
-            label: "Show pending transactions",
-            run: () => {
-              setTab("finance");
-              setFilterId("pending");
+      {paletteOpen && (
+        <CommandPalette
+          open={paletteOpen}
+          onOpenChange={setPaletteOpen}
+          entries={searchIndex}
+          onSelect={openDrawer}
+          quickActions={[
+            {
+              id: "broadcast",
+              label: "Compose a broadcast",
+              run: () => setBroadcastOpen(true),
             },
-          },
-          {
-            id: "past-due",
-            label: "Show past-due penalties",
-            run: () => {
-              setTab("penalties");
-              setFilterId("past_due");
+            {
+              id: "queue",
+              label: "Jump to the action queue",
+              run: () =>
+                document
+                  .querySelector("h2")
+                  ?.scrollIntoView({ behavior: "smooth" }),
             },
-          },
-          {
-            id: "not-in-clerk",
-            label: "Show members not in the Clerk org",
-            run: () => {
-              setTab("members");
-              setFilterId("not_in_clerk");
+            {
+              id: "pending-finance",
+              label: "Show pending transactions",
+              run: () => {
+                setTab("finance");
+                setFilterId("pending");
+              },
             },
-          },
-        ]}
-      />
+            {
+              id: "past-due",
+              label: "Show past-due penalties",
+              run: () => {
+                setTab("penalties");
+                setFilterId("past_due");
+              },
+            },
+            {
+              id: "not-in-clerk",
+              label: "Show members not in the Clerk org",
+              run: () => {
+                setTab("members");
+                setFilterId("not_in_clerk");
+              },
+            },
+          ]}
+        />
+      )}
 
-      <BroadcastComposer
-        open={broadcastOpen}
-        onOpenChange={setBroadcastOpen}
-        members={memberOptions}
-        projects={projectOptions}
-      />
+      {broadcastOpen && (
+        <BroadcastComposer
+          open={broadcastOpen}
+          onOpenChange={setBroadcastOpen}
+          members={memberOptions}
+          projects={projectOptions}
+        />
+      )}
 
-      <ReasonDialog
-        request={reasonRequest}
-        onClose={() => setReasonRequest(null)}
-      />
+      {reasonRequest && (
+        <ReasonDialog
+          request={reasonRequest}
+          onClose={() => setReasonRequest(null)}
+        />
+      )}
     </div>
   );
 }
