@@ -22,16 +22,31 @@ Traced the handlers into client derivation/rendering, CSV helpers, board persist
 
 ## Browser evidence
 
-Controlled Chrome run using the isolated Vite component fixture, desktop 1280×800, 4× CPU throttling, 1,000 synthetic admin rows, three columns, three fresh-page samples per version. The same click opened the record table in each run. The baseline table source was read from commit `2d3228c`; the temporary baseline copy was removed after comparison.
+Controlled Chrome run using the isolated Vite component fixture, desktop 1280×800, **6× CPU throttling**, 1,000 synthetic admin rows, three columns, and three fresh-page samples per version. The same click opened the record table in each run. The baseline table source is commit `2d3228c`; the measured refactored app source is commit `868afe2`, which was HEAD for the run. A detached baseline worktree used the same fixture and measurement code, with its expected DOM count adjusted from the refactor's 50-row page to the baseline's 1,000 rows.
 
 The measurement is the maximum Event Timing duration with an interaction ID from that single click, including input/processing/presentation delay. It is **not production INP**, a population percentile, an authenticated AdminConsole benchmark, or real phone evidence. Development fixture overhead and machine/browser conditions affect the absolute values.
 
 | Version | Recorded click durations | Median | Rendered data rows |
 | --- | --- | --- | --- |
-| Before | 760, 696, 712 ms | 712 ms | 1,000 |
-| Refactored | 80, 80, 80 ms | 80 ms | 50 |
+| Before (`2d3228c`) | 1,120, 1,064, 1,048 ms | 1,064 ms | 1,000 |
+| Refactored (`868afe2`) | 200, 112, 112 ms | 112 ms | 50 |
 
-[Repeatable workload](../../tests/mobile/performance.pw.ts) now measures the refactored component and attaches timings to the Playwright result. It asserts bounded rendering, page navigation, cross-page selection, 1,000-row CSV contents and filtered selection. There is no fixed timing threshold that would make CI depend on machine load.
+The refactored median is **952 ms lower (89.5%)**, or 9.5× faster in this controlled workload. Its first sample was 200 ms while the next two were 112 ms; the median is reported rather than selecting the best run.
+
+[Repeatable workload](../../tests/mobile/performance.pw.ts) now keeps the 6× throttle and attaches/logs the raw samples. It asserts bounded rendering, page navigation, cross-page selection, 1,000-row CSV contents, global filtering and global sorting. There is no fixed timing threshold that would make CI depend on machine load.
+
+## Pagination and export regression review
+
+No pagination, sorting, filtering, selection, or export regression was found.
+
+- `DataTable` derives `visibleRows` from the complete `rows` prop by applying the active predicate filter, search query, and selected sort in that order. It only then computes `pageRows = visibleRows.slice(...)`. Search, predicate-filter changes, and sorting reset the page to zero, so results cannot remain stranded on an out-of-range or semantically stale page.
+- The header checkbox uses `visibleRows.map(config.rowId)`, not `pageRows`, so “Select all matching rows” selects every filtered record across pages. Bulk actions receive `selectedIds`, the intersection of the complete filtered result and the persistent selection set.
+- CSV generation iterates `visibleRows`, not `pageRows`. With no visible selection it exports every filtered/sorted row. With a visible selection it exports every selected matching row across all pages. Only visible columns with a CSV/sort value are exported, matching the pre-refactor behavior.
+- `downloadCsv` accepts that complete iterable and yields before work and after either 256 rows or an 8 ms slice. Every chunk is retained in `parts` and supplied to one Blob, so yielding changes scheduling rather than coverage or ordering. The refactor also added carriage-return escaping alongside quotes and newlines.
+- The browser assertion exports from page one with no selection, verifies exactly 1,001 lines (header + 1,000 records), and confirms `Record 0999` is present. It then selects all 1,000 matches, moves to page two, filters for the first ten records while still on that workflow, and sees all ten selected. Finally, descending sort brings `Record 0999` onto page one; sorting only the current page could not satisfy that assertion.
+- The component test repeats the same invariants with 120 rows: an unselected export and a selected export each contain all 120 rows, bulk selection spans all pages, filtering narrows the bulk action to ten matching selected rows, and global descending sort brings `Record 119` to page one.
+
+“Full dataset” here means the complete dataset supplied to the client table. Members, finance, penalties, and projects are loaded without server pagination. The Activity tab is deliberately assembled from at most 200 tasks plus 50 meetings in `getAdminTableData`; client pagination/export covers that complete supplied Activity set, not records the server intentionally did not load.
 
 ## Remaining candidates and follow-up
 
@@ -46,7 +61,7 @@ The measurement is the maximum Event Timing duration with an interaction ID from
 
 - Unit/component suite: 83 passed; 15 opt-in database integration tests skipped.
 - Five new tests cover table pagination/selection/export/filter/sort behavior, CSV scheduling/escaping, palette ranking, and calendar lane equivalence/bounded work.
-- Browser suite: eight passed — seven responsive configurations plus one large-table workload. A fresh run with unchanged fixture sources passed after an earlier run lost a dialog during concurrent fixture edits.
+- Browser suite at the original audit point: eight passed — seven responsive configurations plus one large-table workload. The 6× follow-up reran the large-table workload on baseline and HEAD; both benchmark executions passed, and HEAD's expanded export/filter/sort assertions passed.
 - Production build/TypeScript, targeted lint and whitespace checks passed. The workload uses local intersection types for newer Event Timing fields absent from the installed TypeScript DOM declarations.
 
 ## Scanned interaction-site inventory

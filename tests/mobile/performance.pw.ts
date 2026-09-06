@@ -6,7 +6,7 @@ test("large admin table interaction workload", async ({
   context,
 }, testInfo) => {
   const cdp = await context.newCDPSession(page);
-  await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate: 6 });
   const durations: number[] = [];
   for (let run = 0; run < 3; run++) {
     await page.goto("/?performance");
@@ -41,31 +41,43 @@ test("large admin table interaction workload", async ({
       ),
     );
   }
+  const summary = { durationsMs: durations, cpuSlowdown: 6, records: 1000 };
+  console.log(`BENCHMARK_RESULT ${JSON.stringify(summary)}`);
   await testInfo.attach("synthetic-interaction-timing", {
-    body: JSON.stringify({
-      durationsMs: durations,
-      cpuSlowdown: 4,
-      records: 1000,
-    }),
+    body: JSON.stringify(summary),
     contentType: "application/json",
   });
   // Structural assertions are stable across CI machines; timings are evidence,
   // not a flaky hard latency threshold or a field INP claim.
-  await page
-    .getByRole("checkbox", { name: "Select all matching rows" })
-    .check();
-  await expect(page.getByText("1000 selected")).toBeVisible();
-  await page.getByRole("button", { name: "Next page" }).click();
-  await expect(page.getByText("Record 0050", { exact: true })).toBeVisible();
+  // With no selection, export covers all 1,000 matching records, not the
+  // current 50-row render window.
   const downloaded = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export", exact: true }).click();
   const download = await downloaded;
   const csv = await readFile((await download.path())!, "utf8");
   expect(csv.split("\n")).toHaveLength(1001);
   expect(csv).toContain("Record 0999");
+
+  // Selection also spans the full filtered dataset and survives paging.
+  await page
+    .getByRole("checkbox", { name: "Select all matching rows" })
+    .check();
+  await expect(page.getByText("1000 selected")).toBeVisible();
+  await page.getByRole("button", { name: "Next page" }).click();
+  await expect(page.getByText("Record 0050", { exact: true })).toBeVisible();
+
+  // Search filters the source dataset before pagination. A current-page-only
+  // filter from page two would find zero of these first ten records.
   await page
     .getByRole("textbox", { name: "Filter records" })
     .fill("Record 000");
   await expect(page.getByRole("row")).toHaveCount(11);
   await expect(page.getByText("10 selected", { exact: true })).toBeVisible();
+
+  // Sorting also precedes pagination: descending order must bring the final
+  // dataset record onto page one rather than only reversing its first page.
+  await page.getByRole("textbox", { name: "Filter records" }).fill("");
+  await page.getByRole("button", { name: "Name" }).click();
+  await page.getByRole("button", { name: "Name" }).click();
+  await expect(page.getByText("Record 0999", { exact: true })).toBeVisible();
 });
