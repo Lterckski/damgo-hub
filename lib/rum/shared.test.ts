@@ -63,12 +63,18 @@ it("validates bounded samples and strips arbitrary extra payloads", () => {
     { route: "/docs/secret" },
     { revision: -1 },
     { eventType: "private text" },
+    { eventType: ["click"] },
+    { kind: ["vital"] },
+    { device: ["mobile"] },
     { processingDuration: -10 },
     { kind: "interaction", value: 180 },
   ]) {
     expect(parseRumBatch({ samples: [{ ...sample, ...change }] })).toBeNull();
   }
   expect(parseRumBatch({ samples: Array(21).fill(sample) })).toBeNull();
+  expect(
+    parseRumBatch({ samples: [{ ...sample, eventType: "contextmenu" }] }),
+  ).toEqual([{ ...sample, eventType: "contextmenu" }]);
 });
 
 it("attributes processing across pointer and click entries in the same slow frame", () => {

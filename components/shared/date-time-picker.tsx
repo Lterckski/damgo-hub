@@ -117,7 +117,7 @@ export function DateTimePicker({
         type="button"
         onClick={openPicker}
         aria-haspopup="dialog"
-        aria-label={label}
+        aria-label={`${label}: ${displayValue || "No date selected"}`}
         className="flex min-h-11 w-full items-center justify-between rounded-lg border border-input bg-transparent px-2.5 text-sm text-copy-primary transition-colors hover:border-ring"
       >
         <span

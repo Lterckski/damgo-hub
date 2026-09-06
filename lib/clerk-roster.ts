@@ -59,12 +59,27 @@ export const getClerkOrgMembers = cache(
 export const getClerkPendingInvitations = cache(
   async (orgId: string): Promise<ClerkPendingInvitation[]> => {
     const client = await clerkClient();
-    const { data } =
-      await client.organizations.getOrganizationInvitationList({
-        organizationId: orgId,
-        limit: 100,
-      });
-    return data
+    const limit = 100;
+    const first = await client.organizations.getOrganizationInvitationList({
+      organizationId: orgId,
+      limit,
+      offset: 0,
+    });
+    const offsets = Array.from(
+      { length: Math.max(0, Math.ceil(first.totalCount / limit) - 1) },
+      (_, index) => (index + 1) * limit,
+    );
+    const remaining = await Promise.all(
+      offsets.map((offset) =>
+        client.organizations.getOrganizationInvitationList({
+          organizationId: orgId,
+          limit,
+          offset,
+        }),
+      ),
+    );
+    return [first, ...remaining]
+      .flatMap(({ data }) => data)
       .filter((invitation) => invitation.status === "pending")
       .map((invitation) => ({
         email: invitation.emailAddress,

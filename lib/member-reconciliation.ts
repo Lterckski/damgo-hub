@@ -381,14 +381,23 @@ export async function applyReconciliation(
       })
     : { count: 0 };
 
+  const removedMembershipIds = report.inLocalNotClerk.map((row) => row.id);
   const orphanIds = report.inLocalNotClerk
     .filter((row) => row.status !== "REMOVED")
     .map((row) => row.id);
 
-  const markedRemoved = orphanIds.length
-    ? await prisma.member.updateMany({
-        where: { id: { in: orphanIds } },
-        data: { status: "REMOVED" },
+  const markedRemoved = removedMembershipIds.length
+    ? await prisma.$transaction(async (tx) => {
+        const updated = orphanIds.length
+          ? await tx.member.updateMany({
+              where: { id: { in: orphanIds } },
+              data: { status: "REMOVED" },
+            })
+          : { count: 0 };
+        await tx.hubMembership.deleteMany({
+          where: { orgId, memberId: { in: removedMembershipIds } },
+        });
+        return updated;
       })
     : { count: 0 };
 

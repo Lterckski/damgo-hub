@@ -91,16 +91,44 @@ export const listOrgRoles = cache(async (): Promise<Map<string, string>> => {
         select: { id: true, clerkUserId: true },
       })
     : existingMembers;
-  await prisma.$transaction([
-    prisma.hubMembership.deleteMany({ where: { orgId } }),
-    prisma.hubMembership.createMany({
-      data: reconciledMembers.map((member) => ({
-        memberId: member.id,
-        orgId,
-        role: roles.get(member.clerkUserId)!,
-      })),
-    }),
-  ]);
+  const desiredMemberships = new Map(
+    reconciledMembers.map((member) => [
+      member.id,
+      roles.get(member.clerkUserId)!,
+    ]),
+  );
+  const currentMemberships = await prisma.hubMembership.findMany({
+    where: { orgId },
+    select: { memberId: true, role: true },
+  });
+  const currentByMember = new Map(
+    currentMemberships.map((membership) => [membership.memberId, membership]),
+  );
+  const removedMemberIds = currentMemberships
+    .filter((membership) => !desiredMemberships.has(membership.memberId))
+    .map((membership) => membership.memberId);
+  const changedMemberships = [...desiredMemberships].filter(
+    ([memberId, role]) => currentByMember.get(memberId)?.role !== role,
+  );
+
+  if (removedMemberIds.length > 0 || changedMemberships.length > 0) {
+    await prisma.$transaction([
+      ...(removedMemberIds.length > 0
+        ? [
+            prisma.hubMembership.deleteMany({
+              where: { orgId, memberId: { in: removedMemberIds } },
+            }),
+          ]
+        : []),
+      ...changedMemberships.map(([memberId, role]) =>
+        prisma.hubMembership.upsert({
+          where: { memberId },
+          create: { memberId, orgId, role },
+          update: { orgId, role },
+        }),
+      ),
+    ]);
+  }
 
   return roles;
 });

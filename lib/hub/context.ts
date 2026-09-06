@@ -77,12 +77,25 @@ export const requireWorkspaceSession = cache(async () => {
     throw new HubAccessError(
       "This organization is not connected to this workspace",
     );
-  if (!session.orgRole)
+
+  // Session organization claims are short-lived and can briefly survive a
+  // membership removal or role change. Authorization uses a targeted live
+  // Clerk lookup so revocation and demotion take effect immediately without
+  // downloading the full organization roster.
+  const client = await clerkClient();
+  const liveMemberships =
+    await client.organizations.getOrganizationMembershipList({
+      organizationId: session.orgId,
+      userId: [session.userId],
+      limit: 1,
+    });
+  const liveMembership = liveMemberships.data[0];
+  if (!liveMembership)
     throw new HubAccessError("You are no longer a member of this organization");
   return {
     userId: session.userId,
     orgId: session.orgId,
-    role: session.orgRole,
+    role: liveMembership.role,
   };
 });
 

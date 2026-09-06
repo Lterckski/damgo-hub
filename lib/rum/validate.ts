@@ -1,4 +1,31 @@
 import { rumRoute, VITAL_NAMES, type RumSample } from "./shared";
+
+const EVENT_TYPES = [
+  "auxclick",
+  "beforeinput",
+  "click",
+  "compositionend",
+  "compositionstart",
+  "compositionupdate",
+  "contextmenu",
+  "dblclick",
+  "dragend",
+  "dragstart",
+  "drop",
+  "input",
+  "keydown",
+  "keypress",
+  "keyup",
+  "mousedown",
+  "mouseup",
+  "pointercancel",
+  "pointerdown",
+  "pointerup",
+  "touchcancel",
+  "touchend",
+  "touchstart",
+] as const;
+
 export function parseRumBatch(body: unknown): RumSample[] | null {
   if (
     !body ||
@@ -27,8 +54,10 @@ export function parseRumBatch(body: unknown): RumSample[] | null {
     )
       return null;
     if (
-      !["vital", "interaction"].includes(String(s.kind)) ||
-      !["mobile", "tablet", "desktop"].includes(String(s.device))
+      typeof s.kind !== "string" ||
+      !["vital", "interaction"].includes(s.kind) ||
+      typeof s.device !== "string" ||
+      !["mobile", "tablet", "desktop"].includes(s.device)
     )
       return null;
     if (
@@ -55,17 +84,10 @@ export function parseRumBatch(body: unknown): RumSample[] | null {
       return null;
     if (
       s.eventType !== null &&
-      ![
-        "click",
-        "pointerdown",
-        "pointerup",
-        "keydown",
-        "keyup",
-        "mousedown",
-        "mouseup",
-        "touchstart",
-        "touchend",
-      ].includes(String(s.eventType))
+      (typeof s.eventType !== "string" ||
+        !EVENT_TYPES.includes(
+          s.eventType as (typeof EVENT_TYPES)[number],
+        ))
     )
       return null;
     for (const key of ["inputDelay", "processingDuration", "presentationDelay"])

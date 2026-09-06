@@ -98,7 +98,7 @@ export async function search(viewer: Viewer, input: string) {
 }
 
 export async function recommendations(viewer: Viewer) {
-  const [recents, urgent] = await Promise.all([
+  const [recents, urgent, memberships] = await Promise.all([
     prisma.hubRecent.findMany({
       where: {
         orgId: viewer.orgId,
@@ -110,7 +110,12 @@ export async function recommendations(viewer: Viewer) {
       take: 5,
     }),
     getNeedsYouToday(viewer.memberId),
+    prisma.hubMembership.findMany({
+      where: { orgId: viewer.orgId },
+      select: { memberId: true },
+    }),
   ]);
+  const memberIds = new Set(memberships.map(({ memberId }) => memberId));
   const actionable = urgent.filter(
     (item) =>
       item.action &&
@@ -127,7 +132,11 @@ export async function recommendations(viewer: Viewer) {
   });
   const recordsById = new Map(
     visibleNeeds
-      .filter((record) => canSee(viewer, record.orgId, record.grants))
+      .filter(
+        (record) =>
+          (record.entityType !== "member" || memberIds.has(record.entityId)) &&
+          canSee(viewer, record.orgId, record.grants),
+      )
       .map((record) => [record.id, record]),
   );
   const needs = actionable.flatMap((item) => {
@@ -149,14 +158,19 @@ export async function recommendations(viewer: Viewer) {
     // The relation filter above evaluates visibility in the same database
     // statement that returns the records, so a per-row recheck only added an
     // N+1 query without closing a revocation window.
-    recents: recents.map(({ record }) => ({
-      id: record.id,
-      title: record.title,
-      body: record.body.slice(0, 160),
-      status: record.status,
-      entityType: record.entityType,
-      url: recordUrl(record.id),
-    })),
+    recents: recents
+      .filter(
+        ({ record }) =>
+          record.entityType !== "member" || memberIds.has(record.entityId),
+      )
+      .map(({ record }) => ({
+        id: record.id,
+        title: record.title,
+        body: record.body.slice(0, 160),
+        status: record.status,
+        entityType: record.entityType,
+        url: recordUrl(record.id),
+      })),
     needs,
   };
 }
