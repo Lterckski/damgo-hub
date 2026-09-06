@@ -45,7 +45,7 @@ it("bounds rendered rows, resets pagination on search/sort, and selects/exports 
     expect(screen.getByRole("button", { name: "Export" }).hasAttribute("disabled")).toBe(false),
   );
   const allRowsWithoutSelection = vi.mocked(downloadCsv).mock.calls.at(-1)![2];
-  expect([...allRowsWithoutSelection]).toHaveLength(120);
+  expect([...allRowsWithoutSelection]).toEqual(rows.map((row) => [row.name]));
   fireEvent.click(screen.getByRole("button", { name: "Next page" }));
   expect(screen.getByText("Record 050")).toBeTruthy();
   fireEvent.click(
@@ -56,7 +56,7 @@ it("bounds rendered rows, resets pagination on search/sort, and selects/exports 
   fireEvent.click(screen.getByRole("button", { name: "Export" }));
   await waitFor(() => expect(vi.mocked(downloadCsv)).toHaveBeenCalledTimes(2));
   const exportedRows = vi.mocked(downloadCsv).mock.calls.at(-1)![2];
-  expect([...exportedRows]).toHaveLength(120);
+  expect([...exportedRows]).toEqual(rows.map((row) => [row.name]));
   fireEvent.change(screen.getByRole("textbox", { name: "Filter records" }), {
     target: { value: "Record 00" },
   });
@@ -68,7 +68,7 @@ it("bounds rendered rows, resets pagination on search/sort, and selects/exports 
   });
   fireEvent.click(screen.getByRole("button", { name: "Next page" }));
   fireEvent.click(screen.getByRole("button", { name: "Name" }));
-  expect(screen.getByText("Record 000")).toBeTruthy();
+  expect(screen.getAllByRole("row")[1].textContent).toContain("Record 000");
   fireEvent.click(screen.getByRole("button", { name: "Name" }));
-  expect(screen.getByText("Record 119")).toBeTruthy();
+  expect(screen.getAllByRole("row")[1].textContent).toContain("Record 119");
 });
