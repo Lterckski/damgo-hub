@@ -1,7 +1,8 @@
 import { taskVisibilityWhere } from "@/lib/hub/context";
-import { clerkClient } from "@clerk/nextjs/server";
-
-import { organizationMemberProfile } from "@/lib/member-profile";
+import {
+  getClerkOrgMembers,
+  getClerkPendingInvitations,
+} from "@/lib/clerk-roster";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -66,64 +67,143 @@ export interface MatchedRow extends LocalOnlyRow {
   clerkRole: string;
 }
 
-/** Counts everything a Member row still owns, for the merge/delete decision. */
+type MemberCountKey = Exclude<keyof MemberContentCounts, "total">;
+
+/**
+ * Counts content for a whole set of members with a fixed number of grouped
+ * queries. Reconciliation used to issue thirteen counts for every orphan.
+ */
+export async function getMembersContentCounts(
+  memberIds: readonly string[],
+): Promise<Map<string, MemberContentCounts>> {
+  const uniqueIds = [...new Set(memberIds)];
+  const empty = (): MemberContentCounts => ({
+    tasksCreated: 0,
+    taskAssignments: 0,
+    docs: 0,
+    transactions: 0,
+    penaltiesReceived: 0,
+    penaltiesIssued: 0,
+    projectsOwned: 0,
+    projectMemberships: 0,
+    meetingsOrganized: 0,
+    meetingParticipations: 0,
+    agendaProposals: 0,
+    agendaItems: 0,
+    calendarEvents: 0,
+    total: 0,
+  });
+  const counts = new Map(uniqueIds.map((memberId) => [memberId, empty()]));
+  if (uniqueIds.length === 0) return counts;
+
+  const taskVisibility = await taskVisibilityWhere();
+  const groups = await Promise.all([
+    prisma.task.groupBy({
+      by: ["createdById"],
+      where: { AND: [taskVisibility, { createdById: { in: uniqueIds } }] },
+      _count: { _all: true },
+    }),
+    prisma.taskAssignee.groupBy({
+      by: ["memberId"],
+      where: { memberId: { in: uniqueIds }, task: taskVisibility },
+      _count: { _all: true },
+    }),
+    prisma.doc.groupBy({
+      by: ["authorId"],
+      where: { authorId: { in: uniqueIds } },
+      _count: { _all: true },
+    }),
+    prisma.transaction.groupBy({
+      by: ["memberId"],
+      where: { memberId: { in: uniqueIds } },
+      _count: { _all: true },
+    }),
+    prisma.penalty.groupBy({
+      by: ["memberId"],
+      where: { memberId: { in: uniqueIds } },
+      _count: { _all: true },
+    }),
+    prisma.penalty.groupBy({
+      by: ["issuedById"],
+      where: { issuedById: { in: uniqueIds } },
+      _count: { _all: true },
+    }),
+    prisma.project.groupBy({
+      by: ["ownerId"],
+      where: { ownerId: { in: uniqueIds } },
+      _count: { _all: true },
+    }),
+    prisma.projectMember.groupBy({
+      by: ["memberId"],
+      where: { memberId: { in: uniqueIds } },
+      _count: { _all: true },
+    }),
+    prisma.meeting.groupBy({
+      by: ["organizerId"],
+      where: { organizerId: { in: uniqueIds } },
+      _count: { _all: true },
+    }),
+    prisma.meetingParticipant.groupBy({
+      by: ["memberId"],
+      where: { memberId: { in: uniqueIds } },
+      _count: { _all: true },
+    }),
+    prisma.agendaProposal.groupBy({
+      by: ["proposedById"],
+      where: { proposedById: { in: uniqueIds } },
+      _count: { _all: true },
+    }),
+    prisma.agendaItem.groupBy({
+      by: ["addedById"],
+      where: { addedById: { in: uniqueIds } },
+      _count: { _all: true },
+    }),
+    prisma.calendarEvent.groupBy({
+      by: ["createdById"],
+      where: { createdById: { in: uniqueIds } },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const apply = <R extends { _count: { _all: number } }>(
+    key: MemberCountKey,
+    rows: readonly R[],
+    memberId: (row: R) => string,
+  ) => {
+    for (const row of rows) {
+      const result = counts.get(memberId(row));
+      if (result) result[key] = row._count._all;
+    }
+  };
+  apply("tasksCreated", groups[0], (row) => row.createdById);
+  apply("taskAssignments", groups[1], (row) => row.memberId);
+  apply("docs", groups[2], (row) => row.authorId);
+  apply("transactions", groups[3], (row) => row.memberId);
+  apply("penaltiesReceived", groups[4], (row) => row.memberId);
+  apply("penaltiesIssued", groups[5], (row) => row.issuedById);
+  apply("projectsOwned", groups[6], (row) => row.ownerId);
+  apply("projectMemberships", groups[7], (row) => row.memberId);
+  apply("meetingsOrganized", groups[8], (row) => row.organizerId);
+  apply("meetingParticipations", groups[9], (row) => row.memberId);
+  apply("agendaProposals", groups[10], (row) => row.proposedById);
+  apply("agendaItems", groups[11], (row) => row.addedById);
+  apply("calendarEvents", groups[12], (row) => row.createdById);
+
+  for (const result of counts.values()) {
+    result.total = Object.entries(result).reduce(
+      (sum, [key, count]) => (key === "total" ? sum : sum + count),
+      0,
+    );
+  }
+  return counts;
+}
+
+/** Counts everything one Member row owns, for merge/delete decisions. */
 export async function getMemberContentCounts(
   memberId: string,
 ): Promise<MemberContentCounts> {
-  const [
-    tasksCreated,
-    taskAssignments,
-    docs,
-    transactions,
-    penaltiesReceived,
-    penaltiesIssued,
-    projectsOwned,
-    projectMemberships,
-    meetingsOrganized,
-    meetingParticipations,
-    agendaProposals,
-    agendaItems,
-    calendarEvents,
-  ] = await Promise.all([
-    prisma.task.count({
-      where: { AND: [await taskVisibilityWhere(), { createdById: memberId }] },
-    }),
-    prisma.taskAssignee.count({
-      where: { memberId, task: await taskVisibilityWhere() },
-    }),
-    prisma.doc.count({ where: { authorId: memberId } }),
-    prisma.transaction.count({ where: { memberId } }),
-    prisma.penalty.count({ where: { memberId } }),
-    prisma.penalty.count({ where: { issuedById: memberId } }),
-    prisma.project.count({ where: { ownerId: memberId } }),
-    prisma.projectMember.count({ where: { memberId } }),
-    prisma.meeting.count({ where: { organizerId: memberId } }),
-    prisma.meetingParticipant.count({ where: { memberId } }),
-    prisma.agendaProposal.count({ where: { proposedById: memberId } }),
-    prisma.agendaItem.count({ where: { addedById: memberId } }),
-    prisma.calendarEvent.count({ where: { createdById: memberId } }),
-  ]);
-
-  const counts = {
-    tasksCreated,
-    taskAssignments,
-    docs,
-    transactions,
-    penaltiesReceived,
-    penaltiesIssued,
-    projectsOwned,
-    projectMemberships,
-    meetingsOrganized,
-    meetingParticipations,
-    agendaProposals,
-    agendaItems,
-    calendarEvents,
-  };
-
-  return {
-    ...counts,
-    total: Object.values(counts).reduce((sum, n) => sum + n, 0),
-  };
+  const counts = await getMembersContentCounts([memberId]);
+  return counts.get(memberId)!;
 }
 
 export interface RoleDriftRow {
@@ -175,61 +255,12 @@ export interface MemberReconciliation {
   };
 }
 
-/** Every Clerk org membership, paginated. Exported for the sync action's own use. */
-async function fetchOrgMemberships(orgId: string) {
-  const client = await clerkClient();
-  const rows: ClerkOnlyRow[] = [];
-  const limit = 100;
-  let offset = 0;
-
-  while (true) {
-    const { data } = await client.organizations.getOrganizationMembershipList({
-      organizationId: orgId,
-      limit,
-      offset,
-    });
-
-    for (const membership of data) {
-      const publicUserData = membership.publicUserData;
-      if (!publicUserData) continue;
-      const profile = organizationMemberProfile(publicUserData);
-      rows.push({ ...profile, role: membership.role });
-    }
-
-    if (data.length < limit) break;
-    offset += limit;
-  }
-
-  return rows;
-}
-
-async function fetchPendingInvitations(
-  orgId: string,
-): Promise<PendingInvitationRow[]> {
-  const client = await clerkClient();
-  const { data } = await client.organizations.getOrganizationInvitationList({
-    organizationId: orgId,
-    limit: 100,
-  });
-
-  // Clerk returns accepted/revoked invitations here too — only the ones
-  // still outstanding are what "pending" means to an admin.
-  return data
-    .filter((invitation) => invitation.status === "pending")
-    .map((invitation) => ({
-      email: invitation.emailAddress,
-      role: invitation.role,
-      status: invitation.status ?? "pending",
-      createdAt: new Date(invitation.createdAt).toISOString(),
-    }));
-}
-
 export async function reconcileMembers(
   orgId: string,
 ): Promise<MemberReconciliation> {
   const [clerkMembers, pendingInvitations, localMembers] = await Promise.all([
-    fetchOrgMemberships(orgId),
-    fetchPendingInvitations(orgId),
+    getClerkOrgMembers(orgId),
+    getClerkPendingInvitations(orgId),
     prisma.member.findMany({ orderBy: { createdAt: "asc" } }),
   ]);
 
@@ -278,12 +309,10 @@ export async function reconcileMembers(
 
   // Only orphans get content counts — that's the one decision that needs
   // them, and it's a dozen counts per row.
-  const orphanContent = await Promise.all(
-    inLocalNotClerk.map((row) => getMemberContentCounts(row.id)),
+  const orphanContent = await getMembersContentCounts(
+    inLocalNotClerk.map((row) => row.id),
   );
-  inLocalNotClerk.forEach((row, index) => {
-    row.content = orphanContent[index];
-  });
+  for (const row of inLocalNotClerk) row.content = orphanContent.get(row.id);
 
   // Member.email has no @unique — only clerkUserId does. Two Clerk users
   // for one person (a personal sign-up plus the invited address) land here.

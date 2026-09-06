@@ -3,6 +3,7 @@
 import * as React from "react";
 import { CornerDownLeft, Search } from "lucide-react";
 
+import { findPaletteResults } from "@/lib/admin/palette-results";
 import { cn } from "@/lib/utils";
 import type { SearchEntry } from "@/lib/admin/search";
 import type { AdminDrawerTarget } from "@/lib/admin/types";
@@ -55,24 +56,10 @@ export function CommandPalette({
     setActiveIndex(0);
   }
 
-  const results = React.useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return [];
-    // Prefix matches on the title first — typing "din" should surface the
-    // person before a transaction whose description happens to contain it.
-    const scored = entries
-      .filter((entry) => entry.keywords.includes(needle))
-      .map((entry) => ({
-        entry,
-        score: entry.title.toLowerCase().startsWith(needle)
-          ? 0
-          : entry.title.toLowerCase().includes(needle)
-            ? 1
-            : 2,
-      }))
-      .sort((a, b) => a.score - b.score);
-    return scored.slice(0, MAX_RESULTS).map((item) => item.entry);
-  }, [entries, query]);
+  const results = React.useMemo(
+    () => open ? findPaletteResults(entries, query, MAX_RESULTS) : [],
+    [entries, query, open],
+  );
 
   const showQuickActions = query.trim() === "";
   const itemCount = showQuickActions ? quickActions.length : results.length;

@@ -27,6 +27,15 @@
 - Reference tokens through their Tailwind utility names: `bg-base`, `text-copy-primary`, `border-surface-border`, `text-brand`, etc.
 - Maintain the border radius scale: `rounded-xl` for small elements, `rounded-2xl` for cards, `rounded-3xl` for modals.
 
+## Mobile Browser Implementation
+
+- Follow the project-wide [mobile browser requirements](ui-context.md#mobile-browser-requirements) for every new or changed UI, including admin and board surfaces.
+- Use responsive layouts that reflow at narrow widths. Avoid unqualified multi-column forms, page-wide minimum widths, and fixed overlay dimensions that make phone controls unreachable.
+- Essential actions need touch-accessible controls; do not rely exclusively on hover, double-click, dragging, or a keyboard shortcut. Adapt to input capability as well as viewport width.
+- Handle safe areas, dynamic viewport height, scrolling, and the on-screen keyboard at the app/component boundary. Do not hide overflow merely to conceal clipped content, and do not disable browser zoom.
+- Reuse existing components and server logic across screen sizes. Apply responsive behavior through app-level composition and styles; the generated `components/ui/*` protection still applies.
+- Verify changed flows using the [mobile browser workflow](ai-workflow-rules.md#mobile-browser-verification), and record untested behavior accurately.
+
 ## API Routes
 
 - Validate and parse request input before any logic runs.
@@ -48,3 +57,10 @@
 - `components/` — UI composition only; no business logic.
 - `app/api/` — route handlers for auth, triggering, and persistence, organized by domain.
 - Name files after the responsibility they contain, not the technology.
+
+## Interaction performance
+
+- Bound DOM output for growing tables/lists. Keep selection, filtering and exports explicit about whether they span the current page or all matching records.
+- Preserve stable derived-data dependencies across unrelated dialog/tab state changes; avoid reparsing unchanged Markdown or rebuilding unchanged boards.
+- Large client exports must yield during projection/encoding and show progress/errors. Debouncing delays work but does not make synchronous work interruptible.
+- Validate interaction refactors with representative workloads and behavior checks. Record source-level risks separately from measured browser durations; fixture timing is not field INP. See the [interaction audit](current-issues/current-issues-interaction-performance.md).

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -6,7 +7,7 @@ import remarkGfm from "remark-gfm";
  * component overrides map every element to our own tokens directly, same
  * "no hardcoded colors" rule as everywhere else (ui-context.md).
  */
-export function MarkdownContent({ content }: { content: string }) {
+export const MarkdownContent = memo(function MarkdownContent({ content }: { content: string }) {
   return (
     <div className="space-y-4 text-sm leading-relaxed text-copy-secondary">
       <ReactMarkdown
@@ -87,4 +88,4 @@ export function MarkdownContent({ content }: { content: string }) {
       </ReactMarkdown>
     </div>
   );
-}
+});

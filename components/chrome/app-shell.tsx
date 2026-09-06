@@ -16,15 +16,13 @@ export function AppShell({
   children,
 }: AppShellProps) {
   return (
-    <div className="flex h-full min-h-screen flex-col bg-base">
+    <div className="app-shell flex min-h-0 min-w-0 flex-col bg-base">
       {header ?? <AppNavbar rightSlot={navbarRightSlot} />}
-      {/* min-h-0 overrides a flex item's default min-height:auto — without
-          it, a tall page (a long extracted doc, a big textarea) can grow
-          `main` past its flex-basis allocation, which grows this whole
-          column past min-h-screen and forces the *body* to scroll instead
-          of main's own overflow-y-auto — dragging the navbar/dock along
-          with the page content instead of leaving them fixed in place. */}
-      <main className="min-h-0 flex-1 overflow-y-auto pb-24">{children}</main>
+      {/* The shell follows the visible viewport; min-h-0 keeps scrolling
+          inside main when the browser chrome or on-screen keyboard changes. */}
+      <main className="app-main min-h-0 min-w-0 flex-1 overflow-y-auto">
+        {children}
+      </main>
       <AppDock isAdmin={isAdmin} />
     </div>
   );

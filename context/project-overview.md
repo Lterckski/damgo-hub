@@ -4,6 +4,14 @@
 
 Damgo Hub is a collaborative platform for a hackathon group / organization. It brings project proposals, task assignment, organizational finances, documentation, meeting planning, penalties, and member management into one shared workspace, with real-time collaborative boards for project roadmaps and open idea sharing.
 
+## Required Browser Support
+
+**The entire project must be mobile-browser friendly.** This is a product requirement for both existing features and future work, including authentication, member and admin screens, forms, tables, calendars, and collaborative boards. Members must be able to complete their permitted workflows on a phone using touch, without requiring a mouse, hardware keyboard, or desktop browser.
+
+Support iOS Safari and Android Chrome in portrait and landscape while preserving tablet and desktop usability. Mobile layouts may reorganize controls, but must keep essential actions and information accessible. Use the [mobile interaction requirements](ui-context.md#mobile-browser-requirements) and [verification workflow](ai-workflow-rules.md#mobile-browser-verification) as acceptance criteria.
+
+This requirement applies to the current website independently of any future PWA or native app. It is not a claim that the current implementation already meets it; remaining work is tracked in [mobile browser issues](current-issues/current-issues-mobile-browser.md).
+
 ## Goals
 
 1. Let members sign in and manage their identity and role within the organization.
@@ -233,3 +241,4 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 5. Members can schedule meetings and propose agenda items, while only the Leader and Assistant Leader can curate the final agenda before the meeting happens externally.
 6. Admins can track penalties issued to members and manage the member roster from the Admin Side.
 7. Any member can post and browse ideas on the open, real-time Ideas board.
+8. Members and admins can complete the above workflows in mobile browsers with usable touch controls, readable layouts, and accessible forms; mobile verification evidence and remaining gaps are recorded.

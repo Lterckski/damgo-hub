@@ -2,7 +2,15 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ExternalLink, HardDrive, Paperclip, Pencil, Trash2, Upload, X } from "lucide-react";
+import {
+  ExternalLink,
+  HardDrive,
+  Paperclip,
+  Pencil,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +24,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { BackButton } from "@/components/shared/back-button";
-import { DriveFilePicker, type PickedDriveFile } from "@/components/docs/drive-file-picker";
+import {
+  DriveFilePicker,
+  type PickedDriveFile,
+} from "@/components/docs/drive-file-picker";
 import { MarkdownContent } from "@/components/docs/markdown-content";
 import { collapseDocImages, expandDocImages } from "@/lib/collapse-doc-images";
 import { getGoogleDriveEmbedUrl } from "@/lib/google-drive-embed";
@@ -52,7 +63,12 @@ export function DocDetail({ doc, attachments, canEdit }: DocDetailProps) {
   const imagesRef = useRef<Map<number, string>>(new Map());
   const [driveFile, setDriveFile] = useState<PickedDriveFile | null>(
     doc.driveFileId
-      ? { id: doc.driveFileId, name: doc.driveFileName ?? "Drive file", mimeType: doc.driveFileMimeType ?? "", url: doc.driveFileUrl ?? "" }
+      ? {
+          id: doc.driveFileId,
+          name: doc.driveFileName ?? "Drive file",
+          mimeType: doc.driveFileMimeType ?? "",
+          url: doc.driveFileUrl ?? "",
+        }
       : null,
   );
 
@@ -63,7 +79,12 @@ export function DocDetail({ doc, attachments, canEdit }: DocDetailProps) {
     setDisplayContent(display);
     setDriveFile(
       doc.driveFileId
-        ? { id: doc.driveFileId, name: doc.driveFileName ?? "Drive file", mimeType: doc.driveFileMimeType ?? "", url: doc.driveFileUrl ?? "" }
+        ? {
+            id: doc.driveFileId,
+            name: doc.driveFileName ?? "Drive file",
+            mimeType: doc.driveFileMimeType ?? "",
+            url: doc.driveFileUrl ?? "",
+          }
         : null,
     );
     setIsEditing(true);
@@ -105,7 +126,10 @@ export function DocDetail({ doc, attachments, canEdit }: DocDetailProps) {
     try {
       const formData = new FormData();
       formData.set("file", file);
-      await fetch(`/api/docs/${doc.id}/attachments`, { method: "POST", body: formData });
+      await fetch(`/api/docs/${doc.id}/attachments`, {
+        method: "POST",
+        body: formData,
+      });
       router.refresh();
     } finally {
       setIsUploading(false);
@@ -118,8 +142,10 @@ export function DocDetail({ doc, attachments, canEdit }: DocDetailProps) {
     // max-w-3xl reading width) — a live editor benefits from the extra
     // horizontal room the way prose doesn't, per the user's "fill out the
     // page even more" ask.
-    <div className={cn("mx-auto p-6", doc.driveFileId ? "max-w-5xl" : "max-w-3xl")}>
-      <div className="flex items-start justify-between gap-4">
+    <div
+      className={cn("mx-auto p-6", doc.driveFileId ? "max-w-5xl" : "max-w-3xl")}
+    >
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <BackButton />
@@ -131,22 +157,35 @@ export function DocDetail({ doc, attachments, canEdit }: DocDetailProps) {
                 className="font-display h-auto py-1 text-3xl text-copy-primary!"
               />
             ) : (
-              <h1 className="font-display text-3xl text-copy-primary">{doc.title}</h1>
+              <h1 className="font-display text-3xl text-copy-primary">
+                {doc.title}
+              </h1>
             )}
           </div>
           <p className="mt-1 text-sm font-medium text-copy-secondary">
-            {doc.authorName} · updated {new Date(doc.updatedAt).toLocaleDateString()}
+            {doc.authorName} · updated{" "}
+            {new Date(doc.updatedAt).toLocaleDateString()}
           </p>
         </div>
 
         {canEdit && (
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             {isEditing ? (
               <>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsEditing(false)}
+                >
                   Cancel
                 </Button>
-                <Button type="button" size="sm" disabled={isSaving || title.trim() === ""} onClick={save}>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={isSaving || title.trim() === ""}
+                  onClick={save}
+                >
                   Save
                 </Button>
               </>
@@ -168,9 +207,15 @@ export function DocDetail({ doc, attachments, canEdit }: DocDetailProps) {
                   disabled={isUploading}
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <Upload className="h-3.5 w-3.5" /> {isUploading ? "Uploading…" : "Attach File"}
+                  <Upload className="h-3.5 w-3.5" />{" "}
+                  {isUploading ? "Uploading…" : "Attach File"}
                 </Button>
-                <Button type="button" variant="outline" size="sm" onClick={startEditing}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={startEditing}
+                >
                   <Pencil className="h-3.5 w-3.5" /> Edit
                 </Button>
                 <Button
@@ -221,13 +266,18 @@ export function DocDetail({ doc, attachments, canEdit }: DocDetailProps) {
         doc.driveFileId && (
           <div className="mt-6">
             {(() => {
-              const embedUrl = getGoogleDriveEmbedUrl(doc.driveFileId, doc.driveFileMimeType ?? "");
+              const embedUrl = getGoogleDriveEmbedUrl(
+                doc.driveFileId,
+                doc.driveFileMimeType ?? "",
+              );
               return (
                 <>
                   <div className="mb-2 flex items-center justify-between">
                     <p className="flex items-center gap-1.5 text-xs font-bold tracking-wide text-copy-primary uppercase">
                       <HardDrive className="h-3.5 w-3.5" />
-                      {embedUrl ? "Linked Google Drive file — editable below" : "Linked Google Drive file"}
+                      {embedUrl
+                        ? "Linked Google Drive file — editable below"
+                        : "Linked Google Drive file"}
                     </p>
                     <a
                       href={doc.driveFileUrl ?? "#"}
@@ -278,13 +328,15 @@ export function DocDetail({ doc, attachments, canEdit }: DocDetailProps) {
             />
             <p className="mt-2 text-xs text-copy-secondary">
               Photos show as short placeholders like{" "}
-              <span className="font-mono">![Image 1](image-1)</span> here so this stays readable;
-              the actual images still save with the doc. Delete a placeholder line to drop that
-              photo.
+              <span className="font-mono">![Image 1](image-1)</span> here so
+              this stays readable; the actual images still save with the doc.
+              Delete a placeholder line to drop that photo.
             </p>
           </>
         ) : doc.content.trim() === "" ? (
-          <p className="text-sm text-copy-secondary">This doc has no content yet.</p>
+          <p className="text-sm text-copy-secondary">
+            This doc has no content yet.
+          </p>
         ) : (
           <MarkdownContent content={doc.content} />
         )}
@@ -316,14 +368,25 @@ export function DocDetail({ doc, attachments, canEdit }: DocDetailProps) {
       <Dialog open={isDeleting} onOpenChange={setIsDeleting}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-copy-primary">Delete this doc?</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-copy-primary">
+              Delete this doc?
+            </DialogTitle>
             <DialogDescription>This can&apos;t be undone.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setIsDeleting(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setIsDeleting(false)}
+            >
               Cancel
             </Button>
-            <Button type="button" variant="destructive" disabled={isSaving} onClick={deleteDoc}>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={isSaving}
+              onClick={deleteDoc}
+            >
               <Trash2 className="h-3.5 w-3.5" /> Delete
             </Button>
           </DialogFooter>

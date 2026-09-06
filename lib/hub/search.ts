@@ -111,32 +111,45 @@ export async function recommendations(viewer: Viewer) {
     }),
     getNeedsYouToday(viewer.memberId),
   ]);
-  const needs = [];
-  for (const item of urgent) {
-    if (!item.action || item.kind === "AWAITING_YOU") continue;
-    const record = await visibleRecord(viewer, item.id);
-    if (
-      record &&
+  const actionable = urgent.filter(
+    (item) =>
+      item.action &&
       (item.kind === "OVERDUE_TASK" ||
         item.kind === "UNPAID_PENALTY" ||
-        item.kind === "MEETING_SOON")
-    )
-      needs.push({
-        id: record.id,
-        title: record.title,
-        body: item.detail,
-        entityType: record.entityType,
-        status: record.status,
-        url: recordUrl(record.id),
-      });
-    if (needs.length === 3) break;
-  }
-  const allowedRecents = [];
-  for (const recent of recents)
-    if (await visibleRecord(viewer, recent.recordId))
-      allowedRecents.push(recent);
+        item.kind === "MEETING_SOON"),
+  );
+  const visibleNeeds = await prisma.hubRecord.findMany({
+    where: {
+      id: { in: actionable.map((item) => item.id) },
+      ...recordWhere(viewer),
+    },
+    include: { grants: true },
+  });
+  const recordsById = new Map(
+    visibleNeeds
+      .filter((record) => canSee(viewer, record.orgId, record.grants))
+      .map((record) => [record.id, record]),
+  );
+  const needs = actionable.flatMap((item) => {
+    const record = recordsById.get(item.id);
+    return record
+      ? [
+          {
+            id: record.id,
+            title: record.title,
+            body: item.detail,
+            entityType: record.entityType,
+            status: record.status,
+            url: recordUrl(record.id),
+          },
+        ]
+      : [];
+  }).slice(0, 3);
   return {
-    recents: allowedRecents.map(({ record }) => ({
+    // The relation filter above evaluates visibility in the same database
+    // statement that returns the records, so a per-row recheck only added an
+    // N+1 query without closing a revocation window.
+    recents: recents.map(({ record }) => ({
       id: record.id,
       title: record.title,
       body: record.body.slice(0, 160),

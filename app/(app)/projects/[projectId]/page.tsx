@@ -4,7 +4,6 @@ import { requireWorkspacePage as requireWorkspaceSession } from "@/lib/hub/conte
 import { prisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
 import { getMemberPickerOptions } from "@/lib/members";
-import { requireProjectAccess } from "@/lib/project-access";
 import { PROJECT_INCLUDE, serializeProject } from "@/lib/projects";
 import { AccessDenied } from "@/components/shared/access-denied";
 import { ProjectDetail } from "@/components/projects/project-detail";
@@ -16,28 +15,29 @@ export default async function ProjectDetailPage({
 }) {
   await requireWorkspaceSession();
 
-  const { projectId } = await params;
-  const member = await getCurrentMember();
-
-  const access = await requireProjectAccess(projectId, member);
-  if (!access) {
-    return <AccessDenied backHref="/projects" backLabel="Back to Projects" />;
-  }
-
-  const [projectRecord, allMembers] = await Promise.all([
-    prisma.project.findUnique({
-      where: {
-        ...{ id: projectId },
-        AND: [await entityVisibilityWhere("project")],
-      },
-      include: PROJECT_INCLUDE,
-    }),
+  const [{ projectId }, member, visibility, allMembers] = await Promise.all([
+    params,
+    getCurrentMember(),
+    entityVisibilityWhere("project"),
     getMemberPickerOptions(),
   ]);
+  const projectRecord = await prisma.project.findUnique({
+    where: { id: projectId, AND: [visibility] },
+    include: PROJECT_INCLUDE,
+  });
 
-  // Shouldn't happen — requireProjectAccess already confirmed the project
-  // exists — but the type system doesn't know that.
   if (!projectRecord) {
+    return <AccessDenied backHref="/projects" backLabel="Back to Projects" />;
+  }
+  const access =
+    projectRecord.ownerId === member.id
+      ? "owner"
+      : projectRecord.members.some(({ member: collaborator }) =>
+            collaborator.id === member.id
+          )
+        ? "collaborator"
+        : null;
+  if (!access) {
     return <AccessDenied backHref="/projects" backLabel="Back to Projects" />;
   }
 

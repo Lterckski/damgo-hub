@@ -1,7 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { ArrowDown, ArrowUp, ChevronsUpDown, Columns3, Download, Search } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronsUpDown,
+  Columns3,
+  Download,
+  Search,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -91,6 +98,8 @@ interface DataTableProps<Row> {
   pendingIds: Set<string>;
 }
 
+const PAGE_SIZE = 50;
+
 export function DataTable<Row>({
   rows,
   config,
@@ -101,18 +110,38 @@ export function DataTable<Row>({
   pendingIds,
 }: DataTableProps<Row>) {
   const [query, setQuery] = React.useState("");
-  const [sort, setSort] = React.useState<{ columnId: string; direction: "asc" | "desc" } | null>(null);
+  const [sort, setSort] = React.useState<{
+    columnId: string;
+    direction: "asc" | "desc";
+  } | null>(null);
   const [hiddenColumns, setHiddenColumns] = React.useState<Set<string>>(
-    () => new Set(config.columns.filter((c) => c.defaultVisible === false).map((c) => c.id)),
+    () =>
+      new Set(
+        config.columns
+          .filter((c) => c.defaultVisible === false)
+          .map((c) => c.id),
+      ),
   );
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
+
+  const [page, setPage] = React.useState(0);
+  const [exporting, setExporting] = React.useState(false);
+  const [exportError, setExportError] = React.useState<string | null>(null);
+  const [lastFilterId, setLastFilterId] = React.useState(activeFilterId);
+  if (lastFilterId !== activeFilterId) {
+    setLastFilterId(activeFilterId);
+    setPage(0);
+  }
 
   // No reset-on-config effect: the console gives each tab's table its own
   // `key`, so switching tabs remounts this component and every piece of
   // state above starts fresh. A column id from the previous tab can never
   // survive into a config that doesn't have it.
-  const visibleColumns = config.columns.filter((column) => !hiddenColumns.has(column.id));
-  const activeFilter = config.filters.find((filter) => filter.id === activeFilterId) ?? null;
+  const visibleColumns = config.columns.filter(
+    (column) => !hiddenColumns.has(column.id),
+  );
+  const activeFilter =
+    config.filters.find((filter) => filter.id === activeFilterId) ?? null;
 
   const visibleRows = React.useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -120,7 +149,9 @@ export function DataTable<Row>({
 
     if (activeFilter) result = result.filter(activeFilter.predicate);
     if (needle) {
-      result = result.filter((row) => config.searchText(row).toLowerCase().includes(needle));
+      result = result.filter((row) =>
+        config.searchText(row).toLowerCase().includes(needle),
+      );
     }
 
     if (sort) {
@@ -147,10 +178,21 @@ export function DataTable<Row>({
   // action must never act on rows the filter hid. Widening the filter
   // again brings those rows back still selected, which is what someone
   // toggling a filter mid-selection expects.
-  const selectedIds = visibleRows.map(config.rowId).filter((id) => selected.has(id));
-  const allVisibleSelected = visibleRows.length > 0 && selectedIds.length === visibleRows.length;
+  const selectedIds = visibleRows
+    .map(config.rowId)
+    .filter((id) => selected.has(id));
+  const allVisibleSelected =
+    visibleRows.length > 0 && selectedIds.length === visibleRows.length;
+
+  const pageCount = Math.max(1, Math.ceil(visibleRows.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount - 1);
+  const pageRows = visibleRows.slice(
+    currentPage * PAGE_SIZE,
+    (currentPage + 1) * PAGE_SIZE,
+  );
 
   function toggleSort(columnId: string) {
+    setPage(0);
     setSort((current) => {
       if (current?.columnId !== columnId) return { columnId, direction: "asc" };
       if (current.direction === "asc") return { columnId, direction: "desc" };
@@ -158,30 +200,52 @@ export function DataTable<Row>({
     });
   }
 
-  function exportCsv() {
-    const columns = visibleColumns.filter((column) => column.csvValue ?? column.sortValue);
-    const source = selected.size > 0 ? visibleRows.filter((row) => selected.has(config.rowId(row))) : visibleRows;
-
-    downloadCsv(
-      `${config.exportName}-${new Date().toISOString().slice(0, 10)}.csv`,
-      columns.map((column) => column.header),
-      source.map((row) =>
-        columns.map((column) => {
-          if (column.csvValue) return column.csvValue(row);
-          return column.sortValue ? column.sortValue(row) : null;
-        }),
-      ),
+  async function exportCsv() {
+    setExporting(true);
+    setExportError(null);
+    const columns = visibleColumns.filter(
+      (column) => column.csvValue ?? column.sortValue,
     );
+    // Iterate all matching rows, not just this page. Projection runs inside
+    // the export's time slices, not in a synchronous source.map on click.
+    function* csvRows() {
+      for (const row of visibleRows) {
+        if (selectedIds.length > 0 && !selected.has(config.rowId(row)))
+          continue;
+        yield columns.map((column) =>
+          column.csvValue
+            ? column.csvValue(row)
+            : column.sortValue
+              ? column.sortValue(row)
+              : null,
+        );
+      }
+    }
+    try {
+      await downloadCsv(
+        `${config.exportName}-${new Date().toISOString().slice(0, 10)}.csv`,
+        columns.map((column) => column.header),
+        csvRows(),
+      );
+    } catch {
+      setExportError("Export failed. Please try again.");
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
     <div className="overflow-hidden rounded-2xl bg-surface ring-1 ring-surface-border">
       <div className="flex flex-wrap items-center gap-2 border-b border-surface-border px-4 py-3">
-        <div className="relative min-w-48 flex-1">
+        <div className="relative min-w-0 basis-full sm:basis-auto sm:min-w-48 flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-copy-faint" />
           <Input
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(0);
+            }}
+            aria-label="Filter records"
             placeholder="Filter these rows…"
             className="h-9 pl-9 text-copy-primary!"
           />
@@ -200,7 +264,9 @@ export function DataTable<Row>({
               key={filter.id}
               size="sm"
               variant={activeFilterId === filter.id ? "default" : "outline"}
-              onClick={() => onFilterChange(activeFilterId === filter.id ? null : filter.id)}
+              onClick={() =>
+                onFilterChange(activeFilterId === filter.id ? null : filter.id)
+              }
             >
               {filter.label}
             </Button>
@@ -232,22 +298,38 @@ export function DataTable<Row>({
                   });
                 }}
               >
-                <Checkbox checked={!hiddenColumns.has(column.id)} className="mr-2" />
+                <Checkbox
+                  checked={!hiddenColumns.has(column.id)}
+                  className="mr-2"
+                />
                 {column.header}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Button size="sm" variant="outline" onClick={exportCsv} disabled={visibleRows.length === 0}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={exportCsv}
+          disabled={visibleRows.length === 0 || exporting}
+        >
           <Download className="h-4 w-4" />
-          Export
+          {exporting ? "Exporting…" : "Export"}
         </Button>
       </div>
 
+      {exportError && (
+        <p role="alert" className="px-4 py-2 text-sm text-error">
+          {exportError}
+        </p>
+      )}
+
       {selectedIds.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-b border-surface-border bg-accent-dim px-4 py-2.5">
-          <p className="text-sm font-semibold text-copy-primary">{selectedIds.length} selected</p>
+          <p className="text-sm font-semibold text-copy-primary">
+            {selectedIds.length} selected
+          </p>
           <div className="ml-auto flex flex-wrap gap-2">
             {config.bulkActions.map((action) => (
               <Button
@@ -259,7 +341,11 @@ export function DataTable<Row>({
                 {action.label}
               </Button>
             ))}
-            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelected(new Set())}
+            >
               Clear
             </Button>
           </div>
@@ -269,7 +355,9 @@ export function DataTable<Row>({
       {visibleRows.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center">
           <p className="text-sm font-semibold text-copy-primary">
-            {query || activeFilter ? "Nothing matches those filters" : config.emptyState.title}
+            {query || activeFilter
+              ? "Nothing matches those filters"
+              : config.emptyState.title}
           </p>
           <p className="max-w-sm text-sm text-copy-secondary">
             {query || activeFilter
@@ -283,6 +371,7 @@ export function DataTable<Row>({
               className="mt-2"
               onClick={() => {
                 setQuery("");
+                setPage(0);
                 onFilterChange(null);
               }}
             >
@@ -291,7 +380,15 @@ export function DataTable<Row>({
           )}
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div
+          tabIndex={0}
+          role="region"
+          aria-label="Admin records; scroll horizontally for more columns"
+          className="overflow-x-auto"
+        >
+          <p className="px-3 py-2 text-xs text-copy-secondary sm:hidden">
+            Scroll sideways for more columns.
+          </p>
           <Table>
             <TableHeader>
               <TableRow>
@@ -300,10 +397,12 @@ export function DataTable<Row>({
                     checked={allVisibleSelected}
                     onCheckedChange={() =>
                       setSelected(
-                        allVisibleSelected ? new Set() : new Set(visibleRows.map(config.rowId)),
+                        allVisibleSelected
+                          ? new Set()
+                          : new Set(visibleRows.map(config.rowId)),
                       )
                     }
-                    aria-label="Select all rows"
+                    aria-label="Select all matching rows"
                   />
                 </TableHead>
                 {visibleColumns.map((column) => (
@@ -333,7 +432,7 @@ export function DataTable<Row>({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visibleRows.map((row) => {
+              {pageRows.map((row) => {
                 const id = config.rowId(row);
                 return (
                   <TableRow
@@ -363,7 +462,10 @@ export function DataTable<Row>({
                       />
                     </TableCell>
                     {visibleColumns.map((column) => (
-                      <TableCell key={column.id} className={column.cellClassName}>
+                      <TableCell
+                        key={column.id}
+                        className={column.cellClassName}
+                      >
                         {column.cell(row)}
                       </TableCell>
                     ))}
@@ -373,6 +475,36 @@ export function DataTable<Row>({
             </TableBody>
           </Table>
         </div>
+      )}
+      {visibleRows.length > 0 && (
+        <nav
+          aria-label="Records pages"
+          className="flex flex-wrap items-center justify-between gap-2 border-t border-surface-border px-4 py-3"
+        >
+          <p className="text-sm text-copy-secondary" role="status">
+            {currentPage * PAGE_SIZE + 1}–
+            {Math.min((currentPage + 1) * PAGE_SIZE, visibleRows.length)} of{" "}
+            {visibleRows.length} records
+          </p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={currentPage === 0}
+              onClick={() => setPage(currentPage - 1)}
+            >
+              Previous page
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={currentPage === pageCount - 1}
+              onClick={() => setPage(currentPage + 1)}
+            >
+              Next page
+            </Button>
+          </div>
+        </nav>
       )}
     </div>
   );

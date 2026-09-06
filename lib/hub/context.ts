@@ -2,7 +2,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
-import { listOrgRoles } from "@/lib/organization-roles";
+import { getCurrentMember } from "@/lib/member-session";
 import { isDevViewingAsMember } from "@/lib/current-member";
 import type { Viewer } from "./visibility";
 import { recordWhere } from "./visibility";
@@ -23,11 +23,11 @@ export const requireWorkspaceSession = cache(async () => {
   if (!session.userId) throw new HubAccessError("Sign in to continue", 401);
   if (!session.orgId)
     throw new HubAccessError("Select your Damgo Hub organization", 403);
-  const client = await clerkClient();
   let workspace = await prisma.hubWorkspace.findUnique({
     where: { id: "singleton" },
   });
   if (!workspace) {
+    const client = await clerkClient();
     const leader = await prisma.member.findFirst({ where: { isLeader: true } });
     if (!leader)
       throw new HubAccessError(
@@ -77,22 +77,13 @@ export const requireWorkspaceSession = cache(async () => {
     throw new HubAccessError(
       "This organization is not connected to this workspace",
     );
-  const membership = await client.organizations.getOrganizationMembershipList({
-    organizationId: session.orgId,
-    userId: [session.userId],
-    limit: 1,
-  });
-  const current = membership.data.find(
-    (m) => m.publicUserData?.userId === session.userId,
-  );
-  if (!current)
+  if (!session.orgRole)
     throw new HubAccessError("You are no longer a member of this organization");
-  // Recover safely if the first bootstrap was interrupted after binding.
-  await prisma.hubRecord.updateMany({
-    where: { orgId: "" },
-    data: { orgId: workspace.orgId },
-  });
-  return { userId: session.userId, orgId: session.orgId, role: current.role };
+  return {
+    userId: session.userId,
+    orgId: session.orgId,
+    role: session.orgRole,
+  };
 });
 
 export async function requireWorkspacePage() {
@@ -106,35 +97,10 @@ export async function requireWorkspacePage() {
 }
 
 export const getHubViewer = cache(async (): Promise<Viewer> => {
-  const session = await requireWorkspaceSession();
-  const roles = await listOrgRoles();
-  const members = await prisma.member.findMany({
-    where: {
-      clerkUserId: { in: [...roles.keys()] },
-      status: { not: "REMOVED" },
-    },
-    select: { id: true, clerkUserId: true },
-  });
-  const member = members.find((m) => m.clerkUserId === session.userId);
-  if (!member) throw new HubAccessError("Your member profile is unavailable");
-  await prisma.$transaction([
-    prisma.hubMembership.deleteMany({
-      where: {
-        orgId: session.orgId,
-        memberId: { notIn: members.map((m) => m.id) },
-      },
-    }),
-    ...members.map((m) =>
-      prisma.hubMembership.upsert({
-        where: { memberId: m.id },
-        create: {
-          memberId: m.id,
-          orgId: session.orgId,
-          role: roles.get(m.clerkUserId)!,
-        },
-        update: { orgId: session.orgId, role: roles.get(m.clerkUserId)! },
-      }),
-    ),
+  const [session, member, viewingAsMember] = await Promise.all([
+    requireWorkspaceSession(),
+    getCurrentMember(),
+    isDevViewingAsMember(),
   ]);
   const projects = await prisma.project.findMany({
     where: {
@@ -148,14 +114,18 @@ export const getHubViewer = cache(async (): Promise<Viewer> => {
   return {
     orgId: session.orgId,
     memberId: member.id,
-    role: (await isDevViewingAsMember()) ? "org:member" : session.role,
+    role: viewingAsMember ? "org:member" : session.role,
     projectIds: projects.map((p) => p.id),
   };
 });
 
 export async function hubApiGuard(): Promise<Response | null> {
   try {
-    await getHubViewer();
+    // API routes only need the deployment/org boundary here. Routes that
+    // read scoped records resolve getHubViewer() through their visibility
+    // helper, while routes without scoped records avoid roster sync and a
+    // project lookup on every request.
+    await requireWorkspaceSession();
     return null;
   } catch (error) {
     if (error instanceof HubAccessError)
@@ -179,6 +149,27 @@ export async function entityVisibilityWhere(entityType: string) {
     select: { entityId: true },
   });
   return { id: { in: records.map((r) => r.entityId) } };
+}
+
+/** Resolve several entity scopes with one HubRecord query. */
+export async function entityVisibilityWheres(entityTypes: readonly string[]) {
+  const viewer = await getHubViewer();
+  const records = await prisma.hubRecord.findMany({
+    where: {
+      ...recordWhere(viewer),
+      entityType: { in: [...new Set(entityTypes)] },
+    },
+    select: { entityId: true, entityType: true },
+  });
+  const ids = new Map<string, string[]>();
+  for (const entityType of entityTypes) ids.set(entityType, []);
+  for (const record of records) ids.get(record.entityType)?.push(record.entityId);
+  return Object.fromEntries(
+    entityTypes.map((entityType) => [
+      entityType,
+      { id: { in: ids.get(entityType) ?? [] } },
+    ]),
+  ) as Record<string, { id: { in: string[] } }>;
 }
 
 export async function activityVisibilityWhere() {

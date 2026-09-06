@@ -6,6 +6,7 @@ import { visibleRecord } from "@/lib/hub/search";
 import { RecordOpenTracker } from "@/components/chrome/record-open-tracker";
 import { RecordActions } from "@/components/chrome/record-actions";
 import { MarkdownContent } from "@/components/docs/markdown-content";
+import { getMemberPickerOptions } from "@/lib/members";
 
 export default async function RecordPage({
   params,
@@ -17,25 +18,20 @@ export default async function RecordPage({
   const { recordId } = await params;
   const record = await visibleRecord(viewer, recordId);
   if (!record) notFound();
-  const comments = await prisma.hubComment.findMany({
-    where: { recordId },
-    orderBy: { createdAt: "asc" },
-    take: 100,
-  });
-  const memberships = await prisma.hubMembership.findMany({
-    where: { orgId: viewer.orgId },
-  });
-  const members = await prisma.member.findMany({
-    where: { id: { in: memberships.map((m) => m.memberId) } },
-    select: { id: true, displayName: true },
-  });
-  const milestones =
+  const [comments, members, milestones] = await Promise.all([
+    prisma.hubComment.findMany({
+      where: { recordId },
+      orderBy: { createdAt: "asc" },
+      take: 100,
+    }),
+    getMemberPickerOptions(),
     record.entityType === "project"
-      ? await prisma.projectMilestone.findMany({
+      ? prisma.projectMilestone.findMany({
           where: { projectId: record.entityId },
           orderBy: { dueAt: "asc" },
         })
-      : [];
+      : Promise.resolve([]),
+  ]);
   const destinations: Record<string, string> = {
     task: `/tasks?task=${record.entityId}`,
     penalty: "/penalties",

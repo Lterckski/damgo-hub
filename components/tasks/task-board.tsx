@@ -1,7 +1,7 @@
 "use client";
 import { useSearchParams } from "next/navigation";
 
-import { useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { FolderKanban } from "lucide-react";
 
@@ -132,7 +132,7 @@ interface TaskColumnsProps {
   onOpenTask: (task: SerializedTask) => void;
 }
 
-function TaskColumns({ tasks, onOpenTask }: TaskColumnsProps) {
+const TaskColumns = memo(function TaskColumns({ tasks, onOpenTask }: TaskColumnsProps) {
   const groups = groupByStatus(tasks);
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -169,7 +169,7 @@ function TaskColumns({ tasks, onOpenTask }: TaskColumnsProps) {
       ))}
     </div>
   );
-}
+});
 
 export function TaskBoard({
   tasks,
@@ -184,9 +184,9 @@ export function TaskBoard({
     () => tasks.find((task) => task.id === params.get("task")) ?? null,
   );
 
-  const myTasks = tasks.filter((t) =>
+  const myTasks = useMemo(() => tasks.filter((t) =>
     t.assignees.some((a) => a.id === currentMemberId),
-  );
+  ), [tasks, currentMemberId]);
 
   return (
     <div className="space-y-4">

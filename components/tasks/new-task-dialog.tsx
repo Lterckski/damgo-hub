@@ -228,7 +228,7 @@ export function NewTaskDialog({
                 {error}
               </p>
             )}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={FIELD_LABEL_CLASS}>
                   Title <span className="text-error">*</span>
@@ -287,7 +287,7 @@ export function NewTaskDialog({
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <DateTimePicker
                 label="Start"
                 value={startDate}
@@ -321,7 +321,7 @@ export function NewTaskDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={FIELD_LABEL_CLASS}>Project (optional)</label>
                 <Select
@@ -404,7 +404,7 @@ export function NewTaskDialog({
                       Members of the selected project
                     </label>
                   )}
-                  <div className="grid max-h-32 grid-cols-3 gap-2 overflow-y-auto border-t border-surface-border-subtle pt-2">
+                  <div className="grid max-h-32 grid-cols-1 sm:grid-cols-3 gap-2 overflow-y-auto border-t border-surface-border-subtle pt-2">
                     {members.map((m) => (
                       <label
                         key={m.id}

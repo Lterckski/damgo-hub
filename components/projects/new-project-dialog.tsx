@@ -30,12 +30,17 @@ import {
   type ProjectMemberOption,
 } from "@/lib/projects";
 
-const FIELD_LABEL_CLASS = "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
+const FIELD_LABEL_CLASS =
+  "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
 
 // See new-task-dialog.tsx's comment — <Select.Value> needs an `items` map
 // to show a label instead of the raw value before the popup has opened.
-const PRIORITY_ITEMS = Object.fromEntries(PROJECT_PRIORITY_OPTIONS.map((o) => [o.value, o.label]));
-const CATEGORY_ITEMS = Object.fromEntries(PROJECT_CATEGORY_OPTIONS.map((o) => [o.value, o.label]));
+const PRIORITY_ITEMS = Object.fromEntries(
+  PROJECT_PRIORITY_OPTIONS.map((o) => [o.value, o.label]),
+);
+const CATEGORY_ITEMS = Object.fromEntries(
+  PROJECT_CATEGORY_OPTIONS.map((o) => [o.value, o.label]),
+);
 
 interface NewProjectDialogProps {
   members: ProjectMemberOption[];
@@ -53,7 +58,10 @@ interface DraftLink {
  * Objectives, Team Lead/Team Members — rather than one long single-column
  * stack, per the user's explicit request to fit more on one screen.
  */
-export function NewProjectDialog({ members, currentMemberId }: NewProjectDialogProps) {
+export function NewProjectDialog({
+  members,
+  currentMemberId,
+}: NewProjectDialogProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -71,7 +79,10 @@ export function NewProjectDialog({ members, currentMemberId }: NewProjectDialogP
   const [links, setLinks] = useState<DraftLink[]>([]);
 
   const ownerItems = Object.fromEntries(
-    members.map((m) => [m.id, m.id === currentMemberId ? `${m.displayName} (you)` : m.displayName]),
+    members.map((m) => [
+      m.id,
+      m.id === currentMemberId ? `${m.displayName} (you)` : m.displayName,
+    ]),
   );
 
   function reset() {
@@ -98,11 +109,16 @@ export function NewProjectDialog({ members, currentMemberId }: NewProjectDialogP
   }
 
   function addLink() {
-    setLinks((prev) => [...prev, { key: crypto.randomUUID(), label: "", url: "" }]);
+    setLinks((prev) => [
+      ...prev,
+      { key: crypto.randomUUID(), label: "", url: "" },
+    ]);
   }
 
   function updateLink(key: string, patch: Partial<DraftLink>) {
-    setLinks((prev) => prev.map((link) => (link.key === key ? { ...link, ...patch } : link)));
+    setLinks((prev) =>
+      prev.map((link) => (link.key === key ? { ...link, ...patch } : link)),
+    );
   }
 
   function removeLink(key: string) {
@@ -157,9 +173,12 @@ export function NewProjectDialog({ members, currentMemberId }: NewProjectDialogP
       >
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-copy-primary">New Proposal</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-copy-primary">
+              New Proposal
+            </DialogTitle>
             <DialogDescription>
-              Only the name is required — fill in as much or as little else as you have right now.
+              Only the name is required — fill in as much or as little else as
+              you have right now.
             </DialogDescription>
           </DialogHeader>
 
@@ -176,9 +195,11 @@ export function NewProjectDialog({ members, currentMemberId }: NewProjectDialogP
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className={FIELD_LABEL_CLASS}>Description (optional)</label>
+                <label className={FIELD_LABEL_CLASS}>
+                  Description (optional)
+                </label>
                 <Textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -187,7 +208,9 @@ export function NewProjectDialog({ members, currentMemberId }: NewProjectDialogP
                 />
               </div>
               <div>
-                <label className={FIELD_LABEL_CLASS}>Objectives (optional)</label>
+                <label className={FIELD_LABEL_CLASS}>
+                  Objectives (optional)
+                </label>
                 <Textarea
                   value={objectives}
                   onChange={(e) => setObjectives(e.target.value)}
@@ -200,7 +223,7 @@ export function NewProjectDialog({ members, currentMemberId }: NewProjectDialogP
 
             {/* Timeline + Priority + Category */}
             <div className="rounded-xl border border-surface-border-subtle p-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <DateTimePicker
                   label="Proposed Start (optional)"
                   value={startDate}
@@ -215,7 +238,11 @@ export function NewProjectDialog({ members, currentMemberId }: NewProjectDialogP
                 />
                 <div>
                   <label className={FIELD_LABEL_CLASS}>Priority</label>
-                  <Select items={PRIORITY_ITEMS} value={priority} onValueChange={(v) => v && setPriority(v)}>
+                  <Select
+                    items={PRIORITY_ITEMS}
+                    value={priority}
+                    onValueChange={(v) => v && setPriority(v)}
+                  >
                     <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
@@ -229,8 +256,14 @@ export function NewProjectDialog({ members, currentMemberId }: NewProjectDialogP
                   </Select>
                 </div>
                 <div>
-                  <label className={FIELD_LABEL_CLASS}>Category (optional)</label>
-                  <Select items={CATEGORY_ITEMS} value={category} onValueChange={(v) => setCategory(v ?? "")}>
+                  <label className={FIELD_LABEL_CLASS}>
+                    Category (optional)
+                  </label>
+                  <Select
+                    items={CATEGORY_ITEMS}
+                    value={category}
+                    onValueChange={(v) => setCategory(v ?? "")}
+                  >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="None" />
                     </SelectTrigger>
@@ -247,34 +280,49 @@ export function NewProjectDialog({ members, currentMemberId }: NewProjectDialogP
             </div>
 
             {/* Team Lead + Team Members */}
-            <div className="grid grid-cols-2 gap-4 rounded-xl border border-surface-border-subtle p-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-xl border border-surface-border-subtle p-3">
               <div>
                 <label className={FIELD_LABEL_CLASS}>Team Lead</label>
-                <Select items={ownerItems} value={ownerId} onValueChange={(v) => v && setOwnerId(v)}>
+                <Select
+                  items={ownerItems}
+                  value={ownerId}
+                  onValueChange={(v) => v && setOwnerId(v)}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {members.map((m) => (
                       <SelectItem key={m.id} value={m.id}>
-                        {m.id === currentMemberId ? `${m.displayName} (you)` : m.displayName}
+                        {m.id === currentMemberId
+                          ? `${m.displayName} (you)`
+                          : m.displayName}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 <p className="mt-1 text-xs text-copy-secondary">
-                  Defaults to you. Gets full edit/delete/collaborator-management access.
+                  Defaults to you. Gets full edit/delete/collaborator-management
+                  access.
                 </p>
               </div>
 
               <div>
-                <p className={FIELD_LABEL_CLASS}>Team Members / Collaborators (optional)</p>
+                <p className={FIELD_LABEL_CLASS}>
+                  Team Members / Collaborators (optional)
+                </p>
                 <div className="grid max-h-28 gap-2 overflow-y-auto rounded-lg border border-surface-border-subtle p-2">
                   {members
                     .filter((m) => m.id !== ownerId)
                     .map((m) => (
-                      <label key={m.id} className="flex items-center gap-2 text-sm text-copy-primary">
-                        <Checkbox checked={memberIds.includes(m.id)} onCheckedChange={() => toggleMember(m.id)} />
+                      <label
+                        key={m.id}
+                        className="flex items-center gap-2 text-sm text-copy-primary"
+                      >
+                        <Checkbox
+                          checked={memberIds.includes(m.id)}
+                          onCheckedChange={() => toggleMember(m.id)}
+                        />
                         {m.displayName}
                       </label>
                     ))}
@@ -287,9 +335,11 @@ export function NewProjectDialog({ members, currentMemberId }: NewProjectDialogP
               <p className="mb-3 text-xs font-bold tracking-wide text-copy-faint uppercase">
                 Optional details
               </p>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={FIELD_LABEL_CLASS}>Estimated Budget (PHP)</label>
+                  <label className={FIELD_LABEL_CLASS}>
+                    Estimated Budget (PHP)
+                  </label>
                   <Input
                     type="number"
                     min="0"
@@ -302,7 +352,12 @@ export function NewProjectDialog({ members, currentMemberId }: NewProjectDialogP
                 </div>
                 <div>
                   <label className={FIELD_LABEL_CLASS}>Supporting Links</label>
-                  <Button type="button" variant="outline" size="sm" onClick={addLink}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addLink}
+                  >
                     <Plus className="h-3.5 w-3.5" /> Add Link
                   </Button>
                 </div>
@@ -314,13 +369,17 @@ export function NewProjectDialog({ members, currentMemberId }: NewProjectDialogP
                     <div key={link.key} className="flex items-center gap-2">
                       <Input
                         value={link.label}
-                        onChange={(e) => updateLink(link.key, { label: e.target.value })}
+                        onChange={(e) =>
+                          updateLink(link.key, { label: e.target.value })
+                        }
                         placeholder="Label"
                         className="w-1/3 text-copy-primary!"
                       />
                       <Input
                         value={link.url}
-                        onChange={(e) => updateLink(link.key, { url: e.target.value })}
+                        onChange={(e) =>
+                          updateLink(link.key, { url: e.target.value })
+                        }
                         placeholder="https://…"
                         className="flex-1 text-copy-primary!"
                       />
@@ -339,10 +398,18 @@ export function NewProjectDialog({ members, currentMemberId }: NewProjectDialogP
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setIsOpen(false)}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setIsOpen(false)}
+              >
                 Cancel
               </Button>
-              <Button type="button" disabled={isSubmitting || name.trim() === ""} onClick={createProject}>
+              <Button
+                type="button"
+                disabled={isSubmitting || name.trim() === ""}
+                onClick={createProject}
+              >
                 Create Proposal
               </Button>
             </DialogFooter>

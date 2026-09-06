@@ -21,7 +21,7 @@ const FEATURES = [
  */
 export function AuthSplitLayout({ children }: AuthSplitLayoutProps) {
   return (
-    <div className="flex min-h-screen bg-base">
+    <div className="flex min-h-dvh bg-base">
       <div className="relative hidden w-full max-w-md flex-col justify-center gap-8 overflow-hidden border-r border-surface-border bg-surface px-12 lg:flex">
         <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand to-collab" />
         <div>
@@ -42,7 +42,10 @@ export function AuthSplitLayout({ children }: AuthSplitLayoutProps) {
         </div>
         <ul className="space-y-3">
           {FEATURES.map((feature) => (
-            <li key={feature} className="flex items-center gap-2.5 text-sm font-medium text-copy-primary">
+            <li
+              key={feature}
+              className="flex items-center gap-2.5 text-sm font-medium text-copy-primary"
+            >
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-dim text-brand">
                 <Check className="h-3 w-3" />
               </span>
@@ -51,7 +54,7 @@ export function AuthSplitLayout({ children }: AuthSplitLayoutProps) {
           ))}
         </ul>
       </div>
-      <div className="flex flex-1 items-center justify-center p-6">
+      <div className="flex min-w-0 flex-1 items-start justify-center px-2 py-6 sm:items-center sm:p-6">
         {children}
       </div>
     </div>

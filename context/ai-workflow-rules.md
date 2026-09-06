@@ -53,8 +53,24 @@ Update the relevant context file whenever implementation changes:
 
 Progress state must reflect the actual state of the implementation, not the intended state.
 
+## Mobile Browser Verification
+
+Mobile-browser friendliness is a project-wide acceptance requirement, not a later enhancement. Apply it to existing-feature repairs and new work, including admin and collaborative board flows.
+
+1. Review the affected flow at representative phone widths (320, 375/390, and 430 CSS pixels), tablet width, and desktop width. Check portrait and landscape, long content, empty/error states, and menu/dialog transitions.
+2. Verify touch navigation, field entry, file selection where relevant, on-screen keyboard behavior, safe-area spacing, and reachable submit/dismiss controls. For boards, include pan/zoom, selection, editing, and available connection actions. Retain desktop mouse and keyboard behavior.
+3. Validate relevant authenticated member/admin flows in iOS Safari and Android Chrome. Responsive desktop emulation is useful for layout checks but does not establish device keyboard, browser chrome, upload, or touch behavior by itself.
+4. Record tested browser/device or emulation environment, checked flows, and remaining gaps in `progress-tracker.md`. If browser/device testing is unavailable, state that limitation and leave the affected mobile verification pending; passing a build or unit tests does not establish mobile readiness. Continue independent implementation and checks without adding an approval gate.
+
+Use [mobile browser issues](current-issues/current-issues-mobile-browser.md) for the existing backlog. Documentation-only changes require link/diff checks, not an application build or a claim of device testing.
+
 ## Before Moving To The Next Unit
 
 1. The current unit works end to end within its defined scope.
 2. No invariant defined in `architecture-context.md` was violated.
 3. `progress-tracker.md` reflects the completed work.
+4. Changed UI satisfies the mobile requirements, with verification evidence recorded; unresolved mobile defects or unavailable device checks remain explicitly pending.
+
+## Current performance observation hold
+
+The user requested one week of real Core Web Vitals data before further optimization. Add/verify the RUM instrumentation, deploy through the normal workflow, and record the actual collection start. Do not refactor interaction behavior further during the observation week unless the user changes this instruction. Earlier local improvements remain in place; do not silently revert or deploy them as part of monitoring. Review sample counts, release boundaries and device coverage alongside p75. [Observation runbook](current-issues/current-issues-real-user-monitoring.md).

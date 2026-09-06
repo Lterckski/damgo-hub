@@ -390,7 +390,9 @@ export async function getVisibleMeetingCalendarItems(
   memberId: string,
   isAdmin: boolean,
   range?: { gte: Date; lte: Date },
+  visibleMeetings?: { id: { in: string[] } },
 ): Promise<UnifiedCalendarItem[]> {
+  const visibility = visibleMeetings ?? (await entityVisibilityWhere("meeting"));
   const meetings = await prisma.meeting.findMany({
     where: {
       ...{
@@ -405,7 +407,7 @@ export async function getVisibleMeetingCalendarItems(
             }
           : {}),
       },
-      AND: [await entityVisibilityWhere("meeting")],
+      AND: [visibility],
     },
     select: { id: true, title: true, scheduledAt: true, endsAt: true },
     orderBy: { scheduledAt: "asc" },

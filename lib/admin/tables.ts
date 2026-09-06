@@ -1,5 +1,4 @@
-import { entityVisibilityWhere } from "@/lib/hub/context";
-import { taskVisibilityWhere } from "@/lib/hub/context";
+import { entityVisibilityWheres } from "@/lib/hub/context";
 import { prisma } from "@/lib/prisma";
 import { listOrgRoles } from "@/lib/organization-roles";
 import { getOrgSettings } from "@/lib/org-settings";
@@ -111,13 +110,21 @@ export interface AdminTableData {
 }
 
 export async function getAdminTableData(): Promise<AdminTableData> {
-  const settings = await getOrgSettings();
+  const [settings, orgRoles, visibility] = await Promise.all([
+    getOrgSettings(),
+    listOrgRoles(),
+    entityVisibilityWheres([
+      "task",
+      "transaction",
+      "penalty",
+      "project",
+      "meeting",
+    ]),
+  ]);
   const now = new Date();
   const staleBefore = new Date(
     now.getTime() - settings.projectStaleDays * 24 * 60 * 60 * 1000,
   );
-
-  const orgRoles = await listOrgRoles();
 
   const [members, transactions, penalties, projects, tasks, meetings] =
     await Promise.all([
@@ -135,7 +142,7 @@ export async function getAdminTableData(): Promise<AdminTableData> {
           taskAssignments: {
             where: {
               task: {
-                AND: [await taskVisibilityWhere(), { status: { not: "DONE" } }],
+                AND: [visibility.task, { status: { not: "DONE" } }],
               },
             },
             select: { id: true },
@@ -144,12 +151,12 @@ export async function getAdminTableData(): Promise<AdminTableData> {
         orderBy: { createdAt: "asc" },
       }),
       prisma.transaction.findMany({
-        where: await entityVisibilityWhere("transaction"),
+        where: visibility.transaction,
         include: { member: { select: { displayName: true, avatarUrl: true } } },
         orderBy: { createdAt: "desc" },
       }),
       prisma.penalty.findMany({
-        where: await entityVisibilityWhere("penalty"),
+        where: visibility.penalty,
         include: {
           member: { select: { displayName: true, avatarUrl: true } },
           issuedBy: { select: { displayName: true } },
@@ -158,18 +165,18 @@ export async function getAdminTableData(): Promise<AdminTableData> {
         orderBy: { createdAt: "desc" },
       }),
       prisma.project.findMany({
-        where: await entityVisibilityWhere("project"),
+        where: visibility.project,
         include: {
           owner: { select: { displayName: true, avatarUrl: true } },
           _count: {
             select: {
               members: true,
-              tasks: { where: await taskVisibilityWhere() },
+              tasks: { where: visibility.task },
             },
           },
           tasks: {
             where: {
-              AND: [await taskVisibilityWhere(), { status: { not: "DONE" } }],
+              AND: [visibility.task, { status: { not: "DONE" } }],
             },
             select: { id: true },
           },
@@ -177,7 +184,7 @@ export async function getAdminTableData(): Promise<AdminTableData> {
         orderBy: { updatedAt: "desc" },
       }),
       prisma.task.findMany({
-        where: await taskVisibilityWhere(),
+        where: visibility.task,
         include: {
           assignees: {
             include: {
@@ -185,7 +192,7 @@ export async function getAdminTableData(): Promise<AdminTableData> {
             },
           },
           project: {
-            where: await entityVisibilityWhere("project"),
+            where: visibility.project,
             select: { name: true },
           },
         },
@@ -193,7 +200,7 @@ export async function getAdminTableData(): Promise<AdminTableData> {
         take: 200,
       }),
       prisma.meeting.findMany({
-        where: await entityVisibilityWhere("meeting"),
+        where: visibility.meeting,
         include: {
           organizer: { select: { displayName: true, avatarUrl: true } },
         },

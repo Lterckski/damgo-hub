@@ -34,7 +34,8 @@ import {
 import { HOURS_12, MINUTES_ALL, to12Hour, to24Hour } from "@/lib/time-of-day";
 import { cn } from "@/lib/utils";
 
-const FIELD_LABEL_CLASS = "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
+const FIELD_LABEL_CLASS =
+  "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
 
 interface DateTimePickerProps {
   id?: string;
@@ -64,9 +65,15 @@ export function DateTimePicker({
   required = false,
 }: DateTimePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(value ? new Date(value) : new Date()));
-  const [pendingDate, setPendingDate] = useState<Date | null>(value ? new Date(value) : null);
-  const [pendingTime, setPendingTime] = useState(value ? format(new Date(value), "HH:mm") : "09:00");
+  const [visibleMonth, setVisibleMonth] = useState(() =>
+    startOfMonth(value ? new Date(value) : new Date()),
+  );
+  const [pendingDate, setPendingDate] = useState<Date | null>(
+    value ? new Date(value) : null,
+  );
+  const [pendingTime, setPendingTime] = useState(
+    value ? format(new Date(value), "HH:mm") : "09:00",
+  );
 
   const days = eachDayOfInterval({
     start: startOfWeek(startOfMonth(visibleMonth)),
@@ -110,20 +117,29 @@ export function DateTimePicker({
         type="button"
         onClick={openPicker}
         aria-haspopup="dialog"
-        className="flex h-8 w-full items-center justify-between rounded-lg border border-input bg-transparent px-2.5 text-sm text-copy-primary transition-colors hover:border-ring"
+        aria-label={label}
+        className="flex min-h-11 w-full items-center justify-between rounded-lg border border-input bg-transparent px-2.5 text-sm text-copy-primary transition-colors hover:border-ring"
       >
-        <span className={displayValue ? "" : "text-copy-faint"}>{displayValue || "Select a date…"}</span>
+        <span
+          className={cn("min-w-0 truncate", !displayValue && "text-copy-faint")}
+        >
+          {displayValue || "Select a date…"}
+        </span>
         <CalendarDays className="h-4 w-4 text-copy-secondary" />
       </button>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="sm:max-w-xs">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-copy-primary">{label}</DialogTitle>
+            <DialogTitle className="text-base font-bold text-copy-primary">
+              {label}
+            </DialogTitle>
           </DialogHeader>
 
           <div className="flex items-center justify-between">
-            <p className="text-sm font-bold text-copy-primary">{format(visibleMonth, "MMMM yyyy")}</p>
+            <p className="text-sm font-bold text-copy-primary">
+              {format(visibleMonth, "MMMM yyyy")}
+            </p>
             <div className="flex gap-1">
               <Button
                 type="button"
@@ -240,7 +256,11 @@ export function DateTimePicker({
           )}
 
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setIsOpen(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setIsOpen(false)}
+            >
               Cancel
             </Button>
             <Button type="button" onClick={confirm} disabled={!pendingDate}>

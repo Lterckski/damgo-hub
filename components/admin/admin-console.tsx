@@ -237,6 +237,18 @@ export function AdminConsole({
     [isLeader, currentMemberId],
   );
 
+  // Stable configs preserve DataTable's derived rows while drawers/dialogs change.
+  const tableConfigs = React.useMemo(
+    () => ({
+      members: membersConfig(cellHandlers),
+      finance: financeConfig(cellHandlers, settings.financeCategories),
+      penalties: penaltiesConfig(cellHandlers),
+      projects: projectsConfig(cellHandlers),
+      activity: activityConfig(cellHandlers),
+    }),
+    [cellHandlers, settings.financeCategories],
+  );
+
   // -------------------------------------------------------------------------
   // Queue + bulk actions
   // -------------------------------------------------------------------------
@@ -526,7 +538,7 @@ export function AdminConsole({
   }));
 
   return (
-    <div className="flex flex-col gap-8 p-6 pb-24">
+    <div className="flex flex-col gap-8 p-3 sm:p-6 pb-24">
       {/* ---------------------------------------------------------------
           Zone 1 — command bar
       --------------------------------------------------------------- */}
@@ -546,10 +558,10 @@ export function AdminConsole({
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
-            className="flex h-10 min-w-64 flex-1 items-center gap-2 rounded-xl bg-surface px-3 text-left text-sm text-copy-faint ring-1 ring-surface-border transition-colors hover:ring-brand/40"
+            className="flex min-h-11 min-w-0 basis-full sm:basis-auto flex-1 items-center gap-2 rounded-xl bg-surface px-3 text-left text-sm text-copy-faint ring-1 ring-surface-border transition-colors hover:ring-brand/40"
           >
             <Search className="h-4 w-4" />
-            <span className="flex-1">
+            <span className="min-w-0 flex-1 truncate">
               Search members, transactions, penalties, projects, docs…
             </span>
             <kbd className="rounded border border-surface-border px-1.5 py-0.5 text-[10px] text-copy-muted">
@@ -704,7 +716,7 @@ export function AdminConsole({
           <DataTable
             key="members"
             rows={tables.members}
-            config={membersConfig(cellHandlers)}
+            config={tableConfigs.members}
             activeFilterId={filterId}
             onFilterChange={setFilterId}
             onRowClick={(row) =>
@@ -718,7 +730,7 @@ export function AdminConsole({
           <DataTable
             key="finance"
             rows={tables.finance}
-            config={financeConfig(cellHandlers, settings.financeCategories)}
+            config={tableConfigs.finance}
             activeFilterId={filterId}
             onFilterChange={setFilterId}
             onRowClick={(row) =>
@@ -732,7 +744,7 @@ export function AdminConsole({
           <DataTable
             key="penalties"
             rows={tables.penalties}
-            config={penaltiesConfig(cellHandlers)}
+            config={tableConfigs.penalties}
             activeFilterId={filterId}
             onFilterChange={setFilterId}
             onRowClick={(row) =>
@@ -746,7 +758,7 @@ export function AdminConsole({
           <DataTable
             key="projects"
             rows={tables.projects}
-            config={projectsConfig(cellHandlers)}
+            config={tableConfigs.projects}
             activeFilterId={filterId}
             onFilterChange={setFilterId}
             onRowClick={(row) =>
@@ -760,7 +772,7 @@ export function AdminConsole({
           <DataTable
             key="activity"
             rows={tables.activity}
-            config={activityConfig(cellHandlers)}
+            config={tableConfigs.activity}
             activeFilterId={filterId}
             onFilterChange={setFilterId}
             onRowClick={(row) =>

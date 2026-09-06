@@ -1,4 +1,5 @@
 import type { InvitePolicy, MeetingCadence } from "@/app/generated/prisma/client";
+import { cache } from "react";
 
 import { prisma } from "@/lib/prisma";
 
@@ -45,7 +46,7 @@ export function parsePenaltyRules(value: unknown): PenaltyRule[] {
   });
 }
 
-export async function getOrgSettings(): Promise<OrgSettingsValues> {
+export const getOrgSettings = cache(async (): Promise<OrgSettingsValues> => {
   const row = await prisma.orgSettings.findUnique({ where: { id: ORG_SETTINGS_ID } });
   if (!row) return DEFAULT_ORG_SETTINGS;
 
@@ -57,4 +58,4 @@ export async function getOrgSettings(): Promise<OrgSettingsValues> {
     invitePolicy: row.invitePolicy,
     projectStaleDays: row.projectStaleDays,
   };
-}
+});

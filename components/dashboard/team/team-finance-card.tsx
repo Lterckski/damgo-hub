@@ -32,7 +32,7 @@ export function TeamFinanceCard({ finance }: { finance: TeamFinance }) {
       footerHref="/finance"
       footerLabel="View finance"
     >
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Figure
           label="Balance"
           value={formatPHP(finance.balanceCents)}
@@ -63,7 +63,9 @@ export function TeamFinanceCard({ finance }: { finance: TeamFinance }) {
             Dues
           </h4>
           {finance.duesPeriodLabel && (
-            <span className="text-[10px] text-copy-muted">{finance.duesPeriodLabel}</span>
+            <span className="text-[10px] text-copy-muted">
+              {finance.duesPeriodLabel}
+            </span>
           )}
         </div>
 
@@ -74,10 +76,15 @@ export function TeamFinanceCard({ finance }: { finance: TeamFinance }) {
             {finance.dues.map((row) => {
               const isPaid = row.status !== "UNPAID";
               return (
-                <li key={row.memberId} className="flex flex-col items-center gap-1">
+                <li
+                  key={row.memberId}
+                  className="flex flex-col items-center gap-1"
+                >
                   <span className="relative">
                     <Avatar className="h-9 w-9">
-                      {row.avatarUrl && <AvatarImage src={row.avatarUrl} alt="" />}
+                      {row.avatarUrl && (
+                        <AvatarImage src={row.avatarUrl} alt="" />
+                      )}
                       <AvatarFallback className="text-[10px]">
                         {row.displayName
                           .split(" ")
@@ -106,7 +113,11 @@ export function TeamFinanceCard({ finance }: { finance: TeamFinance }) {
                       isPaid ? "text-copy-muted" : "text-state-warning",
                     )}
                   >
-                    {row.status === "WAIVED" ? "waived" : isPaid ? "paid" : formatPHP(row.amountCents)}
+                    {row.status === "WAIVED"
+                      ? "waived"
+                      : isPaid
+                        ? "paid"
+                        : formatPHP(row.amountCents)}
                   </span>
                 </li>
               );
@@ -131,7 +142,9 @@ function Figure({
 }) {
   return (
     <div>
-      <p className="text-[10px] font-semibold tracking-wide text-copy-secondary uppercase">{label}</p>
+      <p className="text-[10px] font-semibold tracking-wide text-copy-secondary uppercase">
+        {label}
+      </p>
       <p
         className={cn(
           "mt-0.5 text-lg font-bold tabular-nums",

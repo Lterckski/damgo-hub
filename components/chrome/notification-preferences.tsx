@@ -68,9 +68,9 @@ export function NotificationPreferences({ onClose }: { onClose: () => void }) {
               return (
                 <div
                   key={type}
-                  className="flex items-center justify-between gap-3 py-3"
+                  className="flex flex-col items-stretch justify-between gap-3 py-3 sm:flex-row sm:items-center"
                 >
-                  <label className="flex items-center gap-3 font-medium capitalize">
+                  <label className="flex min-h-11 items-center gap-3 font-medium capitalize">
                     <input
                       type="checkbox"
                       checked={pref.enabled}
@@ -84,7 +84,7 @@ export function NotificationPreferences({ onClose }: { onClose: () => void }) {
                   </label>
                   <select
                     aria-label={`${type} delivery channel`}
-                    className="max-w-48 rounded-lg border border-surface-border bg-surface p-2 text-sm text-copy-primary"
+                    className="min-h-11 w-full sm:max-w-48 rounded-lg border border-surface-border bg-surface p-2 text-sm text-copy-primary"
                     value={pref.email ? "email" : "app"}
                     disabled={!pref.enabled || busy}
                     onChange={(e) =>

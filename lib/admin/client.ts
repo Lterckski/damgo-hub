@@ -101,17 +101,42 @@ export function reassignTaskRequest(taskId: string, memberIds: string[], reason:
  * screen — exporting what you filtered to is the point, and a server
  * round-trip would export something subtly different.
  */
-export function downloadCsv(filename: string, headers: string[], rows: (string | number | null)[][]): void {
+export async function downloadCsv(
+  filename: string,
+  headers: string[],
+  rows: Iterable<(string | number | null)[]>,
+): Promise<void> {
   const escape = (value: string | number | null) => {
     const text = value === null ? "" : String(value);
-    return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+    return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
   };
-
-  const csv = [headers, ...rows].map((row) => row.map(escape).join(",")).join("\n");
-  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const yieldToBrowser = () =>
+    new Promise<void>((resolve) => setTimeout(resolve, 0));
+  // Return control before projecting/escaping rows so the click can paint.
+  await yieldToBrowser();
+  const parts: string[] = [headers.map(escape).join(",")];
+  let chunk: string[] = [];
+  let sliceStart = performance.now();
+  for (const row of rows) {
+    chunk.push("\n" + row.map(escape).join(","));
+    if (chunk.length >= 256 || performance.now() - sliceStart >= 8) {
+      parts.push(chunk.join(""));
+      chunk = [];
+      await yieldToBrowser();
+      sliceStart = performance.now();
+    }
+  }
+  if (chunk.length) parts.push(chunk.join(""));
+  const url = URL.createObjectURL(
+    new Blob(parts, { type: "text/csv;charset=utf-8" }),
+  );
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
+  try {
+    link.click();
+  } finally {
+    // Let the browser consume the object URL before releasing it.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 }

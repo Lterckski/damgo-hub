@@ -17,7 +17,13 @@ import {
   X,
 } from "lucide-react";
 
-import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarGroup,
+  AvatarGroupCount,
+  AvatarImage,
+} from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,9 +38,14 @@ import { Input } from "@/components/ui/input";
 import { BackButton } from "@/components/shared/back-button";
 import { MeetingFormDialog } from "@/components/meetings/meeting-form-dialog";
 import { meetingServiceLabel } from "@/lib/meeting-format";
-import type { MeetingMemberOption, SerializedAgendaItem, SerializedMeeting } from "@/lib/meetings";
+import type {
+  MeetingMemberOption,
+  SerializedAgendaItem,
+  SerializedMeeting,
+} from "@/lib/meetings";
 
-const FIELD_LABEL_CLASS = "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
+const FIELD_LABEL_CLASS =
+  "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
 
 interface MeetingDetailProps {
   meeting: SerializedMeeting;
@@ -48,7 +59,11 @@ function initialsFor(name: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
-async function runMeetingMutation(url: string, init: RequestInit, fallbackMessage: string): Promise<void> {
+async function runMeetingMutation(
+  url: string,
+  init: RequestInit,
+  fallbackMessage: string,
+): Promise<void> {
   let response: Response;
   try {
     response = await fetch(url, init);
@@ -69,7 +84,13 @@ async function runMeetingMutation(url: string, init: RequestInit, fallbackMessag
  * Every mutation calls router.refresh() rather than keeping optimistic
  * local copies of server state, matching project-detail.tsx's pattern.
  */
-export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, isAdmin }: MeetingDetailProps) {
+export function MeetingDetail({
+  meeting,
+  members,
+  currentMemberId,
+  isOrganizer,
+  isAdmin,
+}: MeetingDetailProps) {
   const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -92,10 +113,18 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
     setIsSaving(true);
     setActionError(null);
     try {
-      await runMeetingMutation(`/api/meetings/${meeting.id}`, { method: "DELETE" }, "Couldn't delete this meeting.");
+      await runMeetingMutation(
+        `/api/meetings/${meeting.id}`,
+        { method: "DELETE" },
+        "Couldn't delete this meeting.",
+      );
       router.push("/meetings");
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Couldn't delete this meeting.");
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Couldn't delete this meeting.",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -106,32 +135,51 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
     setIsSubmittingProposal(true);
     setProposalError(null);
     try {
-      await runMeetingMutation(`/api/meetings/${meeting.id}/agenda-proposals`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: proposalText.trim() }),
-      }, "Couldn't submit this proposal.");
+      await runMeetingMutation(
+        `/api/meetings/${meeting.id}/agenda-proposals`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: proposalText.trim() }),
+        },
+        "Couldn't submit this proposal.",
+      );
       setProposalText("");
       router.refresh();
     } catch (error) {
-      setProposalError(error instanceof Error ? error.message : "Couldn't submit this proposal.");
+      setProposalError(
+        error instanceof Error
+          ? error.message
+          : "Couldn't submit this proposal.",
+      );
     } finally {
       setIsSubmittingProposal(false);
     }
   }
 
-  async function decideProposal(proposalId: string, status: "ACCEPTED" | "DECLINED") {
+  async function decideProposal(
+    proposalId: string,
+    status: "ACCEPTED" | "DECLINED",
+  ) {
     setBusyProposalId(proposalId);
     setActionError(null);
     try {
-      await runMeetingMutation(`/api/meetings/${meeting.id}/agenda-proposals/${proposalId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      }, "Couldn't update this proposal.");
+      await runMeetingMutation(
+        `/api/meetings/${meeting.id}/agenda-proposals/${proposalId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        },
+        "Couldn't update this proposal.",
+      );
       router.refresh();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Couldn't update this proposal.");
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Couldn't update this proposal.",
+      );
     } finally {
       setBusyProposalId(null);
     }
@@ -142,15 +190,23 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
     setIsAddingItem(true);
     setActionError(null);
     try {
-      await runMeetingMutation(`/api/meetings/${meeting.id}/agenda-items`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: newItemText.trim() }),
-      }, "Couldn't add this agenda item.");
+      await runMeetingMutation(
+        `/api/meetings/${meeting.id}/agenda-items`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: newItemText.trim() }),
+        },
+        "Couldn't add this agenda item.",
+      );
       setNewItemText("");
       router.refresh();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Couldn't add this agenda item.");
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Couldn't add this agenda item.",
+      );
     } finally {
       setIsAddingItem(false);
     }
@@ -161,15 +217,23 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
     setBusyItemId(itemId);
     setActionError(null);
     try {
-      await runMeetingMutation(`/api/meetings/${meeting.id}/agenda-items/${itemId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: editingText.trim() }),
-      }, "Couldn't save this agenda item.");
+      await runMeetingMutation(
+        `/api/meetings/${meeting.id}/agenda-items/${itemId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: editingText.trim() }),
+        },
+        "Couldn't save this agenda item.",
+      );
       setEditingItemId(null);
       router.refresh();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Couldn't save this agenda item.");
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Couldn't save this agenda item.",
+      );
     } finally {
       setBusyItemId(null);
     }
@@ -179,14 +243,22 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
     setBusyItemId(item.id);
     setActionError(null);
     try {
-      await runMeetingMutation(`/api/meetings/${meeting.id}/agenda-items/${item.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ position: item.position + direction }),
-      }, "Couldn't move this agenda item.");
+      await runMeetingMutation(
+        `/api/meetings/${meeting.id}/agenda-items/${item.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ position: item.position + direction }),
+        },
+        "Couldn't move this agenda item.",
+      );
       router.refresh();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Couldn't move this agenda item.");
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Couldn't move this agenda item.",
+      );
     } finally {
       setBusyItemId(null);
     }
@@ -203,30 +275,45 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
       );
       router.refresh();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Couldn't remove this agenda item.");
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Couldn't remove this agenda item.",
+      );
     } finally {
       setBusyItemId(null);
     }
   }
 
-  const pendingProposals = meeting.agendaProposals.filter((p) => p.status === "PENDING");
-  const decidedProposals = meeting.agendaProposals.filter((p) => p.status !== "PENDING");
+  const pendingProposals = meeting.agendaProposals.filter(
+    (p) => p.status === "PENDING",
+  );
+  const decidedProposals = meeting.agendaProposals.filter(
+    (p) => p.status !== "PENDING",
+  );
 
   return (
     <div className="mx-auto max-w-3xl p-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <BackButton />
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-dim text-brand">
               <CalendarClock className="h-4 w-4" />
             </span>
-            <h1 className="font-display text-3xl text-copy-primary">{meeting.title}</h1>
+            <h1 className="font-display text-3xl text-copy-primary">
+              {meeting.title}
+            </h1>
           </div>
           <div className="mt-2 ml-10 space-y-1 text-sm text-copy-secondary">
             <p className="font-medium">
-              {format(new Date(meeting.scheduledAt), "EEEE, MMMM d, yyyy · h:mm a")}
-              {meeting.endsAt ? ` – ${format(new Date(meeting.endsAt), "h:mm a")}` : ""}
+              {format(
+                new Date(meeting.scheduledAt),
+                "EEEE, MMMM d, yyyy · h:mm a",
+              )}
+              {meeting.endsAt
+                ? ` – ${format(new Date(meeting.endsAt), "h:mm a")}`
+                : ""}
             </p>
             <p>Organized by {meeting.organizerName}</p>
             {meeting.location && (
@@ -237,7 +324,12 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
             {meeting.meetingUrl && (
               <p className="flex items-center gap-1.5">
                 <Video className="h-3.5 w-3.5 shrink-0" />
-                <a href={meeting.meetingUrl} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+                <a
+                  href={meeting.meetingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-brand hover:underline"
+                >
                   Join via {meetingServiceLabel(meeting.meetingUrl)}
                 </a>
               </p>
@@ -246,8 +338,13 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
         </div>
 
         {isOrganizer && (
-          <div className="flex shrink-0 items-center gap-2">
-            <MeetingFormDialog members={members} currentMemberId={currentMemberId} isAdmin={isAdmin} meeting={meeting} />
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <MeetingFormDialog
+              members={members}
+              currentMemberId={currentMemberId}
+              isAdmin={isAdmin}
+              meeting={meeting}
+            />
             <Button
               type="button"
               variant="ghost"
@@ -261,12 +358,18 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
         )}
       </div>
 
-      {actionError && !isDeleting && <p role="alert" className="mt-4 text-sm font-medium text-error">{actionError}</p>}
+      {actionError && !isDeleting && (
+        <p role="alert" className="mt-4 text-sm font-medium text-error">
+          {actionError}
+        </p>
+      )}
 
       {meeting.description && (
         <div className="mt-6 rounded-2xl border border-surface-border bg-surface p-6">
           <p className={FIELD_LABEL_CLASS}>Description</p>
-          <p className="text-sm leading-relaxed whitespace-pre-wrap text-copy-secondary">{meeting.description}</p>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap text-copy-secondary">
+            {meeting.description}
+          </p>
         </div>
       )}
 
@@ -275,12 +378,21 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
         <AvatarGroup>
           {meeting.participants.slice(0, 8).map((participant) => (
             <Avatar key={participant.id} className="ring-2 ring-surface">
-              {participant.avatarUrl ? <AvatarImage src={participant.avatarUrl} alt={participant.displayName} /> : null}
-              <AvatarFallback>{initialsFor(participant.displayName)}</AvatarFallback>
+              {participant.avatarUrl ? (
+                <AvatarImage
+                  src={participant.avatarUrl}
+                  alt={participant.displayName}
+                />
+              ) : null}
+              <AvatarFallback>
+                {initialsFor(participant.displayName)}
+              </AvatarFallback>
             </Avatar>
           ))}
           {meeting.participants.length > 8 && (
-            <AvatarGroupCount>+{meeting.participants.length - 8}</AvatarGroupCount>
+            <AvatarGroupCount>
+              +{meeting.participants.length - 8}
+            </AvatarGroupCount>
           )}
         </AvatarGroup>
       </div>
@@ -298,14 +410,22 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
             placeholder="Suggest an agenda topic…"
             className="text-copy-primary!"
           />
-          <Button type="button" disabled={isSubmittingProposal || proposalText.trim() === ""} onClick={submitProposal}>
+          <Button
+            type="button"
+            disabled={isSubmittingProposal || proposalText.trim() === ""}
+            onClick={submitProposal}
+          >
             Propose
           </Button>
         </div>
-        {proposalError && <p className="mt-2 text-sm font-medium text-error">{proposalError}</p>}
+        {proposalError && (
+          <p className="mt-2 text-sm font-medium text-error">{proposalError}</p>
+        )}
 
         {meeting.agendaProposals.length === 0 ? (
-          <p className="mt-4 text-sm text-copy-secondary">No proposals yet — be the first to suggest something.</p>
+          <p className="mt-4 text-sm text-copy-secondary">
+            No proposals yet — be the first to suggest something.
+          </p>
         ) : (
           <ul className="mt-4 space-y-2">
             {[...pendingProposals, ...decidedProposals].map((proposal) => (
@@ -314,10 +434,14 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
                 className="flex items-center justify-between gap-3 rounded-xl border border-surface-border px-3 py-2.5"
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-copy-primary">{proposal.text}</p>
-                  <p className="text-xs text-copy-secondary">Proposed by {proposal.proposedByName}</p>
+                  <p className="text-sm font-medium text-copy-primary">
+                    {proposal.text}
+                  </p>
+                  <p className="text-xs text-copy-secondary">
+                    Proposed by {proposal.proposedByName}
+                  </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
                   {proposal.status === "PENDING" && isAdmin ? (
                     <>
                       <Button
@@ -344,10 +468,20 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
                     </>
                   ) : (
                     <Badge
-                      variant={proposal.status === "ACCEPTED" ? "secondary" : "outline"}
-                      className={proposal.status === "ACCEPTED" ? "text-success" : "text-copy-faint"}
+                      variant={
+                        proposal.status === "ACCEPTED" ? "secondary" : "outline"
+                      }
+                      className={
+                        proposal.status === "ACCEPTED"
+                          ? "text-success"
+                          : "text-copy-faint"
+                      }
                     >
-                      {proposal.status === "PENDING" ? "Pending" : proposal.status === "ACCEPTED" ? "Accepted" : "Declined"}
+                      {proposal.status === "PENDING"
+                        ? "Pending"
+                        : proposal.status === "ACCEPTED"
+                          ? "Accepted"
+                          : "Declined"}
                     </Badge>
                   )}
                 </div>
@@ -363,7 +497,9 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
         <p className={FIELD_LABEL_CLASS}>Final Agenda</p>
 
         {meeting.agendaItems.length === 0 ? (
-          <p className="mt-3 text-sm text-copy-secondary">No agenda items yet.</p>
+          <p className="mt-3 text-sm text-copy-secondary">
+            No agenda items yet.
+          </p>
         ) : (
           <ol className="mt-3 space-y-2">
             {meeting.agendaItems.map((item, index) => (
@@ -391,14 +527,23 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
                     >
                       <Check className="h-3.5 w-3.5" />
                     </Button>
-                    <Button type="button" variant="ghost" size="icon-xs" onClick={() => setEditingItemId(null)}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => setEditingItemId(null)}
+                    >
                       <X className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 ) : (
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-copy-primary">{item.text}</p>
-                    <p className="text-xs text-copy-secondary">Added by {item.addedByName}</p>
+                    <p className="text-sm font-medium text-copy-primary">
+                      {item.text}
+                    </p>
+                    <p className="text-xs text-copy-secondary">
+                      Added by {item.addedByName}
+                    </p>
                   </div>
                 )}
 
@@ -418,7 +563,10 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
                       type="button"
                       variant="ghost"
                       size="icon-xs"
-                      disabled={index === meeting.agendaItems.length - 1 || busyItemId === item.id}
+                      disabled={
+                        index === meeting.agendaItems.length - 1 ||
+                        busyItemId === item.id
+                      }
                       onClick={() => moveAgendaItem(item, 1)}
                       title="Move down"
                     >
@@ -466,7 +614,11 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
               placeholder="Add an agenda item directly…"
               className="text-copy-primary!"
             />
-            <Button type="button" disabled={isAddingItem || newItemText.trim() === ""} onClick={addAgendaItem}>
+            <Button
+              type="button"
+              disabled={isAddingItem || newItemText.trim() === ""}
+              onClick={addAgendaItem}
+            >
               <Plus className="h-3.5 w-3.5" /> Add
             </Button>
           </div>
@@ -476,20 +628,36 @@ export function MeetingDetail({ meeting, members, currentMemberId, isOrganizer, 
       <Dialog open={isDeleting} onOpenChange={setIsDeleting}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-copy-primary">Delete this meeting?</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-copy-primary">
+              Delete this meeting?
+            </DialogTitle>
             <DialogDescription>
-              This can&apos;t be undone. Every participant gets a cancellation email.
+              This can&apos;t be undone. Every participant gets a cancellation
+              email.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setIsDeleting(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setIsDeleting(false)}
+            >
               Cancel
             </Button>
-            <Button type="button" variant="destructive" disabled={isSaving} onClick={deleteMeeting}>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={isSaving}
+              onClick={deleteMeeting}
+            >
               Delete
             </Button>
           </DialogFooter>
-          {actionError && <p role="alert" className="text-sm font-medium text-error">{actionError}</p>}
+          {actionError && (
+            <p role="alert" className="text-sm font-medium text-error">
+              {actionError}
+            </p>
+          )}
         </DialogContent>
       </Dialog>
     </div>

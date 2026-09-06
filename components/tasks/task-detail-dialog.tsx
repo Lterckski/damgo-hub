@@ -243,7 +243,7 @@ export function TaskDetailDialog({
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <p className={FIELD_LABEL_CLASS}>Start</p>
                 <p className="text-sm font-medium text-copy-primary">
@@ -265,7 +265,7 @@ export function TaskDetailDialog({
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <p className={FIELD_LABEL_CLASS}>Assignees</p>
                 {task.assignees.length === 0 ? (
@@ -307,7 +307,7 @@ export function TaskDetailDialog({
           </div>
         ) : (
           <div className="grid gap-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={FIELD_LABEL_CLASS}>Status</label>
                 <Select
@@ -361,7 +361,7 @@ export function TaskDetailDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <DateTimePicker
                 label="Start"
                 value={draftStartDate}
@@ -405,7 +405,7 @@ export function TaskDetailDialog({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={FIELD_LABEL_CLASS}>Project (optional)</label>
                 <Select
@@ -468,7 +468,7 @@ export function TaskDetailDialog({
                     />
                     Select All (whole team — group task)
                   </label>
-                  <div className="grid max-h-32 grid-cols-3 gap-2 overflow-y-auto border-t border-surface-border-subtle pt-2">
+                  <div className="grid max-h-32 grid-cols-1 sm:grid-cols-3 gap-2 overflow-y-auto border-t border-surface-border-subtle pt-2">
                     {members.map((m) => (
                       <label
                         key={m.id}

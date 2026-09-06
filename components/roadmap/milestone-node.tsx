@@ -1,12 +1,24 @@
 "use client";
 
+import { Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useEditMilestone } from "./roadmap-actions-context";
 import { format } from "date-fns";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 
-import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarGroup,
+  AvatarGroupCount,
+  AvatarImage,
+} from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { useBoardMembers } from "@/components/board/board-member-context";
-import type { MilestoneNode as MilestoneNodeType, MilestoneStatus } from "@/types/roadmap";
+import type {
+  MilestoneNode as MilestoneNodeType,
+  MilestoneStatus,
+} from "@/types/roadmap";
 
 const MAX_VISIBLE_ASSIGNEES = 3;
 
@@ -45,12 +57,17 @@ function initialsFor(name: string): string {
  * The one node type this board renders — see types/roadmap.ts and
  * 13-roadmap-board.md. Registered as `nodeTypes={{ milestoneNode:
  * MilestoneNode }}` on the <ReactFlow> instance in roadmap-canvas.tsx,
- * which also owns double-click-to-edit (`onNodeDoubleClick`) — this
- * component stays a pure, callback-free renderer so its `data` prop is
- * exactly what's synced through Liveblocks storage.
+ * which also owns double-click-to-edit (`onNodeDoubleClick`). The explicit
+ * Edit button uses a local context callback; functions never enter the
+ * node data synced through Liveblocks storage.
  */
-export function MilestoneNode({ data, selected }: NodeProps<MilestoneNodeType>) {
+export function MilestoneNode({
+  id,
+  data,
+  selected,
+}: NodeProps<MilestoneNodeType>) {
   const members = useBoardMembers();
+  const edit = useEditMilestone();
   const assignees = data.assigneeIds
     .map((id) => members.find((m) => m.id === id))
     .filter((m): m is NonNullable<typeof m> => m !== undefined);
@@ -65,29 +82,72 @@ export function MilestoneNode({ data, selected }: NodeProps<MilestoneNodeType>) 
       )}
     >
       {HANDLE_SIDES.flatMap(({ position, key }) => [
-        <Handle key={`${key}-target`} id={`${key}-target`} type="target" position={position} className={HANDLE_CLASS} />,
-        <Handle key={`${key}-source`} id={`${key}-source`} type="source" position={position} className={HANDLE_CLASS} />,
+        <Handle
+          key={`${key}-target`}
+          id={`${key}-target`}
+          type="target"
+          position={position}
+          className={HANDLE_CLASS}
+        />,
+        <Handle
+          key={`${key}-source`}
+          id={`${key}-source`}
+          type="source"
+          position={position}
+          className={HANDLE_CLASS}
+        />,
       ])}
 
-      <span className={cn("w-1.5 shrink-0", STATUS_ACCENT_CLASS[data.status])} aria-hidden />
+      <span
+        className={cn("w-1.5 shrink-0", STATUS_ACCENT_CLASS[data.status])}
+        aria-hidden
+      />
 
       <div className="min-w-0 flex-1 space-y-2 p-3">
-        <p className="truncate text-sm font-bold text-copy-primary">{data.title || "Untitled milestone"}</p>
+        <p className="truncate text-sm font-bold text-copy-primary">
+          {data.title || "Untitled milestone"}
+        </p>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="nodrag nopan min-h-11"
+          aria-label={`Edit milestone: ${data.title || "Untitled milestone"}`}
+          onClick={() => edit(id)}
+        >
+          <Pencil className="h-4 w-4" /> Edit
+        </Button>
 
         {data.dueDate && (
-          <p className="text-xs font-medium text-copy-secondary">Due {format(new Date(data.dueDate), "MMM d, yyyy")}</p>
+          <p className="text-xs font-medium text-copy-secondary">
+            Due {format(new Date(data.dueDate), "MMM d, yyyy")}
+          </p>
         )}
 
         {assignees.length > 0 && (
           <AvatarGroup>
             {visibleAssignees.map((assignee) => (
-              <Avatar key={assignee.id} size="sm" className="ring-2 ring-surface">
-                {assignee.avatarUrl ? <AvatarImage src={assignee.avatarUrl} alt={assignee.displayName} /> : null}
-                <AvatarFallback className="text-[10px]">{initialsFor(assignee.displayName)}</AvatarFallback>
+              <Avatar
+                key={assignee.id}
+                size="sm"
+                className="ring-2 ring-surface"
+              >
+                {assignee.avatarUrl ? (
+                  <AvatarImage
+                    src={assignee.avatarUrl}
+                    alt={assignee.displayName}
+                  />
+                ) : null}
+                <AvatarFallback className="text-[10px]">
+                  {initialsFor(assignee.displayName)}
+                </AvatarFallback>
               </Avatar>
             ))}
             {overflow > 0 && (
-              <AvatarGroupCount className="ring-2 ring-surface">+{overflow}</AvatarGroupCount>
+              <AvatarGroupCount className="ring-2 ring-surface">
+                +{overflow}
+              </AvatarGroupCount>
             )}
           </AvatarGroup>
         )}

@@ -1,0 +1,40 @@
+// Latest metric per document lifecycle; slow interactions are a separate kind.
+model RumSample {
+  orgId              String
+  pageId             String
+  kind               String
+  sampleId           String
+  revision           Int
+  name               String
+  value              Float
+  route              String
+  pageRoute          String
+  device             String
+  release            String
+  target             String?
+  eventType          String?
+  inputDelay         Float?
+  processingDuration Float?
+  presentationDelay  Float?
+  recordedAt         DateTime @default(now())
+  updatedAt          DateTime @default(now())
+
+  @@id([orgId, pageId, kind, sampleId])
+  @@index([kind, recordedAt])
+}
+
+// Hourly snapshots of a rolling seven-day population, never p75 of p75s.
+model RumVitalP75 {
+  orgId       String
+  windowEnd   DateTime
+  windowStart DateTime
+  name        String
+  route       String
+  device      String
+  release     String
+  sampleCount Int
+  p75         Float
+  computedAt  DateTime @default(now())
+
+  @@id([orgId, windowEnd, name, route, device, release])
+}

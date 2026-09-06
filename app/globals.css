@@ -225,42 +225,206 @@
 
 /* Explicit choice uses the same palette as system dark mode. */
 :root[data-theme="dark"] {
-    --bg-base: #0b0f1a;
-    --bg-surface: #121a2b;
-    --bg-elevated: #182238;
-    --bg-subtle: #1e293b;
-    --border-default: #2a3650;
-    --border-subtle: #1c2740;
-    --text-primary: #f3f6fb;
-    --text-secondary: #b4c0d4;
-    --text-muted: #8592ac;
-    --text-faint: #55617c;
-    --accent-primary: #45d9c5;
-    --accent-primary-dim: rgba(69, 217, 197, 0.16);
-    --accent-collab: #5a8dc4;
-    --accent-collab-text: #8fb4de;
-    --state-error: #f0655c;
-    --state-success: #52c77d;
-    --state-warning: #e8b84b;
+  --bg-base: #0b0f1a;
+  --bg-surface: #121a2b;
+  --bg-elevated: #182238;
+  --bg-subtle: #1e293b;
+  --border-default: #2a3650;
+  --border-subtle: #1c2740;
+  --text-primary: #f3f6fb;
+  --text-secondary: #b4c0d4;
+  --text-muted: #8592ac;
+  --text-faint: #55617c;
+  --accent-primary: #45d9c5;
+  --accent-primary-dim: rgba(69, 217, 197, 0.16);
+  --accent-collab: #5a8dc4;
+  --accent-collab-text: #8fb4de;
+  --state-error: #f0655c;
+  --state-success: #52c77d;
+  --state-warning: #e8b84b;
 
-    /* Dark-mode idea-note fill/text pairs, copied directly from
+  /* Dark-mode idea-note fill/text pairs, copied directly from
        ui-context.md's Node Color Palette table (Neutral, Teal, Blue,
        Purple, Amber, Red, Rose, Green, in that order). */
-    --idea-color-0-fill: #182238;
-    --idea-color-0-text: #f3f6fb;
-    --idea-color-1-fill: #173248;
-    --idea-color-1-text: #45d9c5;
-    --idea-color-2-fill: #1b2a45;
-    --idea-color-2-text: #7fb0e0;
-    --idea-color-3-fill: #2e2545;
-    --idea-color-3-text: #b79ce0;
-    --idea-color-4-fill: #332912;
-    --idea-color-4-text: #e8b84b;
-    --idea-color-5-fill: #331e1c;
-    --idea-color-5-text: #f0655c;
-    --idea-color-6-fill: #301e30;
-    --idea-color-6-text: #d888ac;
-    --idea-color-7-fill: #16301f;
-    --idea-color-7-text: #52c77d;
+  --idea-color-0-fill: #182238;
+  --idea-color-0-text: #f3f6fb;
+  --idea-color-1-fill: #173248;
+  --idea-color-1-text: #45d9c5;
+  --idea-color-2-fill: #1b2a45;
+  --idea-color-2-text: #7fb0e0;
+  --idea-color-3-fill: #2e2545;
+  --idea-color-3-text: #b79ce0;
+  --idea-color-4-fill: #332912;
+  --idea-color-4-text: #e8b84b;
+  --idea-color-5-fill: #331e1c;
+  --idea-color-5-text: #f0655c;
+  --idea-color-6-fill: #301e30;
+  --idea-color-6-text: #d888ac;
+  --idea-color-7-fill: #16301f;
+  --idea-color-7-text: #52c77d;
+}
 
+/* Application-level responsive behavior; generated UI primitives stay intact. */
+:root {
+  --app-viewport-height: 100dvh;
+  --app-viewport-top: 0px;
+}
+.app-shell {
+  height: var(--app-viewport-height);
+}
+.app-main {
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  scroll-padding-block: 1rem 5rem;
+}
+.app-main > *,
+.app-main .grid > * {
+  min-width: 0;
+}
+.app-main > * {
+  max-width: 100%;
+}
+.app-main :is(h1, h2, h3),
+[data-slot="dialog-title"],
+[data-slot="drawer-title"] {
+  overflow-wrap: anywhere;
+}
+.app-header {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+  height: calc(4rem + env(safe-area-inset-top, 0px));
+}
+.mobile-navigation {
+  position: fixed;
+  z-index: 40;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+}
+.desktop-navigation {
+  display: none;
+}
+@media (min-width: 768px) and (hover: hover) and (pointer: fine) {
+  .mobile-navigation {
+    display: none;
+  }
+  .desktop-navigation {
+    display: flex;
+  }
+}
+:root[data-keyboard-open="true"] :is(.mobile-navigation, .desktop-navigation) {
+  display: none;
+}
+[data-slot="dialog-content"] {
+  top: calc(var(--app-viewport-top) + var(--app-viewport-height) / 2);
+  max-height: calc(
+    var(--app-viewport-height) - 2rem - env(safe-area-inset-top, 0px) -
+      env(safe-area-inset-bottom, 0px)
+  );
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+  scroll-padding-block: 1rem;
+}
+[data-slot="dialog-content"] > *,
+[data-slot="dialog-content"] .grid > * {
+  min-width: 0;
+}
+[data-slot="dialog-header"] {
+  padding-right: 2rem;
+}
+[data-slot="drawer-content"] {
+  top: var(--app-viewport-top);
+  bottom: auto;
+  height: var(--app-viewport-height);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+[data-slot="drawer-header"] {
+  padding-right: 2.5rem;
+}
+[data-slot="popover-content"],
+[data-slot="dropdown-menu-content"] {
+  max-width: calc(
+    100vw - 1rem - env(safe-area-inset-left, 0px) -
+      env(safe-area-inset-right, 0px)
+  );
+  max-height: min(
+    var(--available-height, 100dvh),
+    calc(var(--app-viewport-height) - 1rem)
+  );
+  overflow-y: auto;
+}
+[data-slot="table-container"] {
+  max-width: 100%;
+}
+.board-canvas {
+  height: clamp(20rem, 65dvh, 34rem);
+}
+.board-controls {
+  max-width: calc(100% - 1rem);
+}
+.board-controls > div {
+  flex-wrap: wrap;
+}
+.board-presence {
+  max-width: 45%;
+}
+@media (max-width: 639px) {
+  [data-slot="dialog-content"] {
+    max-width: calc(100vw - 1rem);
+    width: calc(
+      100vw - 1rem - env(safe-area-inset-left, 0px) -
+        env(safe-area-inset-right, 0px)
+    );
+  }
+  [data-slot="tabs-list"] {
+    max-width: 100%;
+    flex-wrap: wrap;
+    height: auto;
+  }
+  [data-slot="tabs-trigger"] {
+    min-height: 2.75rem;
+  }
+  .board-presence {
+    top: 4.5rem;
+    right: 0.5rem;
+  }
+  .board-presence [data-slot="avatar"] {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+}
+@media (pointer: coarse) {
+  [data-slot="button"],
+  [data-slot="select-trigger"],
+  [data-slot="input"] {
+    min-height: 2.75rem;
+  }
+  [data-slot="button"]:has(svg):not(:has(span)) {
+    min-width: 2.75rem;
+  }
+  [data-slot="dialog-close"] {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+  [data-slot="input"],
+  textarea,
+  select {
+    font-size: 1rem;
+  }
+  label:has([role="checkbox"]) {
+    min-height: 2.75rem;
+  }
+  .react-flow__handle {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .desktop-navigation,
+  .desktop-navigation * {
+    transition: none;
+  }
 }

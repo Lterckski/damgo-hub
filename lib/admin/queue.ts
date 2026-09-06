@@ -1,5 +1,4 @@
-import { entityVisibilityWhere } from "@/lib/hub/context";
-import { taskVisibilityWhere } from "@/lib/hub/context";
+import { entityVisibilityWheres } from "@/lib/hub/context";
 import { prisma } from "@/lib/prisma";
 import { getOrgSettings } from "@/lib/org-settings";
 import type { AdminDrawerTarget } from "@/lib/admin/types";
@@ -149,7 +148,10 @@ export function penaltyDueAt(
 }
 
 export async function getActionQueue(): Promise<QueueItem[]> {
-  const settings = await getOrgSettings();
+  const [settings, visibility] = await Promise.all([
+    getOrgSettings(),
+    entityVisibilityWheres(["transaction", "project", "penalty", "task"]),
+  ]);
   const now = new Date();
 
   const [
@@ -163,7 +165,7 @@ export async function getActionQueue(): Promise<QueueItem[]> {
     prisma.transaction.findMany({
       where: {
         ...{ status: "PENDING" },
-        AND: [await entityVisibilityWhere("transaction")],
+        AND: [visibility.transaction],
       },
       include: { member: { select: { displayName: true, avatarUrl: true } } },
       orderBy: { createdAt: "asc" },
@@ -184,7 +186,7 @@ export async function getActionQueue(): Promise<QueueItem[]> {
     prisma.project.findMany({
       where: {
         ...{ status: "PROPOSED" },
-        AND: [await entityVisibilityWhere("project")],
+        AND: [visibility.project],
       },
       include: { owner: { select: { displayName: true, avatarUrl: true } } },
       orderBy: { createdAt: "asc" },
@@ -192,7 +194,7 @@ export async function getActionQueue(): Promise<QueueItem[]> {
     prisma.penalty.findMany({
       where: {
         ...{ status: "OPEN" },
-        AND: [await entityVisibilityWhere("penalty")],
+        AND: [visibility.penalty],
       },
       include: { member: { select: { displayName: true, avatarUrl: true } } },
       orderBy: { createdAt: "asc" },
@@ -204,7 +206,7 @@ export async function getActionQueue(): Promise<QueueItem[]> {
     prisma.task.findMany({
       where: {
         AND: [
-          await taskVisibilityWhere(),
+          visibility.task,
           { status: { not: "DONE" }, dueDate: { lt: daysAgo(3) } },
         ],
       },
@@ -215,7 +217,7 @@ export async function getActionQueue(): Promise<QueueItem[]> {
           },
         },
         project: {
-          where: await entityVisibilityWhere("project"),
+          where: visibility.project,
           select: { name: true },
         },
       },
