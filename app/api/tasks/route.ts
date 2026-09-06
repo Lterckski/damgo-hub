@@ -1,9 +1,17 @@
+import { taskInclude } from "@/lib/hub/task-include";
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { taskVisibilityWhere } from "@/lib/hub/context";
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
-import { serializeTask, TASK_INCLUDE, TASK_PRIORITY_OPTIONS, TASK_TYPE_MAX_LENGTH } from "@/lib/tasks";
+import {
+  serializeTask,
+  TASK_PRIORITY_OPTIONS,
+  TASK_TYPE_MAX_LENGTH,
+} from "@/lib/tasks";
 import { TASK_LINKABLE_PROJECT_STATUSES } from "@/lib/projects";
 import { enqueueGoogleCalendarSync } from "@/lib/sync-calendar";
 import type { TaskPriority, TaskStatus } from "@/app/generated/prisma/enums";
@@ -15,6 +23,9 @@ const VALID_PRIORITIES = TASK_PRIORITY_OPTIONS.map((option) => option.value);
 // GET /api/tasks — any authenticated member; ?assignee=me, ?projectId=,
 // ?status= filters.
 export async function GET(request: Request) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -26,7 +37,10 @@ export async function GET(request: Request) {
   const statusParam = searchParams.get("status");
 
   if (statusParam && !VALID_STATUSES.includes(statusParam as TaskStatus)) {
-    return NextResponse.json({ error: "Invalid status filter" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid status filter" },
+      { status: 400 },
+    );
   }
 
   const where: Prisma.TaskWhereInput = {};
@@ -38,8 +52,8 @@ export async function GET(request: Request) {
   }
 
   const tasks = await prisma.task.findMany({
-    where,
-    include: TASK_INCLUDE,
+    where: { AND: [await taskVisibilityWhere(), where] },
+    include: await taskInclude(),
     orderBy: { createdAt: "desc" },
   });
 
@@ -50,14 +64,30 @@ export async function GET(request: Request) {
 // assignees. title, type, startDate, and dueDate are all mandatory — see
 // 08-task-assignment.md.
 export async function POST(request: Request) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [creator, isAdmin] = await Promise.all([getCurrentMember(), isCurrentMemberAdmin()]);
+  const [creator, isAdmin] = await Promise.all([
+    getCurrentMember(),
+    isCurrentMemberAdmin(),
+  ]);
   const body = await request.json();
-  const { title, description, type, priority, startDate, dueDate, assigneeIds, projectId, documentIds } = body;
+  const {
+    title,
+    description,
+    type,
+    priority,
+    startDate,
+    dueDate,
+    assigneeIds,
+    projectId,
+    documentIds,
+  } = body;
 
   if (typeof title !== "string" || title.trim() === "") {
     return NextResponse.json({ error: "title is required" }, { status: 400 });
@@ -65,26 +95,44 @@ export async function POST(request: Request) {
   // type is free text now (a preset label or a custom one — see
   // task.prisma), just non-empty and capped so a custom label can't blow
   // out task cards/badges elsewhere.
-  if (typeof type !== "string" || type.trim() === "" || type.trim().length > TASK_TYPE_MAX_LENGTH) {
+  if (
+    typeof type !== "string" ||
+    type.trim() === "" ||
+    type.trim().length > TASK_TYPE_MAX_LENGTH
+  ) {
     return NextResponse.json(
-      { error: `type is required and must be ${TASK_TYPE_MAX_LENGTH} characters or fewer` },
+      {
+        error: `type is required and must be ${TASK_TYPE_MAX_LENGTH} characters or fewer`,
+      },
       { status: 400 },
     );
   }
   if (typeof startDate !== "string" || Number.isNaN(Date.parse(startDate))) {
-    return NextResponse.json({ error: "startDate is required and must be a valid date" }, { status: 400 });
+    return NextResponse.json(
+      { error: "startDate is required and must be a valid date" },
+      { status: 400 },
+    );
   }
   if (typeof dueDate !== "string" || Number.isNaN(Date.parse(dueDate))) {
-    return NextResponse.json({ error: "dueDate is required and must be a valid date" }, { status: 400 });
+    return NextResponse.json(
+      { error: "dueDate is required and must be a valid date" },
+      { status: 400 },
+    );
   }
   if (priority !== undefined && !VALID_PRIORITIES.includes(priority)) {
     return NextResponse.json({ error: "Invalid priority" }, { status: 400 });
   }
   if (assigneeIds !== undefined && !Array.isArray(assigneeIds)) {
-    return NextResponse.json({ error: "assigneeIds must be an array" }, { status: 400 });
+    return NextResponse.json(
+      { error: "assigneeIds must be an array" },
+      { status: 400 },
+    );
   }
   if (documentIds !== undefined && !Array.isArray(documentIds)) {
-    return NextResponse.json({ error: "documentIds must be an array" }, { status: 400 });
+    return NextResponse.json(
+      { error: "documentIds must be an array" },
+      { status: 400 },
+    );
   }
 
   // A task can only link to a PROPOSED or ACTIVE project — not a
@@ -92,11 +140,21 @@ export async function POST(request: Request) {
   // lib/projects.ts's TASK_LINKABLE_PROJECT_STATUSES.
   let resolvedProjectId: string | null = null;
   if (typeof projectId === "string" && projectId !== "") {
-    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { status: true } });
+    const project = await prisma.project.findUnique({
+      where: {
+        ...{ id: projectId },
+        AND: [await entityVisibilityWhere("project")],
+      },
+      select: { status: true },
+    });
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 400 });
     }
-    if (!TASK_LINKABLE_PROJECT_STATUSES.includes(project.status as (typeof TASK_LINKABLE_PROJECT_STATUSES)[number])) {
+    if (
+      !TASK_LINKABLE_PROJECT_STATUSES.includes(
+        project.status as (typeof TASK_LINKABLE_PROJECT_STATUSES)[number],
+      )
+    ) {
       return NextResponse.json(
         { error: "A task can only link to a Proposed or Active project" },
         { status: 400 },
@@ -109,12 +167,45 @@ export async function POST(request: Request) {
   // themselves — never to anyone else. Enforced here regardless of what
   // the client actually sent, not just hidden in the UI (see
   // new-task-dialog.tsx for the matching UI restriction).
-  const resolvedAssigneeIds = isAdmin ? ((assigneeIds as string[]) ?? []) : [creator.id];
+  if (
+    body.visibilityScope !== undefined &&
+    !["user", "org", "project"].includes(body.visibilityScope)
+  )
+    return NextResponse.json({ error: "Invalid audience" }, { status: 400 });
+  const visibilityScope = isAdmin ? (body.visibilityScope ?? "user") : "user";
+  if (visibilityScope === "project" && !resolvedProjectId)
+    return NextResponse.json({ error: "Project required" }, { status: 400 });
+  const resolvedAssigneeIds = isAdmin
+    ? ((assigneeIds as string[]) ?? [])
+    : [creator.id];
 
+  if (
+    resolvedAssigneeIds.some((id) => typeof id !== "string") ||
+    new Set(resolvedAssigneeIds).size !== resolvedAssigneeIds.length
+  )
+    return NextResponse.json(
+      { error: "Choose distinct organization members" },
+      { status: 400 },
+    );
+  const validAssignees = await prisma.hubMembership.count({
+    where: { memberId: { in: resolvedAssigneeIds } },
+  });
+  if (
+    validAssignees !== resolvedAssigneeIds.length ||
+    (visibilityScope === "user" && resolvedAssigneeIds.length === 0)
+  )
+    return NextResponse.json(
+      { error: "Choose at least one current organization member" },
+      { status: 400 },
+    );
   const task = await prisma.task.create({
     data: {
+      visibilityScope,
       title: title.trim(),
-      description: typeof description === "string" && description.trim() !== "" ? description.trim() : null,
+      description:
+        typeof description === "string" && description.trim() !== ""
+          ? description.trim()
+          : null,
       type: type.trim(),
       priority: (priority as TaskPriority | undefined) ?? "MEDIUM",
       startDate: new Date(startDate),
@@ -128,7 +219,7 @@ export async function POST(request: Request) {
         create: ((documentIds as string[]) ?? []).map((docId) => ({ docId })),
       },
     },
-    include: TASK_INCLUDE,
+    include: await taskInclude(),
   });
 
   await enqueueGoogleCalendarSync("TASK", task.id);

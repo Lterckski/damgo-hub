@@ -1,3 +1,5 @@
+> Unit 23 implementation: the protected app layout now passes `AppHeader` into `AppShell`. It includes global search, quick-create modals, the scoped notification inbox, Clerk org/account controls and persisted theme selection. The original `AppNavbar` remains the shell fallback. See [the implementation decisions](23-global-search-notifications-header.md); any original future/approval wording below describes the earlier foundation only.
+
 Read `context/ui-context.md` before starting.
 
 **Implemented baseline:** this unit describes the existing shell. The proposed global search, notification inbox, org switcher, quick-create menu and account/theme controls are specified in [unit 23](23-global-search-notifications-header.md), whose audit must be confirmed before implementation. Preserve this unit's bottom dock and separate collaborative workspace chrome when extending the header.

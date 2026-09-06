@@ -1,3 +1,4 @@
+import { taskVisibilityWhere } from "@/lib/hub/context";
 import type { AuditEntityType, Prisma } from "@/app/generated/prisma/client";
 
 import { prisma } from "@/lib/prisma";
@@ -91,13 +92,26 @@ export interface AuditLogEntry {
   createdAt: string;
 }
 
-function asRecord(value: Prisma.JsonValue | null): Record<string, unknown> | null {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+function asRecord(
+  value: Prisma.JsonValue | null,
+): Record<string, unknown> | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    return null;
   return value as Record<string, unknown>;
 }
 
 export async function getAuditLog(limit = 100): Promise<AuditLogEntry[]> {
+  const visibleTasks = await prisma.task.findMany({
+    where: await taskVisibilityWhere(),
+    select: { id: true },
+  });
   const entries = await prisma.auditLog.findMany({
+    where: {
+      OR: [
+        { entityType: { not: "TASK" } },
+        { entityType: "TASK", entityId: { in: visibleTasks.map((t) => t.id) } },
+      ],
+    },
     orderBy: { createdAt: "desc" },
     take: limit,
   });

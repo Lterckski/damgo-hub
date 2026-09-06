@@ -1,3 +1,4 @@
+import { taskVisibilityWhere } from "@/lib/hub/context";
 import { clerkClient } from "@clerk/nextjs/server";
 
 import { organizationMemberProfile } from "@/lib/member-profile";
@@ -66,7 +67,9 @@ export interface MatchedRow extends LocalOnlyRow {
 }
 
 /** Counts everything a Member row still owns, for the merge/delete decision. */
-export async function getMemberContentCounts(memberId: string): Promise<MemberContentCounts> {
+export async function getMemberContentCounts(
+  memberId: string,
+): Promise<MemberContentCounts> {
   const [
     tasksCreated,
     taskAssignments,
@@ -82,8 +85,12 @@ export async function getMemberContentCounts(memberId: string): Promise<MemberCo
     agendaItems,
     calendarEvents,
   ] = await Promise.all([
-    prisma.task.count({ where: { createdById: memberId } }),
-    prisma.taskAssignee.count({ where: { memberId } }),
+    prisma.task.count({
+      where: { AND: [await taskVisibilityWhere(), { createdById: memberId }] },
+    }),
+    prisma.taskAssignee.count({
+      where: { memberId, task: await taskVisibilityWhere() },
+    }),
     prisma.doc.count({ where: { authorId: memberId } }),
     prisma.transaction.count({ where: { memberId } }),
     prisma.penalty.count({ where: { memberId } }),
@@ -113,7 +120,10 @@ export async function getMemberContentCounts(memberId: string): Promise<MemberCo
     calendarEvents,
   };
 
-  return { ...counts, total: Object.values(counts).reduce((sum, n) => sum + n, 0) };
+  return {
+    ...counts,
+    total: Object.values(counts).reduce((sum, n) => sum + n, 0),
+  };
 }
 
 export interface RoleDriftRow {
@@ -193,7 +203,9 @@ async function fetchOrgMemberships(orgId: string) {
   return rows;
 }
 
-async function fetchPendingInvitations(orgId: string): Promise<PendingInvitationRow[]> {
+async function fetchPendingInvitations(
+  orgId: string,
+): Promise<PendingInvitationRow[]> {
   const client = await clerkClient();
   const { data } = await client.organizations.getOrganizationInvitationList({
     organizationId: orgId,
@@ -212,7 +224,9 @@ async function fetchPendingInvitations(orgId: string): Promise<PendingInvitation
     }));
 }
 
-export async function reconcileMembers(orgId: string): Promise<MemberReconciliation> {
+export async function reconcileMembers(
+  orgId: string,
+): Promise<MemberReconciliation> {
   const [clerkMembers, pendingInvitations, localMembers] = await Promise.all([
     fetchOrgMemberships(orgId),
     fetchPendingInvitations(orgId),
@@ -320,7 +334,9 @@ export interface ReconciliationRepair {
  * decision, so it downgrades status and leaves the row for an admin to
  * delete deliberately from the Danger Zone.
  */
-export async function applyReconciliation(orgId: string): Promise<ReconciliationRepair> {
+export async function applyReconciliation(
+  orgId: string,
+): Promise<ReconciliationRepair> {
   const report = await reconcileMembers(orgId);
 
   const created = report.inClerkNotLocal.length

@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
@@ -11,6 +13,9 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ projectId: string; memberId: string }> },
 ) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -20,16 +25,25 @@ export async function DELETE(
   const { projectId, memberId } = await params;
   const access = await requireProjectAccess(projectId, currentMember);
   if (!access) {
-    return NextResponse.json({ error: "Not found or no access" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Not found or no access" },
+      { status: 403 },
+    );
   }
   if (access !== "owner") {
-    return NextResponse.json({ error: "Only the owner can remove collaborators" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Only the owner can remove collaborators" },
+      { status: 403 },
+    );
   }
 
   await prisma.projectMember.deleteMany({ where: { projectId, memberId } });
 
   const project = await prisma.project.findUniqueOrThrow({
-    where: { id: projectId },
+    where: {
+      ...{ id: projectId },
+      AND: [await entityVisibilityWhere("project")],
+    },
     include: PROJECT_INCLUDE,
   });
 

@@ -1,3 +1,6 @@
+import { RecordOpenTracker } from "@/components/chrome/record-open-tracker";
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { requireWorkspacePage as requireWorkspaceSession } from "@/lib/hub/context";
 import { prisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
 import { getMemberPickerOptions } from "@/lib/members";
@@ -11,6 +14,8 @@ export default async function ProjectDetailPage({
 }: {
   params: Promise<{ projectId: string }>;
 }) {
+  await requireWorkspaceSession();
+
   const { projectId } = await params;
   const member = await getCurrentMember();
 
@@ -20,7 +25,13 @@ export default async function ProjectDetailPage({
   }
 
   const [projectRecord, allMembers] = await Promise.all([
-    prisma.project.findUnique({ where: { id: projectId }, include: PROJECT_INCLUDE }),
+    prisma.project.findUnique({
+      where: {
+        ...{ id: projectId },
+        AND: [await entityVisibilityWhere("project")],
+      },
+      include: PROJECT_INCLUDE,
+    }),
     getMemberPickerOptions(),
   ]);
 
@@ -31,10 +42,13 @@ export default async function ProjectDetailPage({
   }
 
   return (
-    <ProjectDetail
-      project={serializeProject(projectRecord)}
-      allMembers={allMembers}
-      isOwner={access === "owner"}
-    />
+    <>
+      <RecordOpenTracker id={`project:${projectId}`} />{" "}
+      <ProjectDetail
+        project={serializeProject(projectRecord)}
+        allMembers={allMembers}
+        isOwner={access === "owner"}
+      />
+    </>
   );
 }

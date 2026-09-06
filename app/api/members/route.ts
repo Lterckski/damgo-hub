@@ -1,3 +1,4 @@
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
@@ -9,6 +10,9 @@ import { listOrgRoles } from "@/lib/organization-roles";
 // member can read this; only org:admin can mutate (see the other routes
 // under app/api/members/[memberId]/*).
 export async function GET() {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
 
   if (!userId) {

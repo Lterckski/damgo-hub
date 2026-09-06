@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
@@ -21,6 +23,9 @@ import { prisma } from "@/lib/prisma";
 // participations, or every meeting for an Admin). ?upcoming=true limits
 // to meetings that haven't started yet.
 export async function GET(request: Request) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -34,55 +39,93 @@ export async function GET(request: Request) {
 
   const meetings = await prisma.meeting.findMany({
     where: {
-      ...meetingVisibilityWhere(member.id, isAdmin),
-      ...(upcomingOnly ? { scheduledAt: { gte: new Date() } } : {}),
+      ...{
+        ...meetingVisibilityWhere(member.id, isAdmin),
+        ...(upcomingOnly ? { scheduledAt: { gte: new Date() } } : {}),
+      },
+      AND: [await entityVisibilityWhere("meeting")],
     },
     include: MEETING_LIST_INCLUDE,
     orderBy: { scheduledAt: upcomingOnly ? "asc" : "desc" },
   });
 
-  return NextResponse.json({ meetings: meetings.map(serializeMeetingListItem) });
+  return NextResponse.json({
+    meetings: meetings.map(serializeMeetingListItem),
+  });
 }
 
 // POST /api/meetings — any authenticated member can schedule a meeting
 // and becomes its organizer, automatically included as a participant.
 export async function POST(request: Request) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [organizer, isAdmin] = await Promise.all([getCurrentMember(), isCurrentMemberAdmin()]);
+  const [organizer, isAdmin] = await Promise.all([
+    getCurrentMember(),
+    isCurrentMemberAdmin(),
+  ]);
   const body = await request.json().catch(() => null);
   if (!body) {
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 },
+    );
   }
 
-  const { title, description, scheduledAt, endsAt, location, meetingUrl, participantIds, agendaItems } = body;
+  const {
+    title,
+    description,
+    scheduledAt,
+    endsAt,
+    location,
+    meetingUrl,
+    participantIds,
+    agendaItems,
+  } = body;
 
   if (typeof title !== "string" || title.trim() === "") {
     return NextResponse.json({ error: "title is required" }, { status: 400 });
   }
-  if (typeof scheduledAt !== "string" || Number.isNaN(Date.parse(scheduledAt))) {
-    return NextResponse.json({ error: "scheduledAt must be a valid date" }, { status: 400 });
+  if (
+    typeof scheduledAt !== "string" ||
+    Number.isNaN(Date.parse(scheduledAt))
+  ) {
+    return NextResponse.json(
+      { error: "scheduledAt must be a valid date" },
+      { status: 400 },
+    );
   }
   const scheduledAtDate = new Date(scheduledAt);
 
   let endsAtDate: Date | null = null;
   if (typeof endsAt === "string" && endsAt !== "") {
     if (Number.isNaN(Date.parse(endsAt))) {
-      return NextResponse.json({ error: "endsAt must be a valid date" }, { status: 400 });
+      return NextResponse.json(
+        { error: "endsAt must be a valid date" },
+        { status: 400 },
+      );
     }
     endsAtDate = new Date(endsAt);
     if (!isEndsAtValid(scheduledAtDate, endsAtDate)) {
-      return NextResponse.json({ error: "endsAt must be later than scheduledAt" }, { status: 400 });
+      return NextResponse.json(
+        { error: "endsAt must be later than scheduledAt" },
+        { status: 400 },
+      );
     }
   }
 
   let meetingUrlValue: string | null = null;
   if (typeof meetingUrl === "string" && meetingUrl.trim() !== "") {
     if (!isValidHttpUrl(meetingUrl.trim())) {
-      return NextResponse.json({ error: "meetingUrl must be a valid http(s) URL" }, { status: 400 });
+      return NextResponse.json(
+        { error: "meetingUrl must be a valid http(s) URL" },
+        { status: 400 },
+      );
     }
     meetingUrlValue = meetingUrl.trim();
   }
@@ -96,6 +139,16 @@ export async function POST(request: Request) {
   const requestedIds: string[] = Array.isArray(participantIds)
     ? participantIds.filter((id): id is string => typeof id === "string")
     : [];
+  const wholeOrg = body.visibilityScope === "org";
+  if (wholeOrg) {
+    const { listOrgRoles } = await import("@/lib/organization-roles");
+    const roles = await listOrgRoles();
+    const orgMembers = await prisma.member.findMany({
+      where: { clerkUserId: { in: [...roles.keys()] } },
+      select: { id: true },
+    });
+    requestedIds.push(...orgMembers.map((m) => m.id));
+  }
   const uniqueRequestedIds = [...new Set([...requestedIds, organizer.id])];
   const realMembers = await prisma.member.findMany({
     where: { id: { in: uniqueRequestedIds } },
@@ -108,18 +161,30 @@ export async function POST(request: Request) {
   // client-side (see architecture-context.md invariant 3). A non-admin's
   // submitted agendaItems are silently dropped rather than erroring the
   // whole request, same leniency as an unknown participant id above.
-  const agendaItemTexts = isAdmin && Array.isArray(agendaItems)
-    ? normalizeAgendaItemDrafts(agendaItems.filter((item): item is string => typeof item === "string"))
-    : [];
+  const agendaItemTexts =
+    isAdmin && Array.isArray(agendaItems)
+      ? normalizeAgendaItemDrafts(
+          agendaItems.filter(
+            (item): item is string => typeof item === "string",
+          ),
+        )
+      : [];
 
   let creationResult: Awaited<ReturnType<typeof createMeeting>>;
   try {
     creationResult = await createMeeting({
+      visibilityScope: wholeOrg ? "org" : "user",
       title: title.trim(),
-      description: typeof description === "string" && description.trim() !== "" ? description.trim() : null,
+      description:
+        typeof description === "string" && description.trim() !== ""
+          ? description.trim()
+          : null,
       scheduledAt: scheduledAtDate,
       endsAt: endsAtDate,
-      location: typeof location === "string" && location.trim() !== "" ? location.trim() : null,
+      location:
+        typeof location === "string" && location.trim() !== ""
+          ? location.trim()
+          : null,
       meetingUrl: meetingUrlValue,
       organizerId: organizer.id,
       organizerName: organizer.displayName,
@@ -127,7 +192,10 @@ export async function POST(request: Request) {
       agendaItemTexts,
     });
   } catch (error) {
-    console.error("Failed to schedule meeting", { organizerId: organizer.id, error });
+    console.error("Failed to schedule meeting", {
+      organizerId: organizer.id,
+      error,
+    });
     return NextResponse.json(
       { error: "The meeting could not be scheduled. Please try again." },
       { status: 500 },
@@ -139,19 +207,31 @@ export async function POST(request: Request) {
   // External side effects happen after the durable meeting + outbox commit.
   // Their failure is logged but never turns a successful create into a 500.
   try {
-    const { reminder24hRunId, reminder1hRunId } = await scheduleMeetingReminders(meeting);
+    const { reminder24hRunId, reminder1hRunId } =
+      await scheduleMeetingReminders(meeting);
     if (reminder24hRunId || reminder1hRunId) {
-      await prisma.meeting.update({ where: { id: meeting.id }, data: { reminder24hRunId, reminder1hRunId } });
+      await prisma.meeting.update({
+        where: { id: meeting.id },
+        data: { reminder24hRunId, reminder1hRunId },
+      });
     }
   } catch (error) {
-    console.error("Failed to reconcile reminder runs after meeting creation", { meetingId: meeting.id, error });
+    console.error("Failed to reconcile reminder runs after meeting creation", {
+      meetingId: meeting.id,
+      error,
+    });
   }
-  if (invitationOutboxId) await enqueueMeetingNotificationOutbox(invitationOutboxId);
+  if (invitationOutboxId)
+    await enqueueMeetingNotificationOutbox(invitationOutboxId);
 
-  return NextResponse.json({ meeting: serializeMeetingListItem(meeting) }, { status: 201 });
+  return NextResponse.json(
+    { meeting: serializeMeetingListItem(meeting) },
+    { status: 201 },
+  );
 }
 
 interface CreateMeetingInput {
+  visibilityScope: string;
   title: string;
   description: string | null;
   scheduledAt: Date;
@@ -168,6 +248,7 @@ function createMeeting(input: CreateMeetingInput) {
   return prisma.$transaction(async (tx) => {
     const meeting = await tx.meeting.create({
       data: {
+        visibilityScope: input.visibilityScope,
         title: input.title,
         description: input.description,
         scheduledAt: input.scheduledAt,

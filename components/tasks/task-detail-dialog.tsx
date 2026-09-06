@@ -1,4 +1,5 @@
 "use client";
+import { RecordOpenTracker } from "@/components/chrome/record-open-tracker";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -27,8 +28,14 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { DateTimePicker } from "@/components/shared/date-time-picker";
 import { DocumentMultiSelect } from "@/components/tasks/document-multi-select";
-import { TaskPriorityBadge, type TaskPriorityValue } from "@/components/tasks/task-priority-badge";
-import { TaskStatusBadge, type TaskStatusValue } from "@/components/tasks/task-status-badge";
+import {
+  TaskPriorityBadge,
+  type TaskPriorityValue,
+} from "@/components/tasks/task-priority-badge";
+import {
+  TaskStatusBadge,
+  type TaskStatusValue,
+} from "@/components/tasks/task-status-badge";
 import {
   TASK_PRIORITY_OPTIONS,
   TASK_TYPE_MAX_LENGTH,
@@ -40,7 +47,8 @@ import {
   type TaskProjectOption,
 } from "@/lib/tasks";
 
-const FIELD_LABEL_CLASS = "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
+const FIELD_LABEL_CLASS =
+  "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
 const NO_PROJECT = "__none__";
 const NO_PROJECT_LABEL = "Not part of a project / Standalone";
 const CUSTOM_TYPE = "__custom__";
@@ -48,13 +56,21 @@ const CUSTOM_TYPE_LABEL = "Custom…";
 
 // See new-task-dialog.tsx's comment — <Select.Value> needs an `items` map
 // to show a label instead of the raw value before the popup has opened.
-const STATUS_ITEMS = { TODO: "To Do", IN_PROGRESS: "In Progress", DONE: "Done" };
+const STATUS_ITEMS = {
+  TODO: "To Do",
+  IN_PROGRESS: "In Progress",
+  DONE: "Done",
+};
 const TASK_TYPE_ITEMS = {
   ...Object.fromEntries(TASK_TYPE_OPTIONS.map((o) => [o.value, o.label])),
   [CUSTOM_TYPE]: CUSTOM_TYPE_LABEL,
 };
-const TASK_TYPE_PRESET_VALUES: ReadonlySet<string> = new Set(TASK_TYPE_OPTIONS.map((o) => o.value));
-const TASK_PRIORITY_ITEMS = Object.fromEntries(TASK_PRIORITY_OPTIONS.map((o) => [o.value, o.label]));
+const TASK_TYPE_PRESET_VALUES: ReadonlySet<string> = new Set(
+  TASK_TYPE_OPTIONS.map((o) => o.value),
+);
+const TASK_PRIORITY_ITEMS = Object.fromEntries(
+  TASK_PRIORITY_OPTIONS.map((o) => [o.value, o.label]),
+);
 
 interface TaskDetailDialogProps {
   task: SerializedTask;
@@ -92,7 +108,9 @@ export function TaskDetailDialog({
   readOnly = false,
 }: TaskDetailDialogProps) {
   const router = useRouter();
-  const [draftStatus, setDraftStatus] = useState<TaskStatusValue>(task.status as TaskStatusValue);
+  const [draftStatus, setDraftStatus] = useState<TaskStatusValue>(
+    task.status as TaskStatusValue,
+  );
   // task.type may already be a custom label (free text since the
   // migration — see task.prisma), not one of the 7 presets — the Select
   // needs the CUSTOM_TYPE sentinel selected in that case, with the actual
@@ -106,10 +124,18 @@ export function TaskDetailDialog({
   const [draftPriority, setDraftPriority] = useState(task.priority);
   const [draftStartDate, setDraftStartDate] = useState(task.startDate);
   const [draftDueDate, setDraftDueDate] = useState(task.dueDate);
-  const [draftDescription, setDraftDescription] = useState(task.description ?? "");
-  const [draftAssigneeIds, setDraftAssigneeIds] = useState(task.assignees.map((a) => a.id));
-  const [draftProjectId, setDraftProjectId] = useState(task.projectId ?? NO_PROJECT);
-  const [draftDocumentIds, setDraftDocumentIds] = useState(task.documents.map((d) => d.id));
+  const [draftDescription, setDraftDescription] = useState(
+    task.description ?? "",
+  );
+  const [draftAssigneeIds, setDraftAssigneeIds] = useState(
+    task.assignees.map((a) => a.id),
+  );
+  const [draftProjectId, setDraftProjectId] = useState(
+    task.projectId ?? NO_PROJECT,
+  );
+  const [draftDocumentIds, setDraftDocumentIds] = useState(
+    task.documents.map((d) => d.id),
+  );
   const [isSaving, setIsSaving] = useState(false);
 
   // For the non-admin assignee view — everyone else currently on this
@@ -132,7 +158,10 @@ export function TaskDetailDialog({
   // dropdown shouldn't silently drop what's already set.
   const projectOptions =
     task.projectId && !projects.some((p) => p.id === task.projectId)
-      ? [{ id: task.projectId, name: task.projectName ?? "Linked project" }, ...projects]
+      ? [
+          { id: task.projectId, name: task.projectName ?? "Linked project" },
+          ...projects,
+        ]
       : projects;
 
   const projectItems: Record<string, string> = {
@@ -180,11 +209,16 @@ export function TaskDetailDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <RecordOpenTracker id={`task:${task.id}`} />
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold text-copy-primary">{task.title}</DialogTitle>
+          <DialogTitle className="text-lg font-bold text-copy-primary">
+            {task.title}
+          </DialogTitle>
           <DialogDescription>
-            {readOnly ? "Task details." : "Edit type, dates, status, assignees, and description."}
+            {readOnly
+              ? "Task details."
+              : "Edit type, dates, status, assignees, and description."}
           </DialogDescription>
         </DialogHeader>
 
@@ -192,7 +226,9 @@ export function TaskDetailDialog({
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
               <TaskStatusBadge status={task.status as TaskStatusValue} />
-              <TaskPriorityBadge priority={task.priority as TaskPriorityValue} />
+              <TaskPriorityBadge
+                priority={task.priority as TaskPriorityValue}
+              />
               <span className="rounded-full bg-subtle px-2 py-0.5 text-xs font-semibold text-copy-secondary">
                 {taskTypeLabel(task.type)}
               </span>
@@ -224,14 +260,18 @@ export function TaskDetailDialog({
 
             <div>
               <p className={FIELD_LABEL_CLASS}>Description</p>
-              <p className="text-sm text-copy-secondary">{task.description || "No description."}</p>
+              <p className="text-sm text-copy-secondary">
+                {task.description || "No description."}
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className={FIELD_LABEL_CLASS}>Assignees</p>
                 {task.assignees.length === 0 ? (
-                  <p className="text-sm text-copy-faint">Unassigned — group task.</p>
+                  <p className="text-sm text-copy-faint">
+                    Unassigned — group task.
+                  </p>
                 ) : (
                   <p className="text-sm font-medium text-copy-primary">
                     {task.assignees.map((a) => a.displayName).join(", ")}
@@ -240,7 +280,9 @@ export function TaskDetailDialog({
               </div>
               <div>
                 <p className={FIELD_LABEL_CLASS}>Assigned By</p>
-                <p className="text-sm font-medium text-copy-primary">{task.createdByName}</p>
+                <p className="text-sm font-medium text-copy-primary">
+                  {task.createdByName}
+                </p>
               </div>
             </div>
 
@@ -271,7 +313,9 @@ export function TaskDetailDialog({
                 <Select
                   items={STATUS_ITEMS}
                   value={draftStatus}
-                  onValueChange={(value) => setDraftStatus(value as TaskStatusValue)}
+                  onValueChange={(value) =>
+                    setDraftStatus(value as TaskStatusValue)
+                  }
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue />
@@ -299,7 +343,9 @@ export function TaskDetailDialog({
                         {option.label}
                       </SelectItem>
                     ))}
-                    <SelectItem value={CUSTOM_TYPE}>{CUSTOM_TYPE_LABEL}</SelectItem>
+                    <SelectItem value={CUSTOM_TYPE}>
+                      {CUSTOM_TYPE_LABEL}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
                 {draftType === CUSTOM_TYPE && (
@@ -316,8 +362,18 @@ export function TaskDetailDialog({
             </div>
 
             <div className="grid grid-cols-3 gap-4">
-              <DateTimePicker label="Start" value={draftStartDate} onChange={setDraftStartDate} required />
-              <DateTimePicker label="End" value={draftDueDate} onChange={setDraftDueDate} required />
+              <DateTimePicker
+                label="Start"
+                value={draftStartDate}
+                onChange={setDraftStartDate}
+                required
+              />
+              <DateTimePicker
+                label="End"
+                value={draftDueDate}
+                onChange={setDraftDueDate}
+                required
+              />
               <div>
                 <label className={FIELD_LABEL_CLASS}>Priority</label>
                 <Select
@@ -361,7 +417,9 @@ export function TaskDetailDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NO_PROJECT}>{NO_PROJECT_LABEL}</SelectItem>
+                    <SelectItem value={NO_PROJECT}>
+                      {NO_PROJECT_LABEL}
+                    </SelectItem>
                     {projectOptions.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.name}
@@ -373,27 +431,38 @@ export function TaskDetailDialog({
 
               {docs.length > 0 && (
                 <div>
-                  <p className={FIELD_LABEL_CLASS}>Related Documents (optional)</p>
+                  <p className={FIELD_LABEL_CLASS}>
+                    Related Documents (optional)
+                  </p>
                   <DocumentMultiSelect
                     docs={docs}
                     selectedIds={draftDocumentIds}
                     onChange={setDraftDocumentIds}
-                    activeProjectId={draftProjectId === NO_PROJECT ? undefined : draftProjectId}
+                    activeProjectId={
+                      draftProjectId === NO_PROJECT ? undefined : draftProjectId
+                    }
                   />
                 </div>
               )}
             </div>
 
             <div>
-              <p className="mb-2 text-xs font-bold tracking-wide text-copy-primary uppercase">Assignees</p>
+              <p className="mb-2 text-xs font-bold tracking-wide text-copy-primary uppercase">
+                Assignees
+              </p>
               {isAdmin ? (
                 <>
                   <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-copy-primary">
                     <Checkbox
-                      checked={members.length > 0 && draftAssigneeIds.length === members.length}
+                      checked={
+                        members.length > 0 &&
+                        draftAssigneeIds.length === members.length
+                      }
                       onCheckedChange={() =>
                         setDraftAssigneeIds(
-                          draftAssigneeIds.length === members.length ? [] : members.map((m) => m.id),
+                          draftAssigneeIds.length === members.length
+                            ? []
+                            : members.map((m) => m.id),
                         )
                       }
                     />
@@ -401,7 +470,10 @@ export function TaskDetailDialog({
                   </label>
                   <div className="grid max-h-32 grid-cols-3 gap-2 overflow-y-auto border-t border-surface-border-subtle pt-2">
                     {members.map((m) => (
-                      <label key={m.id} className="flex items-center gap-2 text-sm text-copy-primary">
+                      <label
+                        key={m.id}
+                        className="flex items-center gap-2 text-sm text-copy-primary"
+                      >
                         <Checkbox
                           checked={draftAssigneeIds.includes(m.id)}
                           onCheckedChange={() => toggleAssignee(m.id)}
@@ -438,7 +510,8 @@ export function TaskDetailDialog({
               )}
               {draftAssigneeIds.length === 0 && (
                 <p className="mt-2 text-xs font-medium text-error">
-                  Select at least one assignee, or check Select All for a group task.
+                  Select at least one assignee, or check Select All for a group
+                  task.
                 </p>
               )}
             </div>
@@ -447,7 +520,12 @@ export function TaskDetailDialog({
 
         <DialogFooter className="justify-between">
           {canDelete ? (
-            <Button variant="ghost" disabled={isSaving} onClick={deleteTask} className="text-error">
+            <Button
+              variant="ghost"
+              disabled={isSaving}
+              onClick={deleteTask}
+              className="text-error"
+            >
               <Trash2 className="h-4 w-4" /> Delete
             </Button>
           ) : (

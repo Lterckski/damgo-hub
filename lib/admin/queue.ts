@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { taskVisibilityWhere } from "@/lib/hub/context";
 import { prisma } from "@/lib/prisma";
 import { getOrgSettings } from "@/lib/org-settings";
 import type { AdminDrawerTarget } from "@/lib/admin/types";
@@ -59,7 +61,11 @@ export interface QueueItem {
 const TRANSACTION_ACTIONS: QueueAction[] = [
   { actionId: "transaction.approve", label: "Approve", variant: "primary" },
   { actionId: "transaction.reject", label: "Reject", variant: "destructive" },
-  { actionId: "transaction.request_receipt", label: "Request receipt", variant: "secondary" },
+  {
+    actionId: "transaction.request_receipt",
+    label: "Request receipt",
+    variant: "secondary",
+  },
 ];
 
 const REQUEST_ACTIONS: QueueAction[] = [
@@ -69,7 +75,11 @@ const REQUEST_ACTIONS: QueueAction[] = [
 
 const PROPOSAL_ACTIONS: QueueAction[] = [
   { actionId: "agenda_proposal.accept", label: "Accept", variant: "primary" },
-  { actionId: "agenda_proposal.decline", label: "Decline", variant: "destructive" },
+  {
+    actionId: "agenda_proposal.decline",
+    label: "Decline",
+    variant: "destructive",
+  },
 ];
 
 const PROJECT_ACTIONS: QueueAction[] = [
@@ -79,12 +89,22 @@ const PROJECT_ACTIONS: QueueAction[] = [
 
 const PENALTY_ACTIONS: QueueAction[] = [
   { actionId: "penalty.resolve", label: "Mark paid", variant: "primary" },
-  { actionId: "penalty.waive", label: "Waive", variant: "destructive", requiresReason: true },
+  {
+    actionId: "penalty.waive",
+    label: "Waive",
+    variant: "destructive",
+    requiresReason: true,
+  },
 ];
 
 const TASK_ACTIONS: QueueAction[] = [
   { actionId: "task.complete", label: "Mark done", variant: "primary" },
-  { actionId: "task.extend", label: "Extend 7 days", variant: "secondary", requiresReason: true },
+  {
+    actionId: "task.extend",
+    label: "Extend 7 days",
+    variant: "secondary",
+    requiresReason: true,
+  },
 ];
 
 /** Every action id the queue can legitimately offer — the route's allowlist. */
@@ -103,7 +123,9 @@ export function isQueueActionId(value: unknown): value is string {
 
 /** The reason-required actions, so the route can enforce it server-side too. */
 export const REASON_REQUIRED_ACTION_IDS = new Set(
-  [...PENALTY_ACTIONS, ...TASK_ACTIONS].filter((a) => a.requiresReason).map((a) => a.actionId),
+  [...PENALTY_ACTIONS, ...TASK_ACTIONS]
+    .filter((a) => a.requiresReason)
+    .map((a) => a.actionId),
 );
 
 function daysAgo(days: number): Date {
@@ -121,56 +143,85 @@ export function penaltyDueAt(
   penaltyDueDays: number,
 ): Date {
   if (penalty.dueAt) return penalty.dueAt;
-  return new Date(penalty.createdAt.getTime() + penaltyDueDays * 24 * 60 * 60 * 1000);
+  return new Date(
+    penalty.createdAt.getTime() + penaltyDueDays * 24 * 60 * 60 * 1000,
+  );
 }
 
 export async function getActionQueue(): Promise<QueueItem[]> {
   const settings = await getOrgSettings();
   const now = new Date();
 
-  const [pendingTransactions, memberRequests, agendaProposals, proposedProjects, openPenalties, overdueTasks] =
-    await Promise.all([
-      prisma.transaction.findMany({
-        where: { status: "PENDING" },
-        include: { member: { select: { displayName: true, avatarUrl: true } } },
-        orderBy: { createdAt: "asc" },
-      }),
-      prisma.memberRequest.findMany({
-        where: { status: "PENDING" },
-        include: { member: { select: { displayName: true, avatarUrl: true } } },
-        orderBy: { createdAt: "asc" },
-      }),
-      prisma.agendaProposal.findMany({
-        where: { status: "PENDING" },
-        include: {
-          proposedBy: { select: { displayName: true, avatarUrl: true } },
-          meeting: { select: { title: true } },
+  const [
+    pendingTransactions,
+    memberRequests,
+    agendaProposals,
+    proposedProjects,
+    openPenalties,
+    overdueTasks,
+  ] = await Promise.all([
+    prisma.transaction.findMany({
+      where: {
+        ...{ status: "PENDING" },
+        AND: [await entityVisibilityWhere("transaction")],
+      },
+      include: { member: { select: { displayName: true, avatarUrl: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.memberRequest.findMany({
+      where: { status: "PENDING" },
+      include: { member: { select: { displayName: true, avatarUrl: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.agendaProposal.findMany({
+      where: { status: "PENDING" },
+      include: {
+        proposedBy: { select: { displayName: true, avatarUrl: true } },
+        meeting: { select: { title: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.project.findMany({
+      where: {
+        ...{ status: "PROPOSED" },
+        AND: [await entityVisibilityWhere("project")],
+      },
+      include: { owner: { select: { displayName: true, avatarUrl: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.penalty.findMany({
+      where: {
+        ...{ status: "OPEN" },
+        AND: [await entityVisibilityWhere("penalty")],
+      },
+      include: { member: { select: { displayName: true, avatarUrl: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+    // "Escalated" overdue tasks: past due AND not already done. The
+    // 3-day grace matches src/trigger/penalty-escalation-check.ts's own
+    // notion of escalation rather than inventing a second threshold —
+    // a task one hour late is not an admin decision.
+    prisma.task.findMany({
+      where: {
+        AND: [
+          await taskVisibilityWhere(),
+          { status: { not: "DONE" }, dueDate: { lt: daysAgo(3) } },
+        ],
+      },
+      include: {
+        assignees: {
+          include: {
+            member: { select: { displayName: true, avatarUrl: true } },
+          },
         },
-        orderBy: { createdAt: "asc" },
-      }),
-      prisma.project.findMany({
-        where: { status: "PROPOSED" },
-        include: { owner: { select: { displayName: true, avatarUrl: true } } },
-        orderBy: { createdAt: "asc" },
-      }),
-      prisma.penalty.findMany({
-        where: { status: "OPEN" },
-        include: { member: { select: { displayName: true, avatarUrl: true } } },
-        orderBy: { createdAt: "asc" },
-      }),
-      // "Escalated" overdue tasks: past due AND not already done. The
-      // 3-day grace matches src/trigger/penalty-escalation-check.ts's own
-      // notion of escalation rather than inventing a second threshold —
-      // a task one hour late is not an admin decision.
-      prisma.task.findMany({
-        where: { status: { not: "DONE" }, dueDate: { lt: daysAgo(3) } },
-        include: {
-          assignees: { include: { member: { select: { displayName: true, avatarUrl: true } } } },
-          project: { select: { name: true } },
+        project: {
+          where: await entityVisibilityWhere("project"),
+          select: { name: true },
         },
-        orderBy: { dueDate: "asc" },
-      }),
-    ]);
+      },
+      orderBy: { dueDate: "asc" },
+    }),
+  ]);
 
   const items: QueueItem[] = [];
 
@@ -180,7 +231,9 @@ export async function getActionQueue(): Promise<QueueItem[]> {
       kind: "TRANSACTION_PENDING",
       entityId: transaction.id,
       title: `${transaction.type === "INCOME" ? "Income" : "Expense"} awaiting approval — ${transaction.category}`,
-      detail: transaction.receiptPath ? transaction.description : "No receipt attached",
+      detail: transaction.receiptPath
+        ? transaction.description
+        : "No receipt attached",
       subjectName: transaction.member.displayName,
       subjectAvatarUrl: transaction.member.avatarUrl,
       amountCents: transaction.amount,
@@ -207,7 +260,9 @@ export async function getActionQueue(): Promise<QueueItem[]> {
       severity: "info",
       occurredAt: request.createdAt.toISOString(),
       actions: REQUEST_ACTIONS,
-      drawer: request.memberId ? { kind: "members", recordId: request.memberId } : null,
+      drawer: request.memberId
+        ? { kind: "members", recordId: request.memberId }
+        : null,
     });
   }
 
@@ -249,7 +304,9 @@ export async function getActionQueue(): Promise<QueueItem[]> {
     const dueAt = penaltyDueAt(penalty, settings.penaltyDueDays);
     if (dueAt > now) continue;
 
-    const daysLate = Math.floor((now.getTime() - dueAt.getTime()) / (24 * 60 * 60 * 1000));
+    const daysLate = Math.floor(
+      (now.getTime() - dueAt.getTime()) / (24 * 60 * 60 * 1000),
+    );
     items.push({
       id: `PENALTY_PAST_DUE:${penalty.id}`,
       kind: "PENALTY_PAST_DUE",
@@ -267,7 +324,9 @@ export async function getActionQueue(): Promise<QueueItem[]> {
   }
 
   for (const task of overdueTasks) {
-    const daysLate = Math.floor((now.getTime() - task.dueDate.getTime()) / (24 * 60 * 60 * 1000));
+    const daysLate = Math.floor(
+      (now.getTime() - task.dueDate.getTime()) / (24 * 60 * 60 * 1000),
+    );
     const firstAssignee = task.assignees[0]?.member ?? null;
     const extraAssignees = task.assignees.length - 1;
 

@@ -1,8 +1,13 @@
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { isCurrentMemberLeader } from "@/lib/current-member";
-import { grantOrgAdmin, listOrgRoles, revokeOrgAdmin } from "@/lib/organization-roles";
+import {
+  grantOrgAdmin,
+  listOrgRoles,
+  revokeOrgAdmin,
+} from "@/lib/organization-roles";
 
 // POST /api/members/[memberId]/assistant-leader — grant org:admin to this
 // member. Leader only. There is only ever one Assistant Leader seat, so
@@ -12,6 +17,9 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ memberId: string }> },
 ) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const isLeader = await isCurrentMemberLeader();
   if (!isLeader) {
     return NextResponse.json(
@@ -58,6 +66,9 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ memberId: string }> },
 ) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const isLeader = await isCurrentMemberLeader();
   if (!isLeader) {
     return NextResponse.json(

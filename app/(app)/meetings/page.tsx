@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { requireWorkspacePage as requireWorkspaceSession } from "@/lib/hub/context";
 import { prisma } from "@/lib/prisma";
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
 import { getMemberPickerOptions } from "@/lib/members";
@@ -11,11 +13,19 @@ import { BackButton } from "@/components/shared/back-button";
 import { MeetingsList } from "@/components/meetings/meetings-list";
 
 export default async function MeetingsPage() {
-  const [member, isAdmin] = await Promise.all([getCurrentMember(), isCurrentMemberAdmin()]);
+  await requireWorkspaceSession();
+
+  const [member, isAdmin] = await Promise.all([
+    getCurrentMember(),
+    isCurrentMemberAdmin(),
+  ]);
 
   const [meetingRecords, memberOptions] = await Promise.all([
     prisma.meeting.findMany({
-      where: meetingVisibilityWhere(member.id, isAdmin),
+      where: {
+        ...meetingVisibilityWhere(member.id, isAdmin),
+        AND: [await entityVisibilityWhere("meeting")],
+      },
       include: MEETING_LIST_INCLUDE,
       orderBy: { scheduledAt: "desc" },
     }),

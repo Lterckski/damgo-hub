@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { put } from "@vercel/blob";
@@ -11,13 +13,18 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ docId: string }> },
 ) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { docId } = await params;
-  const doc = await prisma.doc.findUnique({ where: { id: docId } });
+  const doc = await prisma.doc.findUnique({
+    where: { ...{ id: docId }, AND: [await entityVisibilityWhere("document")] },
+  });
   if (!doc) {
     return NextResponse.json({ error: "Doc not found" }, { status: 404 });
   }
@@ -38,5 +45,8 @@ export async function POST(
     data: { docId, fileName: file.name, filePath: blob.pathname },
   });
 
-  return NextResponse.json({ attachment: serializeAttachment(attachment) }, { status: 201 });
+  return NextResponse.json(
+    { attachment: serializeAttachment(attachment) },
+    { status: 201 },
+  );
 }

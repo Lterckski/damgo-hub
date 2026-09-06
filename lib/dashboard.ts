@@ -1,3 +1,4 @@
+import { taskVisibilityWhere } from "@/lib/hub/context";
 import { differenceInCalendarDays } from "date-fns";
 import { get } from "@vercel/blob";
 
@@ -55,14 +56,23 @@ export async function getUpcomingItems(limit = 5): Promise<UpcomingItem[]> {
       orderBy: { startAt: "asc" },
     }),
     prisma.task.findMany({
-      where: { dueDate: { gte: now, lte: weekOut }, status: { not: "DONE" } },
+      where: {
+        AND: [
+          await taskVisibilityWhere(),
+          { dueDate: { gte: now, lte: weekOut }, status: { not: "DONE" } },
+        ],
+      },
       select: { id: true, title: true, dueDate: true },
       orderBy: { dueDate: "asc" },
     }),
   ]);
 
   const items: UpcomingItem[] = [
-    ...events.map((e) => ({ id: e.id, title: e.title, startsAt: e.startAt.toISOString() })),
+    ...events.map((e) => ({
+      id: e.id,
+      title: e.title,
+      startsAt: e.startAt.toISOString(),
+    })),
     ...tasks.map((t) => ({
       id: t.id,
       title: `${t.title} (${dueInLabel(t.dueDate, now)})`,
@@ -70,7 +80,9 @@ export async function getUpcomingItems(limit = 5): Promise<UpcomingItem[]> {
     })),
   ];
 
-  return items.sort((a, b) => a.startsAt.localeCompare(b.startsAt)).slice(0, limit);
+  return items
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
+    .slice(0, limit);
 }
 
 export interface RoleCoverageEntry {
@@ -147,7 +159,9 @@ export async function getRecentIdeas(limit = 5): Promise<RecentIdea[]> {
     const text = await new Response(blob.stream).text();
     const snapshot: unknown = JSON.parse(text);
     const parsedNodes =
-      snapshot && typeof snapshot === "object" && Array.isArray((snapshot as { nodes?: unknown }).nodes)
+      snapshot &&
+      typeof snapshot === "object" &&
+      Array.isArray((snapshot as { nodes?: unknown }).nodes)
         ? (snapshot as { nodes: IdeaNode[] }).nodes
         : [];
     nodes = parsedNodes;
@@ -165,7 +179,9 @@ export async function getRecentIdeas(limit = 5): Promise<RecentIdea[]> {
     where: { id: { in: authorIds } },
     select: { id: true, displayName: true },
   });
-  const nameById = new Map(authors.map((author) => [author.id, author.displayName]));
+  const nameById = new Map(
+    authors.map((author) => [author.id, author.displayName]),
+  );
 
   return recent.map((node) => ({
     id: node.id,

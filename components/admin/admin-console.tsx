@@ -19,7 +19,11 @@ import {
   type AdminTab,
   type AdminTableFilterTarget,
 } from "@/lib/admin/types";
-import { runBulkAction, runInlineEdit, runQueueAction } from "@/lib/admin/client";
+import {
+  runBulkAction,
+  runInlineEdit,
+  runQueueAction,
+} from "@/lib/admin/client";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { ActionQueue } from "@/components/admin/action-queue";
@@ -29,8 +33,14 @@ import { CommandPalette } from "@/components/admin/command-palette";
 import { DangerZone } from "@/components/admin/danger-zone";
 import { DataTable, type BulkActionDef } from "@/components/admin/data-table";
 import { OrgSettingsPanel } from "@/components/admin/org-settings-panel";
-import { RecordDrawer, type DrawerAction } from "@/components/admin/record-drawer";
-import { ReasonDialog, type ReasonRequest } from "@/components/admin/reason-dialog";
+import {
+  RecordDrawer,
+  type DrawerAction,
+} from "@/components/admin/record-drawer";
+import {
+  ReasonDialog,
+  type ReasonRequest,
+} from "@/components/admin/reason-dialog";
 import { StatCards } from "@/components/admin/stat-cards";
 import { SyncWithClerk } from "@/components/admin/sync-with-clerk";
 import { ViewAsToggle } from "@/components/admin/view-as-toggle";
@@ -95,13 +105,18 @@ export function AdminConsole({
   const [drawerToken, setDrawerToken] = React.useState(0);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [broadcastOpen, setBroadcastOpen] = React.useState(false);
-  const [reasonRequest, setReasonRequest] = React.useState<ReasonRequest | null>(null);
+  const [reasonRequest, setReasonRequest] =
+    React.useState<ReasonRequest | null>(null);
   const [pendingIds, setPendingIds] = React.useState<Set<string>>(new Set());
 
-  // ⌘K / Ctrl+K anywhere on the console.
+  // The global header owns ⌘K; Shift+⌘K opens console drawer search.
   React.useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        event.shiftKey &&
+        event.key.toLowerCase() === "k"
+      ) {
         event.preventDefault();
         setPaletteOpen((open) => !open);
       }
@@ -110,7 +125,9 @@ export function AdminConsole({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const activeFilter: AdminTableFilterTarget | null = filterId ? { tab, filterId } : null;
+  const activeFilter: AdminTableFilterTarget | null = filterId
+    ? { tab, filterId }
+    : null;
 
   function markPending(ids: string[], pending: boolean) {
     setPendingIds((current) => {
@@ -156,7 +173,13 @@ export function AdminConsole({
       undo:
         result.ok && previousValue !== undefined
           ? async () => {
-              const undone = await runInlineEdit(kind, recordId, field, previousValue, "Undo");
+              const undone = await runInlineEdit(
+                kind,
+                recordId,
+                field,
+                previousValue,
+                "Undo",
+              );
               toast({
                 message: undone.ok ? `${label} restored` : undone.message,
                 tone: undone.ok ? "info" : "error",
@@ -179,10 +202,12 @@ export function AdminConsole({
         if (kind === "penalties" && field === "status" && value === "WAIVED") {
           setReasonRequest({
             title: "Waive this penalty?",
-            description: "The penalty is closed without a ledger entry. Recorded in the audit log.",
+            description:
+              "The penalty is closed without a ledger entry. Recorded in the audit log.",
             confirmLabel: "Waive",
             destructive: true,
-            onConfirm: (reason) => commitEdit(kind, recordId, field, value, label, reason),
+            onConfirm: (reason) =>
+              commitEdit(kind, recordId, field, value, label, reason),
           });
           return;
         }
@@ -198,7 +223,8 @@ export function AdminConsole({
                 ? "A pending transaction is edited in place. A settled one is corrected with an offsetting adjustment entry — the original record is never rewritten."
                 : "Only an open penalty can be re-priced.",
             confirmLabel: "Save change",
-            onConfirm: (reason) => commitEdit(kind, recordId, field, value, label, reason),
+            onConfirm: (reason) =>
+              commitEdit(kind, recordId, field, value, label, reason),
           });
           return;
         }
@@ -215,7 +241,11 @@ export function AdminConsole({
   // Queue + bulk actions
   // -------------------------------------------------------------------------
 
-  async function runQueue(action: QueueAction, entityIds: string[], reason?: string) {
+  async function runQueue(
+    action: QueueAction,
+    entityIds: string[],
+    reason?: string,
+  ) {
     markPending(entityIds, true);
     const result = await runQueueAction(action.actionId, entityIds, reason);
     markPending(entityIds, false);
@@ -227,7 +257,8 @@ export function AdminConsole({
     if (action.requiresReason) {
       setReasonRequest({
         title: `${action.label}${entityIds.length > 1 ? ` ${entityIds.length} items` : ""}?`,
-        description: "This is an override. The reason is written to the audit log against your name.",
+        description:
+          "This is an override. The reason is written to the audit log against your name.",
         confirmLabel: action.label,
         destructive: action.variant === "destructive",
         onConfirm: (reason) => runQueue(action, entityIds, reason),
@@ -237,7 +268,11 @@ export function AdminConsole({
     void runQueue(action, entityIds);
   }
 
-  async function runBulk(action: BulkActionDef, ids: string[], reason?: string) {
+  async function runBulk(
+    action: BulkActionDef,
+    ids: string[],
+    reason?: string,
+  ) {
     markPending(ids, true);
     const result = await runBulkAction(action.id, ids, action.value, reason);
     markPending(ids, false);
@@ -257,7 +292,8 @@ export function AdminConsole({
     if (action.requiresReason) {
       setReasonRequest({
         title: `${action.label} ${ids.length} record${ids.length === 1 ? "" : "s"}?`,
-        description: "Applied one record at a time; each gets its own audit entry.",
+        description:
+          "Applied one record at a time; each gets its own audit entry.",
         confirmLabel: action.label,
         destructive: action.destructive,
         onConfirm: (reason) => runBulk(action, ids, reason),
@@ -271,12 +307,16 @@ export function AdminConsole({
   // Drawer footer actions
   // -------------------------------------------------------------------------
 
-  function buildDrawerActions(detail: Parameters<typeof buildActionsImpl>[0]): DrawerAction[] {
+  function buildDrawerActions(
+    detail: Parameters<typeof buildActionsImpl>[0],
+  ): DrawerAction[] {
     return buildActionsImpl(detail);
   }
 
   function buildActionsImpl(
-    detail: Parameters<React.ComponentProps<typeof RecordDrawer>["buildActions"]>[0],
+    detail: Parameters<
+      React.ComponentProps<typeof RecordDrawer>["buildActions"]
+    >[0],
   ): DrawerAction[] {
     switch (detail.kind) {
       case "finance": {
@@ -287,18 +327,28 @@ export function AdminConsole({
             id: "approve",
             label: "Approve",
             onRun: () =>
-              runQueue({ actionId: "transaction.approve", label: "Approve", variant: "primary" }, [
-                transaction.id,
-              ]),
+              runQueue(
+                {
+                  actionId: "transaction.approve",
+                  label: "Approve",
+                  variant: "primary",
+                },
+                [transaction.id],
+              ),
           },
           {
             id: "reject",
             label: "Reject",
             variant: "destructive",
             onRun: () =>
-              runQueue({ actionId: "transaction.reject", label: "Reject", variant: "destructive" }, [
-                transaction.id,
-              ]),
+              runQueue(
+                {
+                  actionId: "transaction.reject",
+                  label: "Reject",
+                  variant: "destructive",
+                },
+                [transaction.id],
+              ),
           },
         ];
       }
@@ -310,9 +360,14 @@ export function AdminConsole({
             id: "resolve",
             label: "Mark paid",
             onRun: () =>
-              runQueue({ actionId: "penalty.resolve", label: "Mark paid", variant: "primary" }, [
-                penalty.id,
-              ]),
+              runQueue(
+                {
+                  actionId: "penalty.resolve",
+                  label: "Mark paid",
+                  variant: "primary",
+                },
+                [penalty.id],
+              ),
           },
           {
             id: "waive",
@@ -320,7 +375,12 @@ export function AdminConsole({
             variant: "destructive",
             onRun: () =>
               onQueueAction(
-                { actionId: "penalty.waive", label: "Waive", variant: "destructive", requiresReason: true },
+                {
+                  actionId: "penalty.waive",
+                  label: "Waive",
+                  variant: "destructive",
+                  requiresReason: true,
+                },
                 [penalty.id],
               ),
           },
@@ -335,9 +395,14 @@ export function AdminConsole({
                   id: "approve",
                   label: "Approve proposal",
                   onRun: () =>
-                    runQueue({ actionId: "project.approve", label: "Approve", variant: "primary" }, [
-                      project.id,
-                    ]),
+                    runQueue(
+                      {
+                        actionId: "project.approve",
+                        label: "Approve",
+                        variant: "primary",
+                      },
+                      [project.id],
+                    ),
                 },
               ]
             : []),
@@ -348,9 +413,14 @@ export function AdminConsole({
                   label: "Archive",
                   variant: "destructive" as const,
                   onRun: () =>
-                    runQueue({ actionId: "project.archive", label: "Archive", variant: "destructive" }, [
-                      project.id,
-                    ]),
+                    runQueue(
+                      {
+                        actionId: "project.archive",
+                        label: "Archive",
+                        variant: "destructive",
+                      },
+                      [project.id],
+                    ),
                 },
               ]
             : []),
@@ -364,7 +434,14 @@ export function AdminConsole({
             id: "complete",
             label: "Mark done",
             onRun: () =>
-              runQueue({ actionId: "task.complete", label: "Mark done", variant: "primary" }, [task.id]),
+              runQueue(
+                {
+                  actionId: "task.complete",
+                  label: "Mark done",
+                  variant: "primary",
+                },
+                [task.id],
+              ),
           },
           {
             id: "extend",
@@ -372,7 +449,12 @@ export function AdminConsole({
             variant: "outline",
             onRun: () =>
               onQueueAction(
-                { actionId: "task.extend", label: "Extend", variant: "secondary", requiresReason: true },
+                {
+                  actionId: "task.extend",
+                  label: "Extend",
+                  variant: "secondary",
+                  requiresReason: true,
+                },
                 [task.id],
               ),
           },
@@ -423,7 +505,10 @@ export function AdminConsole({
   function openDrawer(target: AdminDrawerTarget) {
     // Keep the table in step with what's being read, so closing the drawer
     // leaves you where the record actually lives.
-    if (target.kind !== "docs" && ADMIN_TABS.includes(target.kind as AdminTab)) {
+    if (
+      target.kind !== "docs" &&
+      ADMIN_TABS.includes(target.kind as AdminTab)
+    ) {
       setTab(target.kind as AdminTab);
     }
     setDrawer(target);
@@ -450,7 +535,8 @@ export function AdminConsole({
           <div>
             <h1 className="font-display text-3xl text-copy-primary">Admin</h1>
             <p className="mt-1 text-sm text-copy-secondary">
-              Everything awaiting a decision, and everything you need to make it — in one place.
+              Everything awaiting a decision, and everything you need to make it
+              — in one place.
             </p>
           </div>
           <ViewAsToggle isViewingAsMember={isViewingAsMember} />
@@ -463,13 +549,19 @@ export function AdminConsole({
             className="flex h-10 min-w-64 flex-1 items-center gap-2 rounded-xl bg-surface px-3 text-left text-sm text-copy-faint ring-1 ring-surface-border transition-colors hover:ring-brand/40"
           >
             <Search className="h-4 w-4" />
-            <span className="flex-1">Search members, transactions, penalties, projects, docs…</span>
+            <span className="flex-1">
+              Search members, transactions, penalties, projects, docs…
+            </span>
             <kbd className="rounded border border-surface-border px-1.5 py-0.5 text-[10px] text-copy-muted">
-              ⌘K
+              ⇧⌘K
             </kbd>
           </button>
 
-          <Button variant="outline" size="sm" onClick={() => setPaletteOpen(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPaletteOpen(true)}
+          >
             <UserPlus className="h-4 w-4" />
             Member
           </Button>
@@ -495,7 +587,11 @@ export function AdminConsole({
             <Plus className="h-4 w-4" />
             Transaction
           </Button>
-          <Button variant="default" size="sm" onClick={() => setBroadcastOpen(true)}>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => setBroadcastOpen(true)}
+          >
             <Megaphone className="h-4 w-4" />
             Broadcast
           </Button>
@@ -508,14 +604,22 @@ export function AdminConsole({
       <section>
         <SectionHeading
           title="Action queue"
-          hint={queue.length > 0 ? `${queue.length} awaiting a decision` : "Nothing waiting on you"}
+          hint={
+            queue.length > 0
+              ? `${queue.length} awaiting a decision`
+              : "Nothing waiting on you"
+          }
         />
         <ActionQueue
           items={queue}
           onAction={onQueueAction}
           onOpenDrawer={openDrawer}
           pendingIds={
-            new Set(queue.filter((item) => pendingIds.has(item.entityId)).map((item) => item.id))
+            new Set(
+              queue
+                .filter((item) => pendingIds.has(item.entityId))
+                .map((item) => item.id),
+            )
           }
         />
       </section>
@@ -524,7 +628,10 @@ export function AdminConsole({
           Zone 3 — stat cards as filters
       --------------------------------------------------------------- */}
       <section>
-        <SectionHeading title="Overview" hint="Click a card to filter the table below" />
+        <SectionHeading
+          title="Overview"
+          hint="Click a card to filter the table below"
+        />
         <StatCards
           cards={stats.cards}
           activeFilter={activeFilter}
@@ -539,7 +646,11 @@ export function AdminConsole({
         />
 
         <div className="mt-4">
-          <SectionHeading title="Exceptions" hint="What needs attention, not what exists" small />
+          <SectionHeading
+            title="Exceptions"
+            hint="What needs attention, not what exists"
+            small
+          />
           <StatCards
             cards={stats.exceptions}
             activeFilter={activeFilter}
@@ -560,7 +671,10 @@ export function AdminConsole({
           Zone 4 — segmented data table
       --------------------------------------------------------------- */}
       <section>
-        <SectionHeading title="Records" hint="Row click opens the detail drawer" />
+        <SectionHeading
+          title="Records"
+          hint="Row click opens the detail drawer"
+        />
 
         <div className="mb-3 flex flex-wrap gap-1.5">
           {ADMIN_TABS.map((candidate) => (
@@ -593,7 +707,9 @@ export function AdminConsole({
             config={membersConfig(cellHandlers)}
             activeFilterId={filterId}
             onFilterChange={setFilterId}
-            onRowClick={(row) => openDrawer({ kind: "members", recordId: row.id })}
+            onRowClick={(row) =>
+              openDrawer({ kind: "members", recordId: row.id })
+            }
             onBulkAction={onBulkAction}
             pendingIds={pendingIds}
           />
@@ -605,7 +721,9 @@ export function AdminConsole({
             config={financeConfig(cellHandlers, settings.financeCategories)}
             activeFilterId={filterId}
             onFilterChange={setFilterId}
-            onRowClick={(row) => openDrawer({ kind: "finance", recordId: row.id })}
+            onRowClick={(row) =>
+              openDrawer({ kind: "finance", recordId: row.id })
+            }
             onBulkAction={onBulkAction}
             pendingIds={pendingIds}
           />
@@ -617,7 +735,9 @@ export function AdminConsole({
             config={penaltiesConfig(cellHandlers)}
             activeFilterId={filterId}
             onFilterChange={setFilterId}
-            onRowClick={(row) => openDrawer({ kind: "penalties", recordId: row.id })}
+            onRowClick={(row) =>
+              openDrawer({ kind: "penalties", recordId: row.id })
+            }
             onBulkAction={onBulkAction}
             pendingIds={pendingIds}
           />
@@ -629,7 +749,9 @@ export function AdminConsole({
             config={projectsConfig(cellHandlers)}
             activeFilterId={filterId}
             onFilterChange={setFilterId}
-            onRowClick={(row) => openDrawer({ kind: "projects", recordId: row.id })}
+            onRowClick={(row) =>
+              openDrawer({ kind: "projects", recordId: row.id })
+            }
             onBulkAction={onBulkAction}
             pendingIds={pendingIds}
           />
@@ -642,7 +764,9 @@ export function AdminConsole({
             activeFilterId={filterId}
             onFilterChange={setFilterId}
             onRowClick={(row) =>
-              row.kind === "task" ? openDrawer({ kind: "activity", recordId: row.id }) : undefined
+              row.kind === "task"
+                ? openDrawer({ kind: "activity", recordId: row.id })
+                : undefined
             }
             onBulkAction={onBulkAction}
             pendingIds={pendingIds}
@@ -654,7 +778,10 @@ export function AdminConsole({
           Admin tools
       --------------------------------------------------------------- */}
       <section className="flex flex-col gap-4">
-        <SectionHeading title="Organization" hint="Reconciliation, settings, and irreversible actions" />
+        <SectionHeading
+          title="Organization"
+          hint="Reconciliation, settings, and irreversible actions"
+        />
         <SyncWithClerk
           report={reconciliation}
           error={reconciliationError}
@@ -695,11 +822,18 @@ export function AdminConsole({
         entries={searchIndex}
         onSelect={openDrawer}
         quickActions={[
-          { id: "broadcast", label: "Compose a broadcast", run: () => setBroadcastOpen(true) },
+          {
+            id: "broadcast",
+            label: "Compose a broadcast",
+            run: () => setBroadcastOpen(true),
+          },
           {
             id: "queue",
             label: "Jump to the action queue",
-            run: () => document.querySelector("h2")?.scrollIntoView({ behavior: "smooth" }),
+            run: () =>
+              document
+                .querySelector("h2")
+                ?.scrollIntoView({ behavior: "smooth" }),
           },
           {
             id: "pending-finance",
@@ -735,7 +869,10 @@ export function AdminConsole({
         projects={projectOptions}
       />
 
-      <ReasonDialog request={reasonRequest} onClose={() => setReasonRequest(null)} />
+      <ReasonDialog
+        request={reasonRequest}
+        onClose={() => setReasonRequest(null)}
+      />
     </div>
   );
 }

@@ -1,5 +1,10 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
 import { prisma } from "@/lib/prisma";
-import { teamMonthLabel, teamMonthStart, teamNextMonthStart } from "@/lib/team-time";
+import {
+  teamMonthLabel,
+  teamMonthStart,
+  teamNextMonthStart,
+} from "@/lib/team-time";
 
 export interface FinancialSnapshot {
   /** All-time running balance — NOT month-scoped. See the note below. */
@@ -37,7 +42,10 @@ export interface FinancialSnapshot {
  */
 export async function getFinancialSnapshot(): Promise<FinancialSnapshot> {
   const approved = await prisma.transaction.findMany({
-    where: { status: "APPROVED" },
+    where: {
+      ...{ status: "APPROVED" },
+      AND: [await entityVisibilityWhere("transaction")],
+    },
     select: { type: true, amount: true, createdAt: true },
   });
 
@@ -52,7 +60,9 @@ export async function getFinancialSnapshot(): Promise<FinancialSnapshot> {
   // Upper-bounded as well as lower-bounded: without it, a transaction with
   // a future createdAt (a backdated correction, a clock-skewed write) would
   // count toward this month forever.
-  const thisMonth = approved.filter((t) => t.createdAt >= monthStart && t.createdAt < monthEnd);
+  const thisMonth = approved.filter(
+    (t) => t.createdAt >= monthStart && t.createdAt < monthEnd,
+  );
 
   const monthIncomeCentavos = thisMonth
     .filter((t) => t.type === "INCOME")

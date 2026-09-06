@@ -1,3 +1,4 @@
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
@@ -12,6 +13,9 @@ import { getMemberGoogleAccessToken } from "@/lib/google-oauth-token";
 // Google Drive Integration section), so it can only touch files the member
 // explicitly opens through the Picker, not their whole Drive.
 export async function GET() {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -19,7 +23,10 @@ export async function GET() {
 
   const accessToken = await getMemberGoogleAccessToken(userId);
   if (!accessToken) {
-    return NextResponse.json({ error: "Google not connected" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Google not connected" },
+      { status: 404 },
+    );
   }
 
   return NextResponse.json({ accessToken });

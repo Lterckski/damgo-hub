@@ -1,3 +1,4 @@
+import { requireWorkspacePage as requireWorkspaceSession } from "@/lib/hub/context";
 import { Suspense } from "react";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
@@ -61,6 +62,8 @@ function PanelFallback() {
  * visible one — the reason that boundary exists is unchanged.
  */
 export default async function DashboardPage() {
+  await requireWorkspaceSession();
+
   const { userId } = await auth();
   // The (app) layout redirects an unauthenticated visitor, but Next renders
   // layout and page in parallel, so without this getCurrentMember() throws
@@ -105,18 +108,27 @@ export default async function DashboardPage() {
  * makes the personal scoping in Part 4 actually hold.
  */
 async function MyDashboardSection({ memberId }: { memberId: string }) {
-  const [urgent, tasks, upcoming, penalties, money, projects, activity, settings, features] =
-    await Promise.all([
-      getNeedsYouToday(memberId),
-      getMyTasks(memberId),
-      getUpcomingTimeline(memberId),
-      getMyPenalties(memberId),
-      getMyMoney(memberId),
-      getMyProjects(memberId),
-      getMyActivity(memberId),
-      getOrgSettings(),
-      getDashboardFeatures(),
-    ]);
+  const [
+    urgent,
+    tasks,
+    upcoming,
+    penalties,
+    money,
+    projects,
+    activity,
+    settings,
+    features,
+  ] = await Promise.all([
+    getNeedsYouToday(memberId),
+    getMyTasks(memberId),
+    getUpcomingTimeline(memberId),
+    getMyPenalties(memberId),
+    getMyMoney(memberId),
+    getMyProjects(memberId),
+    getMyActivity(memberId),
+    getOrgSettings(),
+    getDashboardFeatures(),
+  ]);
 
   return (
     <MyDashboardPanel

@@ -1,18 +1,27 @@
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 
 import { requireAdmin, toErrorResponse } from "@/lib/admin/guard";
 import { recordAuditEvent } from "@/lib/audit-log";
-import { applyReconciliation, reconcileMembers } from "@/lib/member-reconciliation";
+import {
+  applyReconciliation,
+  reconcileMembers,
+} from "@/lib/member-reconciliation";
 
 // GET /api/admin/sync — the diff, without changing anything. This is what
 // the "Sync with Clerk" panel shows first: an admin sees exactly what drift
 // exists before deciding to repair it.
 export async function GET() {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
 
   try {
-    return NextResponse.json({ report: await reconcileMembers(guard.context.orgId) });
+    return NextResponse.json({
+      report: await reconcileMembers(guard.context.orgId),
+    });
   } catch (error) {
     return toErrorResponse(error);
   }
@@ -23,6 +32,9 @@ export async function GET() {
 // REMOVED. Never hard-deletes; see applyReconciliation()'s own note on why
 // that stays a deliberate Danger Zone action.
 export async function POST() {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
 

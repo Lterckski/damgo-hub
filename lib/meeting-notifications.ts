@@ -70,18 +70,32 @@ export async function createMeetingNotificationOutbox(
 }
 
 /** Best-effort fast path; the scheduled sweep recovers records if Trigger.dev is unavailable. */
-export async function enqueueMeetingNotificationOutbox(outboxId: string): Promise<void> {
+export async function enqueueMeetingNotificationOutbox(
+  outboxId: string,
+): Promise<void> {
   try {
-    await tasks.trigger<typeof meetingNotificationTask>("meeting-notification", {
-      outboxId,
-    });
+    await tasks.trigger<typeof meetingNotificationTask>(
+      "meeting-notification",
+      {
+        outboxId,
+      },
+    );
   } catch (error) {
-    console.error("Failed to enqueue durable meeting notification", { outboxId, error });
+    console.error("Failed to enqueue durable meeting notification", {
+      outboxId,
+      error,
+    });
   }
 }
 
-export async function enqueueMeetingNotificationOutboxes(outboxIds: Array<string | null>): Promise<void> {
-  await Promise.all(outboxIds.filter((id): id is string => id !== null).map(enqueueMeetingNotificationOutbox));
+export async function enqueueMeetingNotificationOutboxes(
+  outboxIds: Array<string | null>,
+): Promise<void> {
+  await Promise.all(
+    outboxIds
+      .filter((id): id is string => id !== null)
+      .map(enqueueMeetingNotificationOutbox),
+  );
 }
 
 /**
@@ -95,17 +109,32 @@ export async function scheduleMeetingReminders(meeting: {
   id: string;
   scheduledAt: Date;
   notificationRevision: number;
-}): Promise<{ reminder24hRunId: string | null; reminder1hRunId: string | null }> {
+}): Promise<{
+  reminder24hRunId: string | null;
+  reminder1hRunId: string | null;
+}> {
   const now = Date.now();
-  const reminder24hAt = new Date(meeting.scheduledAt.getTime() - REMINDER_24H_MS);
+  const reminder24hAt = new Date(
+    meeting.scheduledAt.getTime() - REMINDER_24H_MS,
+  );
   const reminder1hAt = new Date(meeting.scheduledAt.getTime() - REMINDER_1H_MS);
 
   const [reminder24hRunId, reminder1hRunId] = await Promise.all([
     reminder24hAt.getTime() > now
-      ? triggerReminder(meeting.id, meeting.notificationRevision, "REMINDER_24H", reminder24hAt)
+      ? triggerReminder(
+          meeting.id,
+          meeting.notificationRevision,
+          "REMINDER_24H",
+          reminder24hAt,
+        )
       : null,
     reminder1hAt.getTime() > now
-      ? triggerReminder(meeting.id, meeting.notificationRevision, "REMINDER_1H", reminder1hAt)
+      ? triggerReminder(
+          meeting.id,
+          meeting.notificationRevision,
+          "REMINDER_1H",
+          reminder1hAt,
+        )
       : null,
   ]);
 
@@ -161,12 +190,20 @@ function parseMeetingNotificationPayload(value: {
   recipientMemberIds: Prisma.JsonValue;
   snapshot: Prisma.JsonValue;
 }): MeetingNotificationPayload | null {
-  if (value.notificationType === "REMINDER_24H" || value.notificationType === "REMINDER_1H") return null;
-  if (!Array.isArray(value.recipientMemberIds) || !value.recipientMemberIds.every((id) => typeof id === "string")) {
+  if (
+    value.notificationType === "REMINDER_24H" ||
+    value.notificationType === "REMINDER_1H"
+  )
+    return null;
+  if (
+    !Array.isArray(value.recipientMemberIds) ||
+    !value.recipientMemberIds.every((id) => typeof id === "string")
+  ) {
     return null;
   }
   const snapshot = value.snapshot;
-  if (!snapshot || Array.isArray(snapshot) || typeof snapshot !== "object") return null;
+  if (!snapshot || Array.isArray(snapshot) || typeof snapshot !== "object")
+    return null;
   const record = snapshot as Record<string, Prisma.JsonValue>;
   if (
     typeof record.title !== "string" ||
@@ -183,21 +220,27 @@ function parseMeetingNotificationPayload(value: {
     recipientMemberIds: value.recipientMemberIds,
     snapshot: {
       title: record.title,
-      description: typeof record.description === "string" ? record.description : null,
+      description:
+        typeof record.description === "string" ? record.description : null,
       scheduledAt: record.scheduledAt,
       endsAt: typeof record.endsAt === "string" ? record.endsAt : null,
       location: typeof record.location === "string" ? record.location : null,
-      meetingUrl: typeof record.meetingUrl === "string" ? record.meetingUrl : null,
+      meetingUrl:
+        typeof record.meetingUrl === "string" ? record.meetingUrl : null,
       organizerName: record.organizerName,
       agendaItems: Array.isArray(record.agendaItems)
-        ? record.agendaItems.filter((item): item is string => typeof item === "string")
+        ? record.agendaItems.filter(
+            (item): item is string => typeof item === "string",
+          )
         : [],
     },
   };
 }
 
 /** Claims and delivers one durable notification intent. Safe for duplicate worker runs. */
-export async function processMeetingNotificationOutbox(outboxId: string): Promise<void> {
+export async function processMeetingNotificationOutbox(
+  outboxId: string,
+): Promise<void> {
   const staleClaimBefore = new Date(Date.now() - 10 * 60 * 1000);
   const claim = await prisma.meetingNotificationOutbox.updateMany({
     where: {
@@ -208,14 +251,21 @@ export async function processMeetingNotificationOutbox(outboxId: string): Promis
         { status: "PROCESSING", updatedAt: { lt: staleClaimBefore } },
       ],
     },
-    data: { status: "PROCESSING", attemptCount: { increment: 1 }, lastError: null },
+    data: {
+      status: "PROCESSING",
+      attemptCount: { increment: 1 },
+      lastError: null,
+    },
   });
   if (claim.count === 0) return;
 
   try {
-    const outbox = await prisma.meetingNotificationOutbox.findUniqueOrThrow({ where: { id: outboxId } });
+    const outbox = await prisma.meetingNotificationOutbox.findUniqueOrThrow({
+      where: { id: outboxId },
+    });
     const payload = parseMeetingNotificationPayload(outbox);
-    if (!payload) throw new Error("Meeting notification outbox payload is invalid");
+    if (!payload)
+      throw new Error("Meeting notification outbox payload is invalid");
 
     let hasTransientFailure = false;
     for (const recipientMemberId of payload.recipientMemberIds) {
@@ -228,7 +278,8 @@ export async function processMeetingNotificationOutbox(outboxId: string): Promis
       });
       if (result === "transient-failure") hasTransientFailure = true;
     }
-    if (hasTransientFailure) throw new Error("One or more meeting emails failed transiently");
+    if (hasTransientFailure)
+      throw new Error("One or more meeting emails failed transiently");
 
     await prisma.meetingNotificationOutbox.update({
       where: { id: outboxId },
@@ -240,10 +291,14 @@ export async function processMeetingNotificationOutbox(outboxId: string): Promis
       where: { id: outboxId },
       select: { attemptCount: true },
     });
-    const exhausted = (current?.attemptCount ?? MAX_OUTBOX_ATTEMPTS) >= MAX_OUTBOX_ATTEMPTS;
+    const exhausted =
+      (current?.attemptCount ?? MAX_OUTBOX_ATTEMPTS) >= MAX_OUTBOX_ATTEMPTS;
     await prisma.meetingNotificationOutbox.updateMany({
       where: { id: outboxId, status: "PROCESSING" },
-      data: { status: exhausted ? "DEAD_LETTER" : "FAILED", lastError: message.slice(0, 500) },
+      data: {
+        status: exhausted ? "DEAD_LETTER" : "FAILED",
+        lastError: message.slice(0, 500),
+      },
     });
     throw error;
   }
@@ -258,7 +313,10 @@ export async function pendingMeetingNotificationOutboxIds(): Promise<string[]> {
       OR: [
         { status: "PENDING", createdAt: { lt: retryBefore } },
         { status: "FAILED", updatedAt: { lt: retryBefore } },
-        { status: "PROCESSING", updatedAt: { lt: new Date(Date.now() - 10 * 60 * 1000) } },
+        {
+          status: "PROCESSING",
+          updatedAt: { lt: new Date(Date.now() - 10 * 60 * 1000) },
+        },
       ],
     },
     select: { id: true },
@@ -282,7 +340,10 @@ export async function pendingMeetingNotificationOutboxIds(): Promise<string[]> {
  * ambiguous-skip, or a fresh send that succeeded) vs. a real, actionable
  * failure the caller should treat as this task run failing.
  */
-export type MeetingEmailAttemptResult = "handled" | "permanent-failure" | "transient-failure";
+export type MeetingEmailAttemptResult =
+  | "handled"
+  | "permanent-failure"
+  | "transient-failure";
 
 export async function sendOneMeetingEmail(params: {
   meetingId: string;
@@ -291,7 +352,47 @@ export async function sendOneMeetingEmail(params: {
   recipientMemberId: string;
   snapshot: MeetingSnapshot;
 }): Promise<MeetingEmailAttemptResult> {
-  const { meetingId, notificationType, meetingRevision, recipientMemberId, snapshot } = params;
+  const {
+    meetingId,
+    notificationType,
+    meetingRevision,
+    recipientMemberId,
+    snapshot,
+  } = params;
+  const workspace = await prisma.hubWorkspace.findUnique({
+    where: { id: "singleton" },
+  });
+  if (workspace) {
+    const recipient = await prisma.member.findUnique({
+      where: { id: recipientMemberId },
+      select: { clerkUserId: true },
+    });
+    if (!recipient) return "handled";
+    const { clerkClient } = await import("@clerk/nextjs/server");
+    const clerk = await clerkClient();
+    const membership = await clerk.organizations.getOrganizationMembershipList({
+      organizationId: workspace.orgId,
+      userId: [recipient.clerkUserId],
+      limit: 1,
+    });
+    if (
+      !membership.data.some(
+        (m) => m.publicUserData?.userId === recipient.clerkUserId,
+      )
+    )
+      return "handled";
+    const preference = await prisma.hubPreference.findUnique({
+      where: {
+        orgId_memberId_type: {
+          orgId: workspace.orgId,
+          memberId: recipientMemberId,
+          type: "meeting",
+        },
+      },
+    });
+    if (preference && (!preference.enabled || !preference.email))
+      return "handled";
+  }
 
   const existing = await prisma.meetingEmailDelivery.findUnique({
     where: {
@@ -304,7 +405,11 @@ export async function sendOneMeetingEmail(params: {
     },
   });
 
-  if (existing?.status === "SENT" || existing?.status === "SENDING" || existing?.status === "SKIPPED") {
+  if (
+    existing?.status === "SENT" ||
+    existing?.status === "SENDING" ||
+    existing?.status === "SKIPPED"
+  ) {
     return "handled";
   }
 
@@ -314,15 +419,28 @@ export async function sendOneMeetingEmail(params: {
         data: { status: "SENDING", attemptCount: { increment: 1 } },
       })
     : await prisma.meetingEmailDelivery.create({
-        data: { meetingId, recipientMemberId, notificationType, meetingRevision, status: "SENDING", attemptCount: 1 },
+        data: {
+          meetingId,
+          recipientMemberId,
+          notificationType,
+          meetingRevision,
+          status: "SENDING",
+          attemptCount: 1,
+        },
       });
 
-  const member = await prisma.member.findUnique({ where: { id: recipientMemberId }, select: { email: true } });
+  const member = await prisma.member.findUnique({
+    where: { id: recipientMemberId },
+    select: { email: true },
+  });
   const email = member?.email?.trim();
   if (!email || !isLikelyValidEmail(email)) {
     await prisma.meetingEmailDelivery.update({
       where: { id: delivery.id },
-      data: { status: "SKIPPED", lastError: "Recipient has no valid email address on file" },
+      data: {
+        status: "SKIPPED",
+        lastError: "Recipient has no valid email address on file",
+      },
     });
     console.error("Skipping meeting email — missing/invalid address", {
       meetingId,
@@ -348,12 +466,22 @@ export async function sendOneMeetingEmail(params: {
   const subject = meetingEmailSubject(notificationType, snapshot.title);
   const idempotencyKey = `${meetingId}:${recipientMemberId}:${notificationType}:${meetingRevision}`;
 
-  const result = await sendEmail({ to: email, subject, html, text, idempotencyKey });
+  const result = await sendEmail({
+    to: email,
+    subject,
+    html,
+    text,
+    idempotencyKey,
+  });
 
   if (result.ok) {
     await prisma.meetingEmailDelivery.update({
       where: { id: delivery.id },
-      data: { status: "SENT", providerMessageId: result.providerMessageId, sentAt: new Date() },
+      data: {
+        status: "SENT",
+        providerMessageId: result.providerMessageId,
+        sentAt: new Date(),
+      },
     });
     return "handled";
   }
@@ -365,7 +493,12 @@ export async function sendOneMeetingEmail(params: {
     where: { id: delivery.id },
     data: { status: "FAILED", lastError: result.error.slice(0, 500) },
   });
-  console.error("Meeting email failed", { meetingId, recipientMemberId, notificationType, error: result.error });
+  console.error("Meeting email failed", {
+    meetingId,
+    recipientMemberId,
+    notificationType,
+    error: result.error,
+  });
   return "transient-failure";
 }
 

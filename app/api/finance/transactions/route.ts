@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { put } from "@vercel/blob";
@@ -6,13 +8,19 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
 import { pesosToCentavos } from "@/lib/currency";
 import { serializeTransaction } from "@/lib/finance";
-import type { TransactionStatus, TransactionType } from "@/app/generated/prisma/enums";
+import type {
+  TransactionStatus,
+  TransactionType,
+} from "@/app/generated/prisma/enums";
 
 const VALID_STATUSES: TransactionStatus[] = ["PENDING", "APPROVED", "REJECTED"];
 const VALID_TYPES: TransactionType[] = ["INCOME", "EXPENSE"];
 
 // GET /api/finance/transactions — any authenticated member; ?status= filters.
 export async function GET(request: Request) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -21,29 +29,48 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const statusParam = searchParams.get("status");
 
-  if (statusParam && !VALID_STATUSES.includes(statusParam as TransactionStatus)) {
-    return NextResponse.json({ error: "Invalid status filter" }, { status: 400 });
+  if (
+    statusParam &&
+    !VALID_STATUSES.includes(statusParam as TransactionStatus)
+  ) {
+    return NextResponse.json(
+      { error: "Invalid status filter" },
+      { status: 400 },
+    );
   }
 
   const transactions = await prisma.transaction.findMany({
-    where: statusParam ? { status: statusParam as TransactionStatus } : undefined,
+    where: {
+      ...(statusParam
+        ? { status: statusParam as TransactionStatus }
+        : undefined),
+      AND: [await entityVisibilityWhere("transaction")],
+    },
     include: { member: { select: { displayName: true } } },
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json({ transactions: transactions.map(serializeTransaction) });
+  return NextResponse.json({
+    transactions: transactions.map(serializeTransaction),
+  });
 }
 
 // POST /api/finance/transactions — org:admin (Leader/Assistant Leader)
 // only; always starts PENDING. multipart/form-data so an optional receipt
 // file can ride along in the same request.
 export async function POST(request: Request) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (!(await isCurrentMemberAdmin())) {
-    return NextResponse.json({ error: "Only Admins can log transactions" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Only Admins can log transactions" },
+      { status: 403 },
+    );
   }
 
   const member = await getCurrentMember();
@@ -55,24 +82,40 @@ export async function POST(request: Request) {
   const description = formData.get("description");
   const receipt = formData.get("receipt");
 
-  if (typeof type !== "string" || !VALID_TYPES.includes(type as TransactionType)) {
-    return NextResponse.json({ error: "type must be INCOME or EXPENSE" }, { status: 400 });
+  if (
+    typeof type !== "string" ||
+    !VALID_TYPES.includes(type as TransactionType)
+  ) {
+    return NextResponse.json(
+      { error: "type must be INCOME or EXPENSE" },
+      { status: 400 },
+    );
   }
   if (typeof category !== "string" || category.trim() === "") {
-    return NextResponse.json({ error: "category is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "category is required" },
+      { status: 400 },
+    );
   }
 
   const amountPesos = Number(amountPesosRaw);
   if (!Number.isFinite(amountPesos) || amountPesos <= 0) {
-    return NextResponse.json({ error: "amount must be a positive number" }, { status: 400 });
+    return NextResponse.json(
+      { error: "amount must be a positive number" },
+      { status: 400 },
+    );
   }
 
   let receiptPath: string | undefined;
   if (receipt instanceof File && receipt.size > 0) {
-    const blob = await put(`receipts/${member.id}-${Date.now()}-${receipt.name}`, receipt, {
-      access: "private",
-      addRandomSuffix: true,
-    });
+    const blob = await put(
+      `receipts/${member.id}-${Date.now()}-${receipt.name}`,
+      receipt,
+      {
+        access: "private",
+        addRandomSuffix: true,
+      },
+    );
     receiptPath = blob.pathname;
   }
 
@@ -92,5 +135,8 @@ export async function POST(request: Request) {
     include: { member: { select: { displayName: true } } },
   });
 
-  return NextResponse.json({ transaction: serializeTransaction(transaction) }, { status: 201 });
+  return NextResponse.json(
+    { transaction: serializeTransaction(transaction) },
+    { status: 201 },
+  );
 }

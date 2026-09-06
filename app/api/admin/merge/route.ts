@@ -1,3 +1,4 @@
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 
 import { requireAdmin, toErrorResponse } from "@/lib/admin/guard";
@@ -15,17 +16,29 @@ import { prisma } from "@/lib/prisma";
  * dozen tables and is not reversible by clicking something.
  */
 export async function POST(request: Request) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
 
   const body: unknown = await request.json().catch(() => null);
   if (typeof body !== "object" || body === null) {
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 },
+    );
   }
 
-  const { sourceId, targetId, confirmation, reason } = body as Record<string, unknown>;
+  const { sourceId, targetId, confirmation, reason } = body as Record<
+    string,
+    unknown
+  >;
   if (typeof sourceId !== "string" || typeof targetId !== "string") {
-    return NextResponse.json({ error: "sourceId and targetId are required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "sourceId and targetId are required" },
+      { status: 400 },
+    );
   }
 
   try {
@@ -35,11 +48,16 @@ export async function POST(request: Request) {
       where: { id: sourceId },
       select: { displayName: true },
     });
-    if (!source) return NextResponse.json({ error: "Source member not found" }, { status: 404 });
+    if (!source)
+      return NextResponse.json(
+        { error: "Source member not found" },
+        { status: 404 },
+      );
 
     if (
       typeof confirmation !== "string" ||
-      confirmation.trim().toLowerCase() !== source.displayName.trim().toLowerCase()
+      confirmation.trim().toLowerCase() !==
+        source.displayName.trim().toLowerCase()
     ) {
       return NextResponse.json(
         { error: `Type “${source.displayName}” exactly to confirm` },
@@ -47,8 +65,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const outcome = await mergeMember(guard.context.actor, sourceId, targetId, justification);
-    if (!outcome.ok) return NextResponse.json({ error: outcome.error }, { status: outcome.status });
+    const outcome = await mergeMember(
+      guard.context.actor,
+      sourceId,
+      targetId,
+      justification,
+    );
+    if (!outcome.ok)
+      return NextResponse.json(
+        { error: outcome.error },
+        { status: outcome.status },
+      );
 
     return NextResponse.json({
       ok: true,

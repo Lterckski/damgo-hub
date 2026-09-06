@@ -1,0 +1,115 @@
+// One verified Clerk organization owns this deployment. A second org is
+// refused until the legacy singleton settings/rooms can be isolated too.
+model HubWorkspace {
+  id    String @id @default("singleton")
+  orgId String @unique
+}
+
+model HubMembership {
+  memberId String @id
+  orgId    String
+  role     String
+
+  @@index([orgId])
+}
+
+model HubRecord {
+  id              String                   @id
+  orgId           String                   @default("")
+  entityType      String
+  entityId        String
+  title           String
+  body            String
+  ownerId         String?
+  projectId       String?
+  status          String
+  dueAt           DateTime?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @default(now())
+  sourceCreatedAt DateTime?
+  searchVector    Unsupported("tsvector")? @default(dbgenerated("(setweight(to_tsvector('simple'::regconfig, title), 'A'::\"char\") || setweight(to_tsvector('simple'::regconfig, body), 'B'::\"char\"))"))
+  grants          HubGrant[]
+  notifications   HubNotification[]
+  opens           HubRecent[]
+  comments        HubComment[]
+
+  @@unique([orgId, entityType, entityId])
+  @@index([searchVector], map: "HubRecord_fts", type: Gin)
+}
+
+model HubGrant {
+  id              String    @id
+  recordId        String
+  record          HubRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  visibilityScope String
+  recipientId     String    @default("")
+
+  @@index([recordId])
+}
+
+model HubNotification {
+  id              String                 @id @default(cuid())
+  orgId           String
+  recordId        String
+  record          HubRecord              @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  visibilityScope String
+  recipientId     String                 @default("")
+  actorId         String?
+  action          String
+  title           String
+  body            String
+  url             String
+  eventKey        String                 @unique
+  createdAt       DateTime               @default(now())
+  states          HubNotificationState[]
+
+  @@index([orgId, createdAt])
+}
+
+model HubNotificationState {
+  notificationId String
+  notification   HubNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  memberId       String
+  readAt         DateTime?
+  dismissedAt    DateTime?
+  suppressed     Boolean         @default(false)
+  emailPending   Boolean         @default(false)
+  emailSentAt    DateTime?
+  emailAttempts  Int             @default(0)
+
+  @@id([notificationId, memberId])
+  @@index([memberId, readAt])
+}
+
+model HubPreference {
+  orgId    String
+  memberId String
+  type     String
+  enabled  Boolean @default(true)
+  email    Boolean @default(false)
+
+  @@id([orgId, memberId, type])
+}
+
+model HubRecent {
+  orgId        String
+  memberId     String
+  recordId     String
+  record       HubRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  lastOpenedAt DateTime  @default(now())
+
+  @@id([orgId, memberId, recordId])
+  @@index([orgId, memberId, lastOpenedAt])
+}
+
+model HubComment {
+  id        String    @id @default(cuid())
+  recordId  String
+  record    HubRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  authorId  String
+  body      String
+  mentions  String[]  @default([])
+  createdAt DateTime  @default(now())
+
+  @@index([recordId, createdAt])
+}

@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 
 import { requireAdmin, toErrorResponse } from "@/lib/admin/guard";
@@ -18,28 +20,46 @@ import { prisma } from "@/lib/prisma";
 
 type DangerAction = "member.remove" | "project.archive" | "cycle.reset";
 
-const DANGER_ACTIONS: DangerAction[] = ["member.remove", "project.archive", "cycle.reset"];
+const DANGER_ACTIONS: DangerAction[] = [
+  "member.remove",
+  "project.archive",
+  "cycle.reset",
+];
 
 function isDangerAction(value: unknown): value is DangerAction {
-  return typeof value === "string" && (DANGER_ACTIONS as string[]).includes(value);
+  return (
+    typeof value === "string" && (DANGER_ACTIONS as string[]).includes(value)
+  );
 }
 
 /** Case- and whitespace-insensitive, but otherwise exact. */
 function confirmationMatches(typed: unknown, expected: string): boolean {
-  return typeof typed === "string" && typed.trim().toLowerCase() === expected.trim().toLowerCase();
+  return (
+    typeof typed === "string" &&
+    typed.trim().toLowerCase() === expected.trim().toLowerCase()
+  );
 }
 
 export async function POST(request: Request) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
   const { actor } = guard.context;
 
   const body: unknown = await request.json().catch(() => null);
   if (typeof body !== "object" || body === null) {
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 },
+    );
   }
 
-  const { action, targetId, confirmation, reason } = body as Record<string, unknown>;
+  const { action, targetId, confirmation, reason } = body as Record<
+    string,
+    unknown
+  >;
   if (!isDangerAction(action)) {
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   }
@@ -49,19 +69,34 @@ export async function POST(request: Request) {
 
     if (action === "member.remove") {
       if (typeof targetId !== "string") {
-        return NextResponse.json({ error: "targetId is required" }, { status: 400 });
+        return NextResponse.json(
+          { error: "targetId is required" },
+          { status: 400 },
+        );
       }
-      const member = await prisma.member.findUnique({ where: { id: targetId } });
-      if (!member) return NextResponse.json({ error: "Member not found" }, { status: 404 });
+      const member = await prisma.member.findUnique({
+        where: { id: targetId },
+      });
+      if (!member)
+        return NextResponse.json(
+          { error: "Member not found" },
+          { status: 404 },
+        );
 
       // Same two guards the existing DELETE /api/members/[memberId]
       // enforces — the Leader's seat is fixed, and an admin removing
       // themselves would lock the org out of its own console.
       if (member.isLeader) {
-        return NextResponse.json({ error: "The Leader can't be removed" }, { status: 400 });
+        return NextResponse.json(
+          { error: "The Leader can't be removed" },
+          { status: 400 },
+        );
       }
       if (member.id === actor.id) {
-        return NextResponse.json({ error: "You can't remove yourself" }, { status: 400 });
+        return NextResponse.json(
+          { error: "You can't remove yourself" },
+          { status: 400 },
+        );
       }
       if (!confirmationMatches(confirmation, member.displayName)) {
         return NextResponse.json(
@@ -86,7 +121,10 @@ export async function POST(request: Request) {
       // than a tidy table. A real delete stays at DELETE
       // /api/members/[memberId], which reassigns that content first.
       await prisma.$transaction(async (tx) => {
-        await tx.member.update({ where: { id: targetId }, data: { status: "REMOVED" } });
+        await tx.member.update({
+          where: { id: targetId },
+          data: { status: "REMOVED" },
+        });
         await recordAuditEvent(
           {
             actor,
@@ -110,16 +148,34 @@ export async function POST(request: Request) {
 
     if (action === "project.archive") {
       if (typeof targetId !== "string") {
-        return NextResponse.json({ error: "targetId is required" }, { status: 400 });
+        return NextResponse.json(
+          { error: "targetId is required" },
+          { status: 400 },
+        );
       }
-      const project = await prisma.project.findUnique({ where: { id: targetId } });
-      if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+      const project = await prisma.project.findUnique({
+        where: {
+          ...{ id: targetId },
+          AND: [await entityVisibilityWhere("project")],
+        },
+      });
+      if (!project)
+        return NextResponse.json(
+          { error: "Project not found" },
+          { status: 404 },
+        );
       if (!confirmationMatches(confirmation, project.name)) {
-        return NextResponse.json({ error: `Type “${project.name}” exactly to confirm` }, { status: 400 });
+        return NextResponse.json(
+          { error: `Type “${project.name}” exactly to confirm` },
+          { status: 400 },
+        );
       }
 
       await prisma.$transaction(async (tx) => {
-        await tx.project.update({ where: { id: targetId }, data: { status: "ARCHIVED" } });
+        await tx.project.update({
+          where: { id: targetId },
+          data: { status: "ARCHIVED" },
+        });
         await recordAuditEvent(
           {
             actor,
@@ -135,7 +191,10 @@ export async function POST(request: Request) {
         );
       });
 
-      return NextResponse.json({ ok: true, message: `${project.name} archived` });
+      return NextResponse.json({
+        ok: true,
+        message: `${project.name} archived`,
+      });
     }
 
     // cycle.reset — closes the books on the current cycle: every COMPLETED
@@ -143,7 +202,10 @@ export async function POST(request: Request) {
     // waived. Deliberately does NOT touch transactions; the ledger is
     // cumulative and has no cycle boundary (architecture-context.md).
     if (!confirmationMatches(confirmation, "reset cycle")) {
-      return NextResponse.json({ error: "Type “reset cycle” exactly to confirm" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Type “reset cycle” exactly to confirm" },
+        { status: 400 },
+      );
     }
 
     const settings = await getOrgSettings();
@@ -158,11 +220,16 @@ export async function POST(request: Request) {
       // — an issue date older than the org's penaltyDueDays window. Keying
       // only off `dueAt` would silently skip every legacy penalty.
       const now = new Date();
-      const fallbackCutoff = new Date(now.getTime() - settings.penaltyDueDays * 24 * 60 * 60 * 1000);
+      const fallbackCutoff = new Date(
+        now.getTime() - settings.penaltyDueDays * 24 * 60 * 60 * 1000,
+      );
       const waived = await tx.penalty.updateMany({
         where: {
           status: "OPEN",
-          OR: [{ dueAt: { lt: now } }, { dueAt: null, createdAt: { lt: fallbackCutoff } }],
+          OR: [
+            { dueAt: { lt: now } },
+            { dueAt: null, createdAt: { lt: fallbackCutoff } },
+          ],
         },
         data: { status: "WAIVED", resolvedAt: now },
       });
@@ -174,13 +241,19 @@ export async function POST(request: Request) {
           entityType: "ORG_SETTINGS",
           entityId: "cycle",
           entityLabel: "Cycle reset",
-          after: { projectsArchived: archived.count, penaltiesWaived: waived.count },
+          after: {
+            projectsArchived: archived.count,
+            penaltiesWaived: waived.count,
+          },
           reason: justification,
         },
         tx,
       );
 
-      return { projectsArchived: archived.count, penaltiesWaived: waived.count };
+      return {
+        projectsArchived: archived.count,
+        penaltiesWaived: waived.count,
+      };
     });
 
     return NextResponse.json({

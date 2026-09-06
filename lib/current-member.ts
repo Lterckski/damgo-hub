@@ -1,3 +1,4 @@
+import { requireWorkspaceSession } from "@/lib/hub/context";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
@@ -27,7 +28,9 @@ export async function getCurrentMember(): Promise<Member> {
   const { userId } = await auth();
 
   if (!userId) {
-    throw new Error("getCurrentMember() called without an authenticated Clerk session");
+    throw new Error(
+      "getCurrentMember() called without an authenticated Clerk session",
+    );
   }
 
   const existing = await prisma.member.findUnique({
@@ -70,7 +73,10 @@ export async function getCurrentMember(): Promise<Member> {
  * actually behaves like it would for someone who really is one).
  */
 export async function isCurrentMemberAdmin(): Promise<boolean> {
-  const [{ orgRole }, viewingAsMember] = await Promise.all([auth(), isDevViewingAsMember()]);
+  const [{ role: orgRole }, viewingAsMember] = await Promise.all([
+    requireWorkspaceSession(),
+    isDevViewingAsMember(),
+  ]);
   return orgRole === "org:admin" && !viewingAsMember;
 }
 
@@ -82,7 +88,7 @@ export async function isCurrentMemberAdmin(): Promise<boolean> {
  * isCurrentMemberAdmin() above so it respects the simulated view.
  */
 export async function isRealMemberAdmin(): Promise<boolean> {
-  const { orgRole } = await auth();
+  const { role: orgRole } = await requireWorkspaceSession();
   return orgRole === "org:admin";
 }
 
@@ -94,6 +100,9 @@ export async function isRealMemberAdmin(): Promise<boolean> {
  * same reasoning as isCurrentMemberAdmin() above.
  */
 export async function isCurrentMemberLeader(): Promise<boolean> {
-  const [member, viewingAsMember] = await Promise.all([getCurrentMember(), isDevViewingAsMember()]);
+  const [member, viewingAsMember] = await Promise.all([
+    getCurrentMember(),
+    isDevViewingAsMember(),
+  ]);
   return member.isLeader && !viewingAsMember;
 }

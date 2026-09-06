@@ -1,3 +1,4 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
 /** Shared serialization + query helpers for Meeting API responses — see 16-meeting-scheduling.md. */
 import type { Prisma } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -55,7 +56,9 @@ export interface SerializedMeeting extends SerializedMeetingListItem {
 // every organizer/participant on every meeting the list page fetches.
 const MEETING_PARTICIPANTS_INCLUDE = {
   participants: {
-    include: { member: { select: { id: true, displayName: true, avatarUrl: true } } },
+    include: {
+      member: { select: { id: true, displayName: true, avatarUrl: true } },
+    },
   },
 } as const;
 
@@ -85,7 +88,9 @@ export const MEETING_DETAIL_INCLUDE = {
 } satisfies Prisma.MeetingInclude;
 
 function serializeParticipants(
-  participants: { member: { id: string; displayName: string; avatarUrl: string | null } }[],
+  participants: {
+    member: { id: string; displayName: string; avatarUrl: string | null };
+  }[],
 ): MeetingMemberOption[] {
   return participants.map((p) => ({
     id: p.member.id,
@@ -103,7 +108,9 @@ export function serializeMeetingListItem(meeting: {
   meetingUrl: string | null;
   organizerId: string;
   organizer: { displayName: string };
-  participants: { member: { id: string; displayName: string; avatarUrl: string | null } }[];
+  participants: {
+    member: { id: string; displayName: string; avatarUrl: string | null };
+  }[];
 }): SerializedMeetingListItem {
   return {
     id: meeting.id,
@@ -129,7 +136,9 @@ export function serializeMeeting(meeting: {
   organizerId: string;
   organizer: { displayName: string };
   notificationRevision: number;
-  participants: { member: { id: string; displayName: string; avatarUrl: string | null } }[];
+  participants: {
+    member: { id: string; displayName: string; avatarUrl: string | null };
+  }[];
   agendaProposals: {
     id: string;
     text: string;
@@ -194,7 +203,10 @@ export function serializeMeeting(meeting: {
 export function splitMeetingsByTime(
   meetings: SerializedMeetingListItem[],
   now: Date = new Date(),
-): { upcoming: SerializedMeetingListItem[]; past: SerializedMeetingListItem[] } {
+): {
+  upcoming: SerializedMeetingListItem[];
+  past: SerializedMeetingListItem[];
+} {
   const nowMs = now.getTime();
   const effectiveEnd = (meeting: SerializedMeetingListItem) =>
     new Date(meeting.endsAt ?? meeting.scheduledAt).getTime();
@@ -208,7 +220,10 @@ export function splitMeetingsByTime(
 }
 
 /** Whether `memberId` is a participant of a meeting whose participants were fetched as `{ memberId }` rows. */
-export function isMeetingParticipant(participants: { memberId: string }[], memberId: string): boolean {
+export function isMeetingParticipant(
+  participants: { memberId: string }[],
+  memberId: string,
+): boolean {
   return participants.some((p) => p.memberId === memberId);
 }
 
@@ -221,8 +236,18 @@ export function isMeetingParticipant(participants: { memberId: string }[], membe
  * pattern — see progress-tracker.md's Architecture Decisions) so the two
  * can't drift on what "visible" means.
  */
-export function meetingVisibilityWhere(memberId: string, isAdmin: boolean): Prisma.MeetingWhereInput {
-  return isAdmin ? {} : { participants: { some: { memberId } } };
+export function meetingVisibilityWhere(
+  memberId: string,
+  isAdmin: boolean,
+): Prisma.MeetingWhereInput {
+  return isAdmin
+    ? {}
+    : {
+        OR: [
+          { visibilityScope: "org" },
+          { participants: { some: { memberId } } },
+        ],
+      };
 }
 
 // --- Shared validation --------------------------------------------------
@@ -255,20 +280,33 @@ const SERIALIZABLE_TRANSACTION_ATTEMPTS = 3;
 export async function runSerializableMeetingTransaction<T>(
   operation: (tx: TransactionClient) => Promise<T>,
 ): Promise<T> {
-  for (let attempt = 0; attempt < SERIALIZABLE_TRANSACTION_ATTEMPTS; attempt += 1) {
+  for (
+    let attempt = 0;
+    attempt < SERIALIZABLE_TRANSACTION_ATTEMPTS;
+    attempt += 1
+  ) {
     try {
-      return await prisma.$transaction(operation, { isolationLevel: "Serializable" });
+      return await prisma.$transaction(operation, {
+        isolationLevel: "Serializable",
+      });
     } catch (error) {
       const isWriteConflict =
-        typeof error === "object" && error !== null && "code" in error && error.code === "P2034";
-      if (!isWriteConflict || attempt === SERIALIZABLE_TRANSACTION_ATTEMPTS - 1) throw error;
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "P2034";
+      if (!isWriteConflict || attempt === SERIALIZABLE_TRANSACTION_ATTEMPTS - 1)
+        throw error;
       await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** attempt));
     }
   }
   throw new Error("Serializable meeting transaction exhausted its retries");
 }
 
-export async function nextAgendaPosition(tx: TransactionClient, meetingId: string): Promise<number> {
+export async function nextAgendaPosition(
+  tx: TransactionClient,
+  meetingId: string,
+): Promise<number> {
   const last = await tx.agendaItem.findFirst({
     where: { meetingId },
     orderBy: { position: "desc" },
@@ -307,7 +345,10 @@ export async function moveAgendaItemToPosition(
   itemId: string,
   targetPosition: number,
 ): Promise<void> {
-  const items = await tx.agendaItem.findMany({ where: { meetingId }, orderBy: { position: "asc" } });
+  const items = await tx.agendaItem.findMany({
+    where: { meetingId },
+    orderBy: { position: "asc" },
+  });
   const current = items.find((item) => item.id === itemId);
   if (!current) {
     throw new Error("Agenda item not found in this meeting");
@@ -321,10 +362,16 @@ export async function moveAgendaItemToPosition(
 
   const TEMP_OFFSET = 100_000;
   for (const item of reordered) {
-    await tx.agendaItem.update({ where: { id: item.id }, data: { position: item.position + TEMP_OFFSET } });
+    await tx.agendaItem.update({
+      where: { id: item.id },
+      data: { position: item.position + TEMP_OFFSET },
+    });
   }
   for (let index = 0; index < reordered.length; index++) {
-    await tx.agendaItem.update({ where: { id: reordered[index].id }, data: { position: index } });
+    await tx.agendaItem.update({
+      where: { id: reordered[index].id },
+      data: { position: index },
+    });
   }
 }
 
@@ -346,13 +393,19 @@ export async function getVisibleMeetingCalendarItems(
 ): Promise<UnifiedCalendarItem[]> {
   const meetings = await prisma.meeting.findMany({
     where: {
-      ...meetingVisibilityWhere(memberId, isAdmin),
-      ...(range
-        ? {
-            scheduledAt: { lte: range.lte },
-            OR: [{ endsAt: { gte: range.gte } }, { endsAt: null, scheduledAt: { gte: range.gte } }],
-          }
-        : {}),
+      ...{
+        ...meetingVisibilityWhere(memberId, isAdmin),
+        ...(range
+          ? {
+              scheduledAt: { lte: range.lte },
+              OR: [
+                { endsAt: { gte: range.gte } },
+                { endsAt: null, scheduledAt: { gte: range.gte } },
+              ],
+            }
+          : {}),
+      },
+      AND: [await entityVisibilityWhere("meeting")],
     },
     select: { id: true, title: true, scheduledAt: true, endsAt: true },
     orderBy: { scheduledAt: "asc" },

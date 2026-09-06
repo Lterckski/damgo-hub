@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { taskVisibilityWhere } from "@/lib/hub/context";
 import { clerkClient } from "@clerk/nextjs/server";
 
 import { formatPHP } from "@/lib/currency";
@@ -58,26 +60,32 @@ async function getClerkMembershipCounts(
     let offset = 0;
 
     while (true) {
-      const { data } = await client.organizations.getOrganizationMembershipList({
-        organizationId: orgId,
-        limit,
-        offset,
-      });
+      const { data } = await client.organizations.getOrganizationMembershipList(
+        {
+          organizationId: orgId,
+          limit,
+          offset,
+        },
+      );
       for (const membership of data) {
-        if (membership.publicUserData) clerkUserIds.push(membership.publicUserData.userId);
+        if (membership.publicUserData)
+          clerkUserIds.push(membership.publicUserData.userId);
       }
       if (data.length < limit) break;
       offset += limit;
     }
 
-    const { data: invitations } = await client.organizations.getOrganizationInvitationList({
-      organizationId: orgId,
-      limit: 100,
-    });
+    const { data: invitations } =
+      await client.organizations.getOrganizationInvitationList({
+        organizationId: orgId,
+        limit: 100,
+      });
 
     return {
       clerkUserIds,
-      pendingInvitations: invitations.filter((invitation) => invitation.status === "pending").length,
+      pendingInvitations: invitations.filter(
+        (invitation) => invitation.status === "pending",
+      ).length,
     };
   } catch (error) {
     console.error("Clerk membership count failed", error);
@@ -96,7 +104,9 @@ export interface AdminStats {
 export async function getAdminStats(orgId: string): Promise<AdminStats> {
   const settings = await getOrgSettings();
   const since = weekAgo();
-  const staleBefore = new Date(Date.now() - settings.projectStaleDays * 24 * 60 * 60 * 1000);
+  const staleBefore = new Date(
+    Date.now() - settings.projectStaleDays * 24 * 60 * 60 * 1000,
+  );
 
   const [
     clerkCounts,
@@ -113,20 +123,48 @@ export async function getAdminStats(orgId: string): Promise<AdminStats> {
     membersWithUnpaidPenalties,
   ] = await Promise.all([
     getClerkMembershipCounts(orgId),
-    prisma.member.findMany({ select: { clerkUserId: true, status: true, createdAt: true } }),
+    prisma.member.findMany({
+      select: { clerkUserId: true, status: true, createdAt: true },
+    }),
     prisma.penalty.findMany({
-      where: { status: "OPEN" },
+      where: {
+        ...{ status: "OPEN" },
+        AND: [await entityVisibilityWhere("penalty")],
+      },
       select: { dueAt: true, createdAt: true, amountCents: true },
     }),
     prisma.transaction.count({ where: { status: "PENDING" } }),
     prisma.project.count({ where: { status: "ACTIVE" } }),
-    prisma.transaction.findMany({ where: { status: "APPROVED" }, select: { type: true, amount: true } }),
-    prisma.project.count({ where: { status: "ACTIVE", createdAt: { gte: since } } }),
-    prisma.penalty.count({ where: { status: "OPEN", createdAt: { gte: since } } }),
-    prisma.transaction.count({ where: { receiptPath: null, type: "EXPENSE", status: { not: "REJECTED" } } }),
-    prisma.project.count({ where: { status: "ACTIVE", updatedAt: { lt: staleBefore } } }),
+    prisma.transaction.findMany({
+      where: {
+        ...{ status: "APPROVED" },
+        AND: [await entityVisibilityWhere("transaction")],
+      },
+      select: { type: true, amount: true },
+    }),
+    prisma.project.count({
+      where: { status: "ACTIVE", createdAt: { gte: since } },
+    }),
+    prisma.penalty.count({
+      where: { status: "OPEN", createdAt: { gte: since } },
+    }),
+    prisma.transaction.count({
+      where: {
+        receiptPath: null,
+        type: "EXPENSE",
+        status: { not: "REJECTED" },
+      },
+    }),
+    prisma.project.count({
+      where: { status: "ACTIVE", updatedAt: { lt: staleBefore } },
+    }),
     prisma.task.count({
-      where: { status: { not: "DONE" }, dueDate: { lt: new Date() } },
+      where: {
+        AND: [
+          await taskVisibilityWhere(),
+          { status: { not: "DONE" }, dueDate: { lt: new Date() } },
+        ],
+      },
     }),
     prisma.penalty.groupBy({ by: ["memberId"], where: { status: "OPEN" } }),
   ]);
@@ -137,8 +175,12 @@ export async function getAdminStats(orgId: string): Promise<AdminStats> {
     ? localMembers.filter((member) => clerkUserIdSet.has(member.clerkUserId))
     : localMembers;
 
-  const activeCount = inOrg.filter((member) => member.status === "ACTIVE").length;
-  const inactiveCount = inOrg.filter((member) => member.status === "INACTIVE").length;
+  const activeCount = inOrg.filter(
+    (member) => member.status === "ACTIVE",
+  ).length;
+  const inactiveCount = inOrg.filter(
+    (member) => member.status === "INACTIVE",
+  ).length;
   const pendingInvites = clerkCounts?.pendingInvitations ?? 0;
   // Local rows whose Clerk user is not an org member — exactly what used to
   // be counted as a member with nothing on screen to say so. REMOVED rows
@@ -147,10 +189,14 @@ export async function getAdminStats(orgId: string): Promise<AdminStats> {
   // something that's been handled.
   const notInClerk = clerkUserIdSet
     ? localMembers.filter(
-        (member) => !clerkUserIdSet.has(member.clerkUserId) && member.status !== "REMOVED",
+        (member) =>
+          !clerkUserIdSet.has(member.clerkUserId) &&
+          member.status !== "REMOVED",
       ).length
     : 0;
-  const newMembersThisWeek = inOrg.filter((member) => member.createdAt >= since).length;
+  const newMembersThisWeek = inOrg.filter(
+    (member) => member.createdAt >= since,
+  ).length;
 
   const memberBreakdown = [
     `${activeCount} active`,
@@ -170,7 +216,10 @@ export async function getAdminStats(orgId: string): Promise<AdminStats> {
   const pastDuePenalties = openPenalties.filter(
     (penalty) => penaltyDueAt(penalty, settings.penaltyDueDays) <= now,
   );
-  const openPenaltyValue = openPenalties.reduce((sum, p) => sum + (p.amountCents ?? 0), 0);
+  const openPenaltyValue = openPenalties.reduce(
+    (sum, p) => sum + (p.amountCents ?? 0),
+    0,
+  );
 
   const cards: AdminStatCard[] = [
     {
@@ -180,9 +229,13 @@ export async function getAdminStats(orgId: string): Promise<AdminStats> {
       breakdown: clerkCounts
         ? memberBreakdown
         : "Clerk unreachable — showing unscoped local rows",
-      delta: newMembersThisWeek > 0 ? `${signed(newMembersThisWeek)} this week` : "No change this week",
+      delta:
+        newMembersThisWeek > 0
+          ? `${signed(newMembersThisWeek)} this week`
+          : "No change this week",
       filter: { tab: "members", filterId: "all" },
-      emptyHint: "No one is in the organization yet. Invite your team to get started.",
+      emptyHint:
+        "No one is in the organization yet. Invite your team to get started.",
       tone: notInClerk > 0 ? "warning" : "neutral",
     },
     {
@@ -193,9 +246,13 @@ export async function getAdminStats(orgId: string): Promise<AdminStats> {
         openPenalties.length > 0
           ? `${pastDuePenalties.length} past due · ${formatPHP(openPenaltyValue)} outstanding`
           : null,
-      delta: penaltiesThisWeek > 0 ? `${signed(penaltiesThisWeek)} this week` : "None issued this week",
+      delta:
+        penaltiesThisWeek > 0
+          ? `${signed(penaltiesThisWeek)} this week`
+          : "None issued this week",
       filter: { tab: "penalties", filterId: "open" },
-      emptyHint: "No open penalties. Issued penalties and their amounts would show here.",
+      emptyHint:
+        "No open penalties. Issued penalties and their amounts would show here.",
       tone: pastDuePenalties.length > 0 ? "critical" : "neutral",
     },
     {
@@ -205,17 +262,23 @@ export async function getAdminStats(orgId: string): Promise<AdminStats> {
       breakdown: pendingTransactions > 0 ? "Awaiting your approval" : null,
       delta: null,
       filter: { tab: "finance", filterId: "pending" },
-      emptyHint: "Nothing awaiting approval. Submitted income and expenses land here first.",
+      emptyHint:
+        "Nothing awaiting approval. Submitted income and expenses land here first.",
       tone: pendingTransactions > 0 ? "warning" : "positive",
     },
     {
       key: "projects",
       label: "Active Projects",
       value: String(activeProjects),
-      breakdown: staleProjects > 0 ? `${staleProjects} with no recent activity` : null,
-      delta: newProjectsThisWeek > 0 ? `${signed(newProjectsThisWeek)} this week` : "No change this week",
+      breakdown:
+        staleProjects > 0 ? `${staleProjects} with no recent activity` : null,
+      delta:
+        newProjectsThisWeek > 0
+          ? `${signed(newProjectsThisWeek)} this week`
+          : "No change this week",
       filter: { tab: "projects", filterId: "active" },
-      emptyHint: "No active projects. Approve a proposal from the queue to start one.",
+      emptyHint:
+        "No active projects. Approve a proposal from the queue to start one.",
       tone: "neutral",
     },
     {
@@ -225,7 +288,8 @@ export async function getAdminStats(orgId: string): Promise<AdminStats> {
       breakdown: "Approved transactions only",
       delta: null,
       filter: { tab: "finance", filterId: "approved" },
-      emptyHint: "No approved transactions yet. The running balance appears once one is approved.",
+      emptyHint:
+        "No approved transactions yet. The running balance appears once one is approved.",
       tone: balanceCents < 0 ? "critical" : "positive",
     },
     {
@@ -235,8 +299,10 @@ export async function getAdminStats(orgId: string): Promise<AdminStats> {
       breakdown: `${overdueTasks} task${overdueTasks === 1 ? "" : "s"} · ${pastDuePenalties.length} penalt${pastDuePenalties.length === 1 ? "y" : "ies"}`,
       delta: null,
       filter: { tab: "activity", filterId: "overdue" },
-      emptyHint: "Nothing overdue. Late tasks and past-due penalties surface here.",
-      tone: overdueTasks + pastDuePenalties.length > 0 ? "critical" : "positive",
+      emptyHint:
+        "Nothing overdue. Late tasks and past-due penalties surface here.",
+      tone:
+        overdueTasks + pastDuePenalties.length > 0 ? "critical" : "positive",
     },
   ];
 
@@ -245,7 +311,10 @@ export async function getAdminStats(orgId: string): Promise<AdminStats> {
       key: "members-owing",
       label: "Members With Unpaid Penalties",
       value: String(membersWithUnpaidPenalties.length),
-      breakdown: membersWithUnpaidPenalties.length > 0 ? "Open, not yet settled or waived" : null,
+      breakdown:
+        membersWithUnpaidPenalties.length > 0
+          ? "Open, not yet settled or waived"
+          : null,
       delta: null,
       filter: { tab: "penalties", filterId: "open" },
       emptyHint: "Everyone is settled up.",
@@ -255,7 +324,10 @@ export async function getAdminStats(orgId: string): Promise<AdminStats> {
       key: "missing-receipts",
       label: "Expenses Missing Receipts",
       value: String(transactionsMissingReceipts),
-      breakdown: transactionsMissingReceipts > 0 ? "Approved or pending, no receipt attached" : null,
+      breakdown:
+        transactionsMissingReceipts > 0
+          ? "Approved or pending, no receipt attached"
+          : null,
       delta: null,
       filter: { tab: "finance", filterId: "missing_receipt" },
       emptyHint: "Every expense has a receipt attached.",

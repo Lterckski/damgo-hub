@@ -1,3 +1,4 @@
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
@@ -19,6 +20,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ memberId: string }> },
 ) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const isAdmin = await isCurrentMemberAdmin();
   if (!isAdmin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -33,7 +37,9 @@ export async function PATCH(
     !roles.every((role) => typeof role === "string" && VALID_ROLES.has(role))
   ) {
     return NextResponse.json(
-      { error: `roles must be an array drawn from: ${[...VALID_ROLES].join(", ")}` },
+      {
+        error: `roles must be an array drawn from: ${[...VALID_ROLES].join(", ")}`,
+      },
       { status: 400 },
     );
   }

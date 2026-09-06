@@ -1,10 +1,18 @@
+import { requireWorkspacePage as requireWorkspaceSession } from "@/lib/hub/context";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 
 import { getAuditLog } from "@/lib/audit-log";
-import { getCurrentMember, isCurrentMemberLeader, isDevViewingAsMember } from "@/lib/current-member";
+import {
+  getCurrentMember,
+  isCurrentMemberLeader,
+  isDevViewingAsMember,
+} from "@/lib/current-member";
 import { getOrgSettings } from "@/lib/org-settings";
-import { reconcileMembers, type MemberReconciliation } from "@/lib/member-reconciliation";
+import {
+  reconcileMembers,
+  type MemberReconciliation,
+} from "@/lib/member-reconciliation";
 import { getActionQueue } from "@/lib/admin/queue";
 import { buildSearchIndex } from "@/lib/admin/search";
 import { getAdminStats } from "@/lib/admin/stats";
@@ -30,6 +38,8 @@ import { ToastProvider } from "@/components/ui/toast";
  * no longer linked from here.
  */
 export default async function AdminConsolePage() {
+  await requireWorkspaceSession();
+
   const { userId, orgId } = await auth();
 
   // The layout above already redirects an unauthenticated visitor, but
@@ -41,16 +51,23 @@ export default async function AdminConsolePage() {
     redirect("/sign-in");
   }
 
-  const [tables, queue, auditLog, settings, currentMember, isLeader, isViewingAsMember] =
-    await Promise.all([
-      getAdminTableData(),
-      getActionQueue(),
-      getAuditLog(200),
-      getOrgSettings(),
-      getCurrentMember(),
-      isCurrentMemberLeader(),
-      isDevViewingAsMember(),
-    ]);
+  const [
+    tables,
+    queue,
+    auditLog,
+    settings,
+    currentMember,
+    isLeader,
+    isViewingAsMember,
+  ] = await Promise.all([
+    getAdminTableData(),
+    getActionQueue(),
+    getAuditLog(200),
+    getOrgSettings(),
+    getCurrentMember(),
+    isCurrentMemberLeader(),
+    isDevViewingAsMember(),
+  ]);
 
   const [searchIndex, stats, reconciliationResult] = await Promise.all([
     buildSearchIndex(tables),
@@ -60,19 +77,31 @@ export default async function AdminConsolePage() {
     // wrong in the first place.
     orgId
       ? getAdminStats(orgId)
-      : Promise.resolve({ cards: [], exceptions: [], memberCountDegraded: true }),
+      : Promise.resolve({
+          cards: [],
+          exceptions: [],
+          memberCountDegraded: true,
+        }),
     orgId
       ? reconcileMembers(orgId).then(
-          (report): { report: MemberReconciliation | null; error: string | null } => ({
+          (
+            report,
+          ): { report: MemberReconciliation | null; error: string | null } => ({
             report,
             error: null,
           }),
-          (): { report: MemberReconciliation | null; error: string | null } => ({
+          (): {
+            report: MemberReconciliation | null;
+            error: string | null;
+          } => ({
             report: null,
             error: "Couldn't reach Clerk to compare the roster.",
           }),
         )
-      : Promise.resolve({ report: null, error: "No active Clerk organization on this session." }),
+      : Promise.resolve({
+          report: null,
+          error: "No active Clerk organization on this session.",
+        }),
   ]);
 
   return (

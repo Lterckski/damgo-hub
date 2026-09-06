@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { taskVisibilityWhere } from "@/lib/hub/context";
 import { prisma } from "@/lib/prisma";
 import { listOrgRoles } from "@/lib/organization-roles";
 import { getOrgSettings } from "@/lib/org-settings";
@@ -111,58 +113,94 @@ export interface AdminTableData {
 export async function getAdminTableData(): Promise<AdminTableData> {
   const settings = await getOrgSettings();
   const now = new Date();
-  const staleBefore = new Date(now.getTime() - settings.projectStaleDays * 24 * 60 * 60 * 1000);
+  const staleBefore = new Date(
+    now.getTime() - settings.projectStaleDays * 24 * 60 * 60 * 1000,
+  );
 
   const orgRoles = await listOrgRoles();
 
-  const [members, transactions, penalties, projects, tasks, meetings] = await Promise.all([
-    // Unfiltered on purpose, unlike getMemberTrackerRows(): the console has
-    // to be able to SHOW a local row that Clerk doesn't know about, since
-    // finding those is the point of the Sync with Clerk action. It's flagged
-    // per row via inClerkOrg rather than hidden.
-    prisma.member.findMany({
-      include: {
-        functionalRoles: true,
-        workDistributionRoles: true,
-        _count: { select: { penaltiesReceived: { where: { status: "OPEN" } } } },
-        taskAssignments: { where: { task: { status: { not: "DONE" } } }, select: { id: true } },
-      },
-      orderBy: { createdAt: "asc" },
-    }),
-    prisma.transaction.findMany({
-      include: { member: { select: { displayName: true, avatarUrl: true } } },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.penalty.findMany({
-      include: {
-        member: { select: { displayName: true, avatarUrl: true } },
-        issuedBy: { select: { displayName: true } },
-        transaction: { select: { id: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.project.findMany({
-      include: {
-        owner: { select: { displayName: true, avatarUrl: true } },
-        _count: { select: { members: true, tasks: true } },
-        tasks: { where: { status: { not: "DONE" } }, select: { id: true } },
-      },
-      orderBy: { updatedAt: "desc" },
-    }),
-    prisma.task.findMany({
-      include: {
-        assignees: { include: { member: { select: { displayName: true, avatarUrl: true } } } },
-        project: { select: { name: true } },
-      },
-      orderBy: { updatedAt: "desc" },
-      take: 200,
-    }),
-    prisma.meeting.findMany({
-      include: { organizer: { select: { displayName: true, avatarUrl: true } } },
-      orderBy: { updatedAt: "desc" },
-      take: 50,
-    }),
-  ]);
+  const [members, transactions, penalties, projects, tasks, meetings] =
+    await Promise.all([
+      // Unfiltered on purpose, unlike getMemberTrackerRows(): the console has
+      // to be able to SHOW a local row that Clerk doesn't know about, since
+      // finding those is the point of the Sync with Clerk action. It's flagged
+      // per row via inClerkOrg rather than hidden.
+      prisma.member.findMany({
+        include: {
+          functionalRoles: true,
+          workDistributionRoles: true,
+          _count: {
+            select: { penaltiesReceived: { where: { status: "OPEN" } } },
+          },
+          taskAssignments: {
+            where: {
+              task: {
+                AND: [await taskVisibilityWhere(), { status: { not: "DONE" } }],
+              },
+            },
+            select: { id: true },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.transaction.findMany({
+        where: await entityVisibilityWhere("transaction"),
+        include: { member: { select: { displayName: true, avatarUrl: true } } },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.penalty.findMany({
+        where: await entityVisibilityWhere("penalty"),
+        include: {
+          member: { select: { displayName: true, avatarUrl: true } },
+          issuedBy: { select: { displayName: true } },
+          transaction: { select: { id: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.project.findMany({
+        where: await entityVisibilityWhere("project"),
+        include: {
+          owner: { select: { displayName: true, avatarUrl: true } },
+          _count: {
+            select: {
+              members: true,
+              tasks: { where: await taskVisibilityWhere() },
+            },
+          },
+          tasks: {
+            where: {
+              AND: [await taskVisibilityWhere(), { status: { not: "DONE" } }],
+            },
+            select: { id: true },
+          },
+        },
+        orderBy: { updatedAt: "desc" },
+      }),
+      prisma.task.findMany({
+        where: await taskVisibilityWhere(),
+        include: {
+          assignees: {
+            include: {
+              member: { select: { displayName: true, avatarUrl: true } },
+            },
+          },
+          project: {
+            where: await entityVisibilityWhere("project"),
+            select: { name: true },
+          },
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 200,
+      }),
+      prisma.meeting.findMany({
+        where: await entityVisibilityWhere("meeting"),
+        include: {
+          organizer: { select: { displayName: true, avatarUrl: true } },
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 50,
+      }),
+    ]);
 
   const memberRows: MemberTableRow[] = members.map((member) => ({
     id: member.id,

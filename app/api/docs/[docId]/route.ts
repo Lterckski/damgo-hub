@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
@@ -10,6 +12,9 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ docId: string }> },
 ) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -17,7 +22,7 @@ export async function GET(
 
   const { docId } = await params;
   const doc = await prisma.doc.findUnique({
-    where: { id: docId },
+    where: { ...{ id: docId }, AND: [await entityVisibilityWhere("document")] },
     include: { author: { select: { displayName: true } }, attachments: true },
   });
 
@@ -36,15 +41,23 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ docId: string }> },
 ) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [member, isAdmin] = await Promise.all([getCurrentMember(), isCurrentMemberAdmin()]);
+  const [member, isAdmin] = await Promise.all([
+    getCurrentMember(),
+    isCurrentMemberAdmin(),
+  ]);
   const { docId } = await params;
 
-  const existing = await prisma.doc.findUnique({ where: { id: docId } });
+  const existing = await prisma.doc.findUnique({
+    where: { ...{ id: docId }, AND: [await entityVisibilityWhere("document")] },
+  });
   if (!existing) {
     return NextResponse.json({ error: "Doc not found" }, { status: 404 });
   }
@@ -61,7 +74,9 @@ export async function PATCH(
   const doc = await prisma.doc.update({
     where: { id: docId },
     data: {
-      ...(typeof title === "string" && title.trim() !== "" ? { title: title.trim() } : {}),
+      ...(typeof title === "string" && title.trim() !== ""
+        ? { title: title.trim() }
+        : {}),
       ...(typeof content === "string" ? { content } : {}),
       // driveFile: { id, name, mimeType, url } to attach/replace a link,
       // null to remove it, undefined (the key just absent) to leave it
@@ -86,15 +101,23 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ docId: string }> },
 ) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [member, isAdmin] = await Promise.all([getCurrentMember(), isCurrentMemberAdmin()]);
+  const [member, isAdmin] = await Promise.all([
+    getCurrentMember(),
+    isCurrentMemberAdmin(),
+  ]);
   const { docId } = await params;
 
-  const existing = await prisma.doc.findUnique({ where: { id: docId } });
+  const existing = await prisma.doc.findUnique({
+    where: { ...{ id: docId }, AND: [await entityVisibilityWhere("document")] },
+  });
   if (!existing) {
     return NextResponse.json({ error: "Doc not found" }, { status: 404 });
   }

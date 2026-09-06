@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
@@ -7,6 +9,9 @@ import { serializeDoc } from "@/lib/docs";
 
 // GET /api/docs — any authenticated member; ?projectId= filter.
 export async function GET(request: Request) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -16,7 +21,10 @@ export async function GET(request: Request) {
   const projectId = searchParams.get("projectId");
 
   const docs = await prisma.doc.findMany({
-    where: projectId ? { projectId } : undefined,
+    where: {
+      ...(projectId ? { projectId } : undefined),
+      AND: [await entityVisibilityWhere("document")],
+    },
     include: { author: { select: { displayName: true } } },
     orderBy: { updatedAt: "desc" },
   });
@@ -26,6 +34,9 @@ export async function GET(request: Request) {
 
 // POST /api/docs — any authenticated member creates a doc.
 export async function POST(request: Request) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

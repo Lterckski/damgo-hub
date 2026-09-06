@@ -1,4 +1,5 @@
 "use client";
+import { useSearchParams } from "next/navigation";
 
 import { useState } from "react";
 import { format } from "date-fns";
@@ -7,7 +8,10 @@ import { FolderKanban } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TaskStatusBadge, type TaskStatusValue } from "@/components/tasks/task-status-badge";
+import {
+  TaskStatusBadge,
+  type TaskStatusValue,
+} from "@/components/tasks/task-status-badge";
 import { NewTaskDialog } from "@/components/tasks/new-task-dialog";
 import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
 import { cn } from "@/lib/utils";
@@ -46,7 +50,11 @@ function groupByStatus(tasks: SerializedTask[]) {
   return groups;
 }
 
-function AssigneeStack({ assignees }: { assignees: SerializedTask["assignees"] }) {
+function AssigneeStack({
+  assignees,
+}: {
+  assignees: SerializedTask["assignees"];
+}) {
   if (assignees.length === 0) {
     return <span className="text-xs text-copy-faint">Unassigned</span>;
   }
@@ -131,7 +139,12 @@ function TaskColumns({ tasks, onOpenTask }: TaskColumnsProps) {
       {COLUMNS.map((column) => (
         <div key={column.status} className="space-y-3">
           <div className="flex items-center gap-2">
-            <span className={cn("h-2 w-2 rounded-full", STATUS_ACCENT[column.status])} />
+            <span
+              className={cn(
+                "h-2 w-2 rounded-full",
+                STATUS_ACCENT[column.status],
+              )}
+            />
             <p className="text-xs font-bold tracking-[0.06em] text-copy-primary uppercase">
               {column.label}
             </p>
@@ -144,7 +157,11 @@ function TaskColumns({ tasks, onOpenTask }: TaskColumnsProps) {
               <p className="text-xs text-copy-secondary">No tasks here.</p>
             ) : (
               groups[column.status].map((task) => (
-                <TaskCard key={task.id} task={task} onOpen={() => onOpenTask(task)} />
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  onOpen={() => onOpenTask(task)}
+                />
               ))
             )}
           </div>
@@ -154,10 +171,22 @@ function TaskColumns({ tasks, onOpenTask }: TaskColumnsProps) {
   );
 }
 
-export function TaskBoard({ tasks, members, projects, docs, currentMemberId, isAdmin }: TaskBoardProps) {
-  const [selectedTask, setSelectedTask] = useState<SerializedTask | null>(null);
+export function TaskBoard({
+  tasks,
+  members,
+  projects,
+  docs,
+  currentMemberId,
+  isAdmin,
+}: TaskBoardProps) {
+  const params = useSearchParams();
+  const [selectedTask, setSelectedTask] = useState<SerializedTask | null>(
+    () => tasks.find((task) => task.id === params.get("task")) ?? null,
+  );
 
-  const myTasks = tasks.filter((t) => t.assignees.some((a) => a.id === currentMemberId));
+  const myTasks = tasks.filter((t) =>
+    t.assignees.some((a) => a.id === currentMemberId),
+  );
 
   return (
     <div className="space-y-4">

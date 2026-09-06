@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { requireWorkspacePage as requireWorkspaceSession } from "@/lib/hub/context";
 import { prisma } from "@/lib/prisma";
 import { getCurrentMember } from "@/lib/current-member";
 import { getMemberPickerOptions } from "@/lib/members";
@@ -6,6 +8,8 @@ import { BackButton } from "@/components/shared/back-button";
 import { ProjectsList } from "@/components/projects/projects-list";
 
 export default async function ProjectsPage() {
+  await requireWorkspaceSession();
+
   const member = await getCurrentMember();
 
   // myProjects is always a strict subset of allProjects (every project the
@@ -15,6 +19,7 @@ export default async function ProjectsPage() {
   // reason. Fetch once, derive the subset in JS instead.
   const [allProjectRecords, memberRecords] = await Promise.all([
     prisma.project.findMany({
+      where: await entityVisibilityWhere("project"),
       include: PROJECT_INCLUDE,
       orderBy: { updatedAt: "desc" },
     }),

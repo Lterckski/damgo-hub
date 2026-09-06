@@ -1,3 +1,4 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
 import { prisma } from "@/lib/prisma";
 import { formatPHP } from "@/lib/currency";
 import type { AdminTableData } from "@/lib/admin/tables";
@@ -41,14 +42,25 @@ function entry(
     group,
     title,
     subtitle,
-    keywords: [title, subtitle, ...extraKeywords].filter(Boolean).join(" ").toLowerCase(),
+    keywords: [title, subtitle, ...extraKeywords]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase(),
     drawer: { kind, recordId },
   };
 }
 
-export async function buildSearchIndex(data: AdminTableData): Promise<SearchEntry[]> {
+export async function buildSearchIndex(
+  data: AdminTableData,
+): Promise<SearchEntry[]> {
   const docs = await prisma.doc.findMany({
-    select: { id: true, title: true, author: { select: { displayName: true } }, updatedAt: true },
+    where: await entityVisibilityWhere("document"),
+    select: {
+      id: true,
+      title: true,
+      author: { select: { displayName: true } },
+      updatedAt: true,
+    },
     orderBy: { updatedAt: "desc" },
     take: 200,
   });
@@ -72,16 +84,27 @@ export async function buildSearchIndex(data: AdminTableData): Promise<SearchEntr
       ),
     ),
     ...data.penalties.map((penalty) =>
-      entry("penalties", penalty.id, "Penalties", penalty.reason, `${penalty.memberName} · ${penalty.status}`, [
-        penalty.amountCents ? formatPHP(penalty.amountCents) : null,
-      ]),
+      entry(
+        "penalties",
+        penalty.id,
+        "Penalties",
+        penalty.reason,
+        `${penalty.memberName} · ${penalty.status}`,
+        [penalty.amountCents ? formatPHP(penalty.amountCents) : null],
+      ),
     ),
     ...data.projects.map((project) =>
-      entry("projects", project.id, "Projects", project.name, `${project.status} · ${project.ownerName}`, [
-        project.category,
-        project.priority,
-      ]),
+      entry(
+        "projects",
+        project.id,
+        "Projects",
+        project.name,
+        `${project.status} · ${project.ownerName}`,
+        [project.category, project.priority],
+      ),
     ),
-    ...docs.map((doc) => entry("docs", doc.id, "Docs", doc.title, doc.author.displayName)),
+    ...docs.map((doc) =>
+      entry("docs", doc.id, "Docs", doc.title, doc.author.displayName),
+    ),
   ];
 }

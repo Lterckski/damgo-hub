@@ -1,6 +1,11 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { requireWorkspacePage as requireWorkspaceSession } from "@/lib/hub/context";
 import { prisma } from "@/lib/prisma";
 import { BackButton } from "@/components/shared/back-button";
-import { FinanceTransactionsTable, type TransactionRow } from "@/components/finance/finance-transactions-table";
+import {
+  FinanceTransactionsTable,
+  type TransactionRow,
+} from "@/components/finance/finance-transactions-table";
 
 // All transactions, PENDING surfaced first — see 20-admin-dashboard.md.
 // Reuses FinanceTransactionsTable (and its approve/reject row actions)
@@ -10,7 +15,10 @@ import { FinanceTransactionsTable, type TransactionRow } from "@/components/fina
 // PENDING subset) is what actually surfaces them first rather than
 // leaving them wherever their own createdAt month happens to land.
 export default async function AdminFinancePage() {
+  await requireWorkspaceSession();
+
   const transactions = await prisma.transaction.findMany({
+    where: await entityVisibilityWhere("transaction"),
     include: { member: { select: { displayName: true } } },
     orderBy: { createdAt: "desc" },
   });
@@ -35,7 +43,9 @@ export default async function AdminFinancePage() {
         <BackButton />
         <h1 className="font-display text-3xl text-copy-primary">Finance</h1>
       </div>
-      <p className="mt-1 text-sm text-copy-secondary">All transactions, with pending approvals surfaced first.</p>
+      <p className="mt-1 text-sm text-copy-secondary">
+        All transactions, with pending approvals surfaced first.
+      </p>
 
       {pending.length > 0 && (
         <div className="mt-6">
@@ -47,7 +57,9 @@ export default async function AdminFinancePage() {
       )}
 
       <div className="mt-6">
-        <h2 className="mb-2 text-xs font-bold tracking-wide text-copy-primary uppercase">All Transactions</h2>
+        <h2 className="mb-2 text-xs font-bold tracking-wide text-copy-primary uppercase">
+          All Transactions
+        </h2>
         <FinanceTransactionsTable transactions={rows} isAdmin />
       </div>
     </div>
