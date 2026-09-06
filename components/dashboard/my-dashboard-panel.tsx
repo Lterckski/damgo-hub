@@ -1,125 +1,104 @@
-import { format } from "date-fns";
-import { CheckSquare, CalendarClock, Wallet, Lightbulb } from "lucide-react";
+"use client";
 
-import { DashboardWidget, WidgetEmptyState } from "@/components/dashboard/dashboard-widget";
-import { TaskStatusBadge, type TaskStatusValue } from "@/components/tasks/task-status-badge";
-import { formatPHP } from "@/lib/currency";
-import { getFinancialSnapshot } from "@/lib/finance";
-import { getRecentIdeas, getUpcomingItems } from "@/lib/dashboard";
-import { prisma } from "@/lib/prisma";
+import * as React from "react";
 
-interface MyDashboardPanelProps {
-  memberId: string;
-}
+import type {
+  ActivityRow,
+  MyMoney,
+  MyPenaltyRow,
+  MyProjectRow,
+  MyTaskRow,
+  TimelineItem,
+  UrgentItem,
+} from "@/lib/dashboard/types";
+import { MyActivityCard } from "@/components/dashboard/my/my-activity-card";
+import { MyMoneyCard } from "@/components/dashboard/my/my-money-card";
+import { MyPenaltiesCard } from "@/components/dashboard/my/my-penalties-card";
+import { MyProjectsCard } from "@/components/dashboard/my/my-projects-card";
+import { MyTasksCard } from "@/components/dashboard/my/my-tasks-card";
+import { NeedsYouToday } from "@/components/dashboard/my/needs-you-today";
+import { QuickCapture, type CaptureKind } from "@/components/dashboard/my/quick-capture";
+import { UpcomingCard } from "@/components/dashboard/my/upcoming-card";
 
 /**
- * The member-scoped dashboard grid — My Tasks, Upcoming, Financial
- * Snapshot, Recent Ideas. All four now read real data per
- * 22-dashboard-data-wiring.md (previously mock — see
- * lib/mock-dashboard-data.ts, now unused); Recent Ideas is the last one
- * wired, reading from the ideas board's autosaved snapshot rather than its
- * live Liveblocks state (see lib/dashboard.ts's getRecentIdeas). Stays a
- * Server Component doing its own fetching — this is one of two panels
- * dashboard/page.tsx wraps in its own Suspense boundary, so a slow query
- * here streams in independently of Team Overview rather than blocking it.
+ * My Dashboard.
+ *
+ * Deliberately *not* a uniform grid. Sizes carry meaning:
+ *
+ *   - Needs You Today spans the full width and collapses to one line when
+ *     empty, so it costs nothing to say nothing is wrong.
+ *   - My Tasks is the tallest card and gets 3 of 5 columns — it's the one
+ *     people actually work from.
+ *   - Upcoming and My Money sit beside it at 2 columns.
+ *   - My Projects and My Activity are secondary, smaller and lower.
+ *
+ * Nothing here is admin-facing. Every query behind it is scoped to the
+ * signed-in member server-side (lib/dashboard/personal.ts), so the tab
+ * reads identically for the Leader and for someone with no elevated
+ * permissions — Part 4's requirement, and the reason the team ledger and
+ * approvals live on Team Overview and /admin instead.
+ *
+ * A client component only because Quick Capture is shared state: "Create
+ * task" in an empty My Tasks and "Log an expense" in My Money both open
+ * the same dialogs the header's Quick Capture owns.
  */
-export async function MyDashboardPanel({ memberId }: MyDashboardPanelProps) {
-  const [myTasks, upcoming, finance, recentIdeas] = await Promise.all([
-    prisma.task.findMany({
-      where: { assignees: { some: { memberId } } },
-      select: { id: true, title: true, status: true, dueDate: true },
-      orderBy: { dueDate: "asc" },
-      take: 5,
-    }),
-    getUpcomingItems(),
-    getFinancialSnapshot(),
-    getRecentIdeas(),
-  ]);
+
+export interface MyDashboardData {
+  urgent: UrgentItem[];
+  tasks: MyTaskRow[];
+  upcoming: TimelineItem[];
+  penalties: MyPenaltyRow[];
+  money: MyMoney;
+  projects: MyProjectRow[];
+  activity: ActivityRow[];
+  financeCategories: string[];
+  ideasEnabled: boolean;
+}
+
+export function MyDashboardPanel({ data }: { data: MyDashboardData }) {
+  const [captureKind, setCaptureKind] = React.useState<CaptureKind | null>(null);
 
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-      <DashboardWidget title="My Tasks" icon={CheckSquare} viewAllHref="/tasks">
-        {myTasks.length === 0 ? (
-          <WidgetEmptyState icon={CheckSquare} message="No tasks assigned to you yet." />
-        ) : (
-          <ul className="space-y-3">
-            {myTasks.map((task) => (
-              <li key={task.id} className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-copy-primary">{task.title}</p>
-                  <p className="text-xs text-copy-secondary">Due {format(task.dueDate, "MMM d")}</p>
-                </div>
-                <TaskStatusBadge status={task.status as TaskStatusValue} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </DashboardWidget>
+    <div className="flex flex-col gap-4">
+      {/* Quick Capture is pinned above the content, not inside a card —
+          it belongs to the whole tab, not to any one section. */}
+      <div className="flex items-center justify-between gap-3">
+        <QuickCapture
+          financeCategories={data.financeCategories}
+          ideasEnabled={data.ideasEnabled}
+          openKind={captureKind}
+          onOpenKindChange={setCaptureKind}
+        />
+      </div>
 
-      <DashboardWidget title="Upcoming" icon={CalendarClock} viewAllHref="/calendar" viewAllLabel="View calendar">
-        {upcoming.length === 0 ? (
-          <WidgetEmptyState icon={CalendarClock} message="Nothing on the calendar yet." />
-        ) : (
-          <ul className="space-y-3">
-            {upcoming.map((event) => (
-              <li key={event.id} className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-copy-primary">{event.title}</p>
-                <p className="text-xs text-copy-secondary">
-                  {format(new Date(event.startsAt), "MMM d, h:mm a")}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </DashboardWidget>
+      {/* Row 1 — full width, collapses when clear. */}
+      <NeedsYouToday items={data.urgent} />
 
-      <DashboardWidget title="Financial Snapshot" icon={Wallet} viewAllHref="/finance" viewAllLabel="View finance">
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <div>
-            <p className="text-xs font-medium text-copy-secondary">Balance</p>
-            <p className="mt-1 text-sm font-bold text-copy-primary">
-              {formatPHP(finance.balanceCentavos)}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs font-medium text-copy-secondary">Income</p>
-            <p className="mt-1 text-sm font-bold text-success">
-              {formatPHP(finance.monthIncomeCentavos)}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs font-medium text-copy-secondary">Expenses</p>
-            <p className="mt-1 text-sm font-bold text-error">
-              {formatPHP(finance.monthExpenseCentavos)}
-            </p>
-          </div>
+      {/* Rows 2–3 — tasks dominate, upcoming beside it. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+        <div className="lg:col-span-3">
+          <MyTasksCard tasks={data.tasks} onCreateTask={() => setCaptureKind("task")} />
         </div>
-        <p className="mt-3 text-xs text-copy-secondary">
-          This month, approved transactions only
-        </p>
-      </DashboardWidget>
+        <div className="lg:col-span-2">
+          <UpcomingCard items={data.upcoming} onCreateTask={() => setCaptureKind("task")} />
+        </div>
+      </div>
 
-      <DashboardWidget title="Recent Ideas" icon={Lightbulb} viewAllHref="/ideas" viewAllLabel="Open ideas board">
-        {recentIdeas.length === 0 ? (
-          <WidgetEmptyState icon={Lightbulb} message="No ideas posted yet." />
-        ) : (
-          <ul className="space-y-3">
-            {recentIdeas.map((idea) => (
-              <li key={idea.id} className="flex items-start gap-2">
-                <span
-                  aria-hidden
-                  className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: `var(--idea-color-${idea.colorIndex}-fill)` }}
-                />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-copy-primary">{idea.text}</p>
-                  <p className="text-xs text-copy-secondary">{idea.authorName}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </DashboardWidget>
+      {/* Rows 4–5 — money matters pair up, penalties wider. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+        <div className="lg:col-span-3">
+          <MyPenaltiesCard penalties={data.penalties} />
+        </div>
+        <div className="lg:col-span-2">
+          <MyMoneyCard money={data.money} onLogExpense={() => setCaptureKind("expense")} />
+        </div>
+      </div>
+
+      {/* Rows 6–7 — secondary, equal weight, visually quieter. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <MyProjectsCard projects={data.projects} />
+        <MyActivityCard events={data.activity} />
+      </div>
     </div>
   );
 }

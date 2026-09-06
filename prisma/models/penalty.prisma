@@ -27,6 +27,19 @@ model Penalty {
   // monetary one (most of them, for this team).
   amountCents Int?
   status     PenaltyStatus @default(OPEN)
+  // When this penalty must be settled by. Nullable, and null is the norm for
+  // every row that predates the admin console — the Action Queue falls back
+  // to `createdAt + OrgSettings.penaltyDueDays` when it isn't set, so "past
+  // due" works for old rows without backfilling them. Editable inline from
+  // the console's Penalties tab.
+  dueAt      DateTime?
+  // Set when the member says they've paid, from My Dashboard. Deliberately
+  // NOT the same as resolving: a member cannot settle their own penalty
+  // (that writes a ledger entry, which is an admin action — see Part 4's
+  // boundary and lib/admin/mutations.ts's decidePenalty). This is a claim
+  // an admin then confirms, so the member has a way to say "done" without
+  // being handed the till.
+  paymentClaimedAt DateTime?
   resolvedAt DateTime?
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
@@ -35,7 +48,9 @@ model Penalty {
   // monetary — see Transaction.penaltyId's own comment in
   // transaction.prisma. Never set for a waived or non-monetary penalty.
   transaction Transaction?
+  dispute     PenaltyDispute?
 
   @@index([memberId])
   @@index([status])
+  @@index([status, dueAt])
 }

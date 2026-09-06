@@ -1,0 +1,47 @@
+// Competitions the team is watching, entering, or has entered — the
+// Hackathon Pipeline on Team Overview. `ProjectCategory.HACKATHON_ENTRY`
+// already existed but is only a tag on our own project; it carries no
+// organizer, no deadlines, and no notion of whether we actually got in.
+enum HackathonEntryStatus {
+  /// On the radar, not committed.
+  WATCHING
+  REGISTERED
+  SUBMITTED
+  WON
+  ELIMINATED
+  /// Decided against entering — kept rather than deleted, so the same
+  /// competition isn't re-evaluated from scratch next cycle.
+  SKIPPED
+}
+
+model Hackathon {
+  id        String  @id @default(cuid())
+  name      String
+  organizer String?
+  url       String?
+
+  /// All optional — a competition often appears before its dates are set.
+  registrationDeadline DateTime?
+  submissionDeadline   DateTime?
+  eventStart           DateTime?
+  eventEnd             DateTime?
+
+  entryStatus HackathonEntryStatus @default(WATCHING)
+
+  /// Our entry, once there is one. SetNull rather than Cascade: deleting a
+  /// project shouldn't erase the record that we entered this competition.
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  notes String?
+
+  createdById String?
+  createdBy   Member? @relation("HackathonCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([entryStatus])
+  @@index([submissionDeadline])
+  @@index([registrationDeadline])
+}

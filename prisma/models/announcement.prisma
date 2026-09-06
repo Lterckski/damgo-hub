@@ -1,0 +1,46 @@
+// Admin-pinned notices on Team Overview. Distinct from Broadcast
+// (prisma/models/broadcast.prisma): a broadcast is a push to a chosen
+// audience and is *read*; an announcement is a persistent notice everyone
+// sees until they individually dismiss it. Same information, opposite
+// lifecycle — folding them together would mean one member dismissing a
+// notice hid it for the whole team.
+model Announcement {
+  id    String @id @default(cuid())
+  title String
+  body  String
+
+  /// Unpinned announcements stay readable in the archive but stop
+  /// occupying the dashboard strip.
+  pinned Boolean @default(true)
+
+  /// Optional self-expiry, for time-boxed notices ("submissions close
+  /// Friday") that shouldn't need manual cleanup.
+  expiresAt DateTime?
+
+  // SetNull + denormalized name, matching AuditLog.actorId's reasoning:
+  // a posted notice is history, not ownership, so it isn't reassigned to
+  // whoever deletes the author.
+  authorId   String?
+  author     Member? @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  authorName String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dismissals AnnouncementDismissal[]
+
+  @@index([pinned, createdAt])
+}
+
+/// Per-member dismissal. The absence of a row means "still showing".
+model AnnouncementDismissal {
+  id             String       @id @default(cuid())
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  memberId       String
+  member         Member       @relation("AnnouncementDismissals", fields: [memberId], references: [id], onDelete: Cascade)
+  dismissedAt    DateTime     @default(now())
+
+  @@unique([announcementId, memberId])
+  @@index([memberId])
+}

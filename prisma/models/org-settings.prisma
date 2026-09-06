@@ -1,0 +1,46 @@
+// Org-wide configuration the admin console's Settings block edits — penalty
+// rules and amounts, finance categories, meeting cadence, invite policy.
+// These were previously hardcoded across components; a single row makes them
+// editable without a deploy.
+enum MeetingCadence {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  AD_HOC
+}
+
+enum InvitePolicy {
+  /// Only org:admin can invite. The default and current behavior.
+  ADMIN_ONLY
+  /// Any member may invite; admins still approve via the Action Queue.
+  ANY_MEMBER
+}
+
+// Exactly one row, id "singleton". Read through lib/org-settings.ts, which
+// returns defaults when the row doesn't exist yet rather than requiring a
+// seed step.
+model OrgSettings {
+  id String @id @default("singleton")
+
+  /// Named penalty presets: [{ label, amountCents }]. JSON rather than a
+  /// table — it's a small ordered list edited as a whole, never queried by
+  /// its parts, and has no relations pointing at it.
+  penaltyRules Json @default("[]")
+  /// Days after issuance a penalty counts as past due, when the penalty has
+  /// no explicit dueAt of its own. Feeds the Action Queue's "past due" rows.
+  penaltyDueDays Int @default(14)
+
+  /// Allowed Transaction.category values offered in the finance forms.
+  financeCategories String[] @default(["Dues", "Sponsorship", "Supplies", "Travel", "Registration", "Penalty", "Other"])
+
+  meetingCadence MeetingCadence @default(WEEKLY)
+
+  invitePolicy InvitePolicy @default(ADMIN_ONLY)
+
+  /// Days without activity before a project shows in the "Stale Projects"
+  /// exception card (Part 3).
+  projectStaleDays Int @default(14)
+
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+}

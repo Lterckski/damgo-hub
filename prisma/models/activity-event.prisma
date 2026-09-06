@@ -1,0 +1,61 @@
+// The feed behind My Activity and the team Activity Feed.
+//
+// Distinct from AuditLog (prisma/models/audit-log.prisma), deliberately.
+// AuditLog answers "who changed this record, from what, to what, and why"
+// — it is append-only evidence, admin-only, and covers admin actions.
+// ActivityEvent answers "what happened that someone should notice" — it is
+// member-facing, includes ordinary non-admin activity (a doc created, an
+// idea posted), and is addressed. Forcing one table to do both would mean
+// either leaking override reasons into a member's feed or watering the
+// audit trail down into a notification stream.
+enum ActivityType {
+  TASK_ASSIGNED
+  TASK_COMPLETED
+  PENALTY_ISSUED
+  PENALTY_RESOLVED
+  PENALTY_WAIVED
+  TRANSACTION_SUBMITTED
+  TRANSACTION_APPROVED
+  TRANSACTION_REJECTED
+  PROJECT_CREATED
+  PROJECT_STATUS_CHANGED
+  PROJECT_MEMBER_ADDED
+  DOC_CREATED
+  MEETING_SCHEDULED
+  AGENDA_PROPOSAL_SUBMITTED
+  AGENDA_PROPOSAL_ACCEPTED
+  AGENDA_PROPOSAL_DECLINED
+  ANNOUNCEMENT_POSTED
+  DUES_ASSESSED
+  MEMBER_JOINED
+}
+
+model ActivityEvent {
+  id   String       @id @default(cuid())
+  type ActivityType
+
+  // Who did it. SetNull + denormalized name so the feed still reads after
+  // the member is gone.
+  actorId   String?
+  actor     Member? @relation("ActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorName String
+
+  /// Who this is *for*. Null means it belongs to the team feed only.
+  /// My Activity reads rows where this is the current member — that's what
+  /// makes it a personal feed rather than a filtered global one.
+  audienceMemberId String?
+  audienceMember   Member? @relation("ActivityAudience", fields: [audienceMemberId], references: [id], onDelete: Cascade)
+
+  entityType  String
+  entityId    String
+  /// Readable identity captured at write time, so the row survives renames.
+  entityLabel String
+  /// The one-line sentence the feed renders.
+  summary     String
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([audienceMemberId, createdAt])
+  @@index([type, createdAt])
+}

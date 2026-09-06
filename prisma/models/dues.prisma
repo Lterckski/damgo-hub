@@ -1,0 +1,61 @@
+// Membership dues — the obligation side of the ledger, which Transaction
+// alone could never express. A `Transaction` with category "Dues" records
+// that money *arrived*; it says nothing about who still owes, which is
+// exactly what the dashboard's "You owe" and the team's per-member dues
+// status need.
+enum DuesStatus {
+  UNPAID
+  PAID
+  WAIVED
+}
+
+/// One collection round — "September 2026", "Q4 registration levy".
+model DuesPeriod {
+  id    String @id @default(cuid())
+  label String
+
+  periodStart DateTime
+  periodEnd   DateTime
+  /// The standard amount owed per member, in PHP centavos
+  /// (architecture-context.md invariant 8). Copied onto each assessment at
+  /// creation so changing it later never rewrites what someone was told
+  /// they owed.
+  amountCents Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assessments DuesAssessment[]
+
+  @@unique([periodStart, periodEnd])
+  @@index([periodEnd])
+}
+
+/// One member's obligation for one period.
+model DuesAssessment {
+  id       String     @id @default(cuid())
+  periodId String
+  period   DuesPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  memberId String
+  // Cascade — an assessment is a fact *about* this member and is
+  // meaningless without them, unlike a Transaction, which is ledger
+  // history and survives via reassignment.
+  member   Member     @relation("DuesAssessments", fields: [memberId], references: [id], onDelete: Cascade)
+
+  /// Snapshot of DuesPeriod.amountCents at assessment time.
+  amountCents Int
+  status      DuesStatus @default(UNPAID)
+  paidAt      DateTime?
+
+  /// The ledger entry that settled this, when one exists. Optional because
+  /// a WAIVED assessment never produces one, and an offline payment may be
+  /// marked paid before the transaction is recorded.
+  transactionId String?      @unique
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([periodId, memberId])
+  @@index([memberId, status])
+}

@@ -1,0 +1,28 @@
+// Upvotes on ideas board notes.
+//
+// Keyed by the React Flow / Liveblocks node id rather than a foreign key,
+// because idea notes do not live in Postgres at all — they live in the
+// Liveblocks room and its autosaved Blob snapshot (see
+// prisma/models/ideas-board.prisma and lib/dashboard.ts's getRecentIdeas).
+// There is no Idea row to reference. Votes are the one part of an idea's
+// life that must be durable, queryable and per-member, so they land here
+// while the note text stays on the canvas.
+//
+// Consequence: a vote can outlive its note if someone deletes the note
+// from the board. Reads join against the snapshot and drop votes whose
+// node is gone, rather than a foreign key doing it — see
+// lib/dashboard/ideas.ts.
+model IdeaVote {
+  id String @id @default(cuid())
+
+  /// The canvas node id. Opaque here by design.
+  ideaNodeId String
+
+  memberId String
+  member   Member @relation("IdeaVotes", fields: [memberId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([ideaNodeId, memberId])
+  @@index([ideaNodeId])
+}

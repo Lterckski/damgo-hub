@@ -37,6 +37,11 @@ model Task {
   // nullable column until 11-project-proposals.md; now a real relation.
   projectId   String?
   project     Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  // Stamped when status first becomes DONE, cleared if it's reopened.
+  // `updatedAt` cannot stand in for this: any later edit to a finished
+  // task moves it, which would silently re-date the completion and make
+  // "completion rate this month" wrong in the member's favour.
+  completedAt DateTime?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
@@ -44,6 +49,7 @@ model Task {
   relatedDocuments TaskDocument[]
 
   @@index([status])
+  @@index([completedAt])
   @@index([type])
   @@index([projectId])
   @@index([priority])

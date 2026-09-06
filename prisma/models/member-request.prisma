@@ -1,0 +1,59 @@
+// Join requests and role-change requests — Zone 2 of 20-admin-dashboard.md's
+// Action Queue. Neither existed anywhere in the schema before; the Action
+// Queue is a merged inbox of things awaiting an admin decision, and these
+// are two of the five sources feeding it.
+//
+// One model for both because they are the same shape and render as the same
+// queue row: someone wants something, an admin approves or denies it, the
+// decision is recorded. The discriminator is `type`.
+enum MemberRequestType {
+  /// Someone outside the org asking in. No Member row exists yet.
+  JOIN
+  /// An existing member asking for a different Clerk org role.
+  ROLE_CHANGE
+}
+
+enum MemberRequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
+model MemberRequest {
+  id     String              @id @default(cuid())
+  type   MemberRequestType
+  status MemberRequestStatus @default(PENDING)
+
+  // Identity of the requester. For JOIN these are the only identity we have
+  // — there is no Member row to point at yet, which is the whole point.
+  email       String
+  displayName String
+  avatarUrl   String?
+  clerkUserId String?
+
+  // Set for ROLE_CHANGE only. Cascade: a role-change request is a request
+  // *about* this member, meaningless once they're gone — unlike authored
+  // content, there's nothing to preserve by reassigning it.
+  memberId String?
+  member   Member? @relation("MemberRequestSubject", fields: [memberId], references: [id], onDelete: Cascade)
+
+  /// The Clerk role being asked for — "org:admin" or "org:member". Stored as
+  /// the raw Clerk role string, same as everywhere else in this app that
+  /// touches org roles (lib/organization-roles.ts), never a local enum.
+  requestedRole String?
+  /// Free-text justification from the requester.
+  message       String?
+
+  // SetNull for the same reason AuditLog.actorId is: the decision record
+  // should not silently transfer to whoever happened to delete the decider.
+  decidedById  String?
+  decidedBy    Member?   @relation("MemberRequestDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt    DateTime?
+  decisionNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([memberId])
+}
