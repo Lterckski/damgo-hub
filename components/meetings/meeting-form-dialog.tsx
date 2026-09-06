@@ -18,14 +18,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { DateTimePicker } from "@/components/shared/date-time-picker";
 import { FilterMultiSelect } from "@/components/shared/filter-multi-select";
 import { TimeOfDaySelect } from "@/components/shared/time-of-day-select";
-import { combineDateAndTime, normalizeAgendaItemDrafts } from "@/lib/meeting-format";
+import {
+  combineDateAndTime,
+  normalizeAgendaItemDrafts,
+} from "@/lib/meeting-format";
 import type { MeetingMemberOption, SerializedMeeting } from "@/lib/meetings";
 
-const FIELD_LABEL_CLASS = "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
+const FIELD_LABEL_CLASS =
+  "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
 const DEFAULT_MEETING_TIME = "09:00";
 
 interface MeetingFormDialogProps {
   /** Every member — anyone can be invited as a participant. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   members: MeetingMemberOption[];
   currentMemberId: string;
   /** Leader/Assistant Leader — gates the inline "add an agenda" builder shown while scheduling. */
@@ -48,19 +54,34 @@ interface MeetingFormDialogProps {
  * detail header, the calendar) for backward compatibility; this form
  * just never displays or submits it, on create or edit.
  */
-export function MeetingFormDialog({ members, currentMemberId, isAdmin, meeting }: MeetingFormDialogProps) {
+export function MeetingFormDialog({
+  members,
+  currentMemberId,
+  isAdmin,
+  meeting,
+  open,
+  onOpenChange,
+}: MeetingFormDialogProps) {
   const router = useRouter();
   const isEdit = meeting !== undefined;
 
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = open ?? internalOpen;
+  function setIsOpen(value: boolean) {
+    setInternalOpen(value);
+    onOpenChange?.(value);
+  }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [wholeOrg, setWholeOrg] = useState(false);
   const [title, setTitle] = useState(meeting?.title ?? "");
   const [description, setDescription] = useState(meeting?.description ?? "");
   const [meetingDate, setMeetingDate] = useState(meeting?.scheduledAt ?? "");
   const [meetingTime, setMeetingTime] = useState(
-    meeting ? format(new Date(meeting.scheduledAt), "HH:mm") : DEFAULT_MEETING_TIME,
+    meeting
+      ? format(new Date(meeting.scheduledAt), "HH:mm")
+      : DEFAULT_MEETING_TIME,
   );
   const [location, setLocation] = useState(meeting?.location ?? "");
   const [meetingUrl, setMeetingUrl] = useState(meeting?.meetingUrl ?? "");
@@ -77,10 +98,16 @@ export function MeetingFormDialog({ members, currentMemberId, isAdmin, meeting }
     setTitle(meeting?.title ?? "");
     setDescription(meeting?.description ?? "");
     setMeetingDate(meeting?.scheduledAt ?? "");
-    setMeetingTime(meeting ? format(new Date(meeting.scheduledAt), "HH:mm") : DEFAULT_MEETING_TIME);
+    setMeetingTime(
+      meeting
+        ? format(new Date(meeting.scheduledAt), "HH:mm")
+        : DEFAULT_MEETING_TIME,
+    );
     setLocation(meeting?.location ?? "");
     setMeetingUrl(meeting?.meetingUrl ?? "");
-    setParticipantIds(meeting ? meeting.participants.map((p) => p.id) : [currentMemberId]);
+    setParticipantIds(
+      meeting ? meeting.participants.map((p) => p.id) : [currentMemberId],
+    );
     setAgendaDrafts([]);
     setError(null);
   }
@@ -90,7 +117,9 @@ export function MeetingFormDialog({ members, currentMemberId, isAdmin, meeting }
   }
 
   function updateAgendaDraft(index: number, value: string) {
-    setAgendaDrafts((drafts) => drafts.map((draft, i) => (i === index ? value : draft)));
+    setAgendaDrafts((drafts) =>
+      drafts.map((draft, i) => (i === index ? value : draft)),
+    );
   }
 
   function removeAgendaDraft(index: number) {
@@ -108,19 +137,25 @@ export function MeetingFormDialog({ members, currentMemberId, isAdmin, meeting }
     setIsSubmitting(true);
     setError(null);
     try {
-      const response = await fetch(isEdit ? `/api/meetings/${meeting.id}` : "/api/meetings", {
-        method: isEdit ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          description,
-          scheduledAt,
-          location,
-          meetingUrl,
-          participantIds,
-          ...(isEdit ? {} : { agendaItems: normalizeAgendaItemDrafts(agendaDrafts) }),
-        }),
-      });
+      const response = await fetch(
+        isEdit ? `/api/meetings/${meeting.id}` : "/api/meetings",
+        {
+          method: isEdit ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title,
+            description,
+            scheduledAt,
+            location,
+            meetingUrl,
+            participantIds,
+            visibilityScope: wholeOrg ? "org" : "user",
+            ...(isEdit
+              ? {}
+              : { agendaItems: normalizeAgendaItemDrafts(agendaDrafts) }),
+          }),
+        },
+      );
       if (!response.ok) {
         const body = await response.json().catch(() => null);
         setError(body?.error ?? "Something went wrong.");
@@ -135,33 +170,53 @@ export function MeetingFormDialog({ members, currentMemberId, isAdmin, meeting }
     }
   }
 
-  const memberOptions = members.map((m) => ({ value: m.id, label: m.displayName }));
-  const canSubmit = title.trim() !== "" && meetingDate !== "" && meetingTime !== "" && !isSubmitting;
+  const memberOptions = members.map((m) => ({
+    value: m.id,
+    label: m.displayName,
+  }));
+  const canSubmit =
+    title.trim() !== "" &&
+    meetingDate !== "" &&
+    meetingTime !== "" &&
+    !isSubmitting;
 
   return (
     <>
-      <Button
-        type="button"
-        variant={isEdit ? "outline" : "default"}
-        size={isEdit ? "sm" : "default"}
-        onClick={() => {
-          resetToMeeting();
-          setIsOpen(true);
-        }}
-      >
-        {isEdit ? (
-          <>
-            <Pencil className="h-3.5 w-3.5" /> Edit
-          </>
-        ) : (
-          <>
-            <Plus className="h-3.5 w-3.5" /> Schedule Meeting
-          </>
-        )}
-      </Button>
+      {open === undefined && (
+        <Button
+          type="button"
+          variant={isEdit ? "outline" : "default"}
+          size={isEdit ? "sm" : "default"}
+          onClick={() => {
+            resetToMeeting();
+            setIsOpen(true);
+          }}
+        >
+          {isEdit ? (
+            <>
+              <Pencil className="h-3.5 w-3.5" /> Edit
+            </>
+          ) : (
+            <>
+              <Plus className="h-3.5 w-3.5" /> Schedule Meeting
+            </>
+          )}
+        </Button>
+      )}
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+          {!isEdit && (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={wholeOrg}
+                onChange={(e) => setWholeOrg(e.target.checked)}
+                className="accent-brand"
+              />
+              Invite the entire organization
+            </label>
+          )}
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-copy-primary">
               {isEdit ? "Edit Meeting" : "Schedule Meeting"}
@@ -170,7 +225,9 @@ export function MeetingFormDialog({ members, currentMemberId, isAdmin, meeting }
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="meeting-title" className={FIELD_LABEL_CLASS}>Title</label>
+              <label htmlFor="meeting-title" className={FIELD_LABEL_CLASS}>
+                Title
+              </label>
               <Input
                 id="meeting-title"
                 value={title}
@@ -181,7 +238,12 @@ export function MeetingFormDialog({ members, currentMemberId, isAdmin, meeting }
             </div>
 
             <div>
-              <label htmlFor="meeting-description" className={FIELD_LABEL_CLASS}>Description (optional)</label>
+              <label
+                htmlFor="meeting-description"
+                className={FIELD_LABEL_CLASS}
+              >
+                Description (optional)
+              </label>
               <Textarea
                 id="meeting-description"
                 value={description}
@@ -210,12 +272,20 @@ export function MeetingFormDialog({ members, currentMemberId, isAdmin, meeting }
                 includeTime={false}
                 required
               />
-              <TimeOfDaySelect id="meeting-time" label="Meeting time" value={meetingTime} onChange={setMeetingTime} required />
+              <TimeOfDaySelect
+                id="meeting-time"
+                label="Meeting time"
+                value={meetingTime}
+                onChange={setMeetingTime}
+                required
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="meeting-location" className={FIELD_LABEL_CLASS}>Location (optional)</label>
+                <label htmlFor="meeting-location" className={FIELD_LABEL_CLASS}>
+                  Location (optional)
+                </label>
                 <Input
                   id="meeting-location"
                   value={location}
@@ -225,7 +295,9 @@ export function MeetingFormDialog({ members, currentMemberId, isAdmin, meeting }
                 />
               </div>
               <div>
-                <label htmlFor="meeting-url" className={FIELD_LABEL_CLASS}>External meeting link (optional)</label>
+                <label htmlFor="meeting-url" className={FIELD_LABEL_CLASS}>
+                  External meeting link (optional)
+                </label>
                 <Input
                   id="meeting-url"
                   value={meetingUrl}
@@ -237,7 +309,12 @@ export function MeetingFormDialog({ members, currentMemberId, isAdmin, meeting }
             </div>
 
             <div>
-              <label htmlFor="meeting-participants" className={FIELD_LABEL_CLASS}>Participants</label>
+              <label
+                htmlFor="meeting-participants"
+                className={FIELD_LABEL_CLASS}
+              >
+                Participants
+              </label>
               <FilterMultiSelect
                 id="meeting-participants"
                 label="Select participants"
@@ -247,15 +324,29 @@ export function MeetingFormDialog({ members, currentMemberId, isAdmin, meeting }
               />
             </div>
 
-            {error && <p className="text-sm font-medium text-error" role="alert">{error}</p>}
+            {error && (
+              <p className="text-sm font-medium text-error" role="alert">
+                {error}
+              </p>
+            )}
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setIsOpen(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setIsOpen(false)}
+            >
               Cancel
             </Button>
             <Button type="button" disabled={!canSubmit} onClick={submit}>
-              {isSubmitting ? (isEdit ? "Saving…" : "Scheduling…") : isEdit ? "Save" : "Schedule"}
+              {isSubmitting
+                ? isEdit
+                  ? "Saving…"
+                  : "Scheduling…"
+                : isEdit
+                  ? "Save"
+                  : "Schedule"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -283,7 +374,14 @@ interface AgendaBuilderProps {
  * edit mode — the detail page already owns agenda management for an
  * existing meeting.
  */
-function AgendaBuilder({ isAdmin, isEdit, drafts, onAdd, onChange, onRemove }: AgendaBuilderProps) {
+function AgendaBuilder({
+  isAdmin,
+  isEdit,
+  drafts,
+  onAdd,
+  onChange,
+  onRemove,
+}: AgendaBuilderProps) {
   if (isEdit) return null;
 
   return (
@@ -331,7 +429,8 @@ function AgendaBuilder({ isAdmin, isEdit, drafts, onAdd, onChange, onRemove }: A
             Propose an agenda
           </Button>
           <p className="mt-1.5 text-xs text-copy-secondary">
-            You&apos;ll be able to propose agenda items once this meeting is scheduled.
+            You&apos;ll be able to propose agenda items once this meeting is
+            scheduled.
           </p>
         </div>
       )}

@@ -34,7 +34,8 @@ import {
   type TaskProjectOption,
 } from "@/lib/tasks";
 
-const FIELD_LABEL_CLASS = "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
+const FIELD_LABEL_CLASS =
+  "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
 const NO_PROJECT = "__none__";
 const NO_PROJECT_LABEL = "Not part of a project / Standalone";
 const CUSTOM_TYPE = "__custom__";
@@ -50,9 +51,13 @@ const TASK_TYPE_ITEMS = {
   ...Object.fromEntries(TASK_TYPE_OPTIONS.map((o) => [o.value, o.label])),
   [CUSTOM_TYPE]: CUSTOM_TYPE_LABEL,
 };
-const TASK_PRIORITY_ITEMS = Object.fromEntries(TASK_PRIORITY_OPTIONS.map((o) => [o.value, o.label]));
+const TASK_PRIORITY_ITEMS = Object.fromEntries(
+  TASK_PRIORITY_OPTIONS.map((o) => [o.value, o.label]),
+);
 
 export interface NewTaskDialogProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   members: TaskMemberOption[];
   projects: TaskProjectOption[];
   docs: TaskDocOption[];
@@ -69,9 +74,22 @@ export interface NewTaskDialogProps {
  * Start/End, Project/Documents — rather than one long single-column stack,
  * per the user's explicit request to fit more on one screen.
  */
-export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmin }: NewTaskDialogProps) {
+export function NewTaskDialog({
+  members,
+  projects,
+  docs,
+  currentMemberId,
+  isAdmin,
+  open,
+  onOpenChange,
+}: NewTaskDialogProps) {
   const router = useRouter();
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = open ?? internalOpen;
+  function setIsOpen(value: boolean) {
+    setInternalOpen(value);
+    onOpenChange?.(value);
+  }
   const [isSubmitting, setIsSubmitting] = useState(false);
   // The `disabled` state on the submit button alone isn't airtight against
   // a fast double-click: there's a real gap between setIsSubmitting(true)
@@ -82,6 +100,7 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
   // outright rather than racing on state.
   const isSubmittingRef = useRef(false);
   const [title, setTitle] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [type, setType] = useState<string>(TASK_TYPE_OPTIONS[0].value);
   const [customType, setCustomType] = useState("");
   const [priority, setPriority] = useState<string>("MEDIUM");
@@ -91,7 +110,11 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
   // anyone else (the server enforces this too, see app/api/tasks/route.ts;
   // this is the matching UI so the control isn't misleading about what'll
   // actually happen). Admins keep the full picker.
-  const [assigneeIds, setAssigneeIds] = useState<string[]>(isAdmin ? [] : [currentMemberId]);
+  const [projectAudience, setProjectAudience] = useState(false);
+  const [wholeOrg, setWholeOrg] = useState(false);
+  const [assigneeIds, setAssigneeIds] = useState<string[]>(
+    isAdmin ? [] : [currentMemberId],
+  );
   const [projectId, setProjectId] = useState<string>(NO_PROJECT);
   const [documentIds, setDocumentIds] = useState<string[]>([]);
 
@@ -101,6 +124,9 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
   };
 
   function resetForm() {
+    setError(null);
+    setProjectAudience(false);
+    setWholeOrg(false);
     setTitle("");
     setType(TASK_TYPE_OPTIONS[0].value);
     setCustomType("");
@@ -113,6 +139,8 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
   }
 
   function toggleAssignee(memberId: string) {
+    setProjectAudience(false);
+    setWholeOrg(false);
     setAssigneeIds((prev) => {
       const set = new Set(prev);
       if (set.has(memberId)) set.delete(memberId);
@@ -125,6 +153,7 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
     setIsSubmitting(true);
+    setError(null);
     try {
       const description = formData.get("description");
       const finalType = type === CUSTOM_TYPE ? customType.trim() : type;
@@ -139,16 +168,29 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
           startDate,
           dueDate,
           assigneeIds,
+          visibilityScope: projectAudience
+            ? "project"
+            : wholeOrg
+              ? "org"
+              : "user",
           projectId: projectId === NO_PROJECT ? null : projectId,
           documentIds,
         }),
       });
 
+      if (!response.ok) {
+        const result = await response.json().catch(() => null);
+        throw new Error(result?.error ?? "Unable to create task");
+      }
       if (response.ok) {
         setIsOpen(false);
         resetForm();
         router.refresh();
       }
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Unable to create task",
+      );
     } finally {
       isSubmittingRef.current = false;
       setIsSubmitting(false);
@@ -157,9 +199,11 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
 
   return (
     <>
-      <Button onClick={() => setIsOpen(true)}>
-        <Plus className="h-4 w-4" /> New Task
-      </Button>
+      {open === undefined && (
+        <Button onClick={() => setIsOpen(true)}>
+          <Plus className="h-4 w-4" /> New Task
+        </Button>
+      )}
 
       <Dialog
         open={isOpen}
@@ -170,11 +214,20 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
       >
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-copy-primary">New Task</DialogTitle>
-            <DialogDescription>Create a task and assign it to one or more members.</DialogDescription>
+            <DialogTitle className="text-lg font-bold text-copy-primary">
+              New Task
+            </DialogTitle>
+            <DialogDescription>
+              Create a task and assign it to one or more members.
+            </DialogDescription>
           </DialogHeader>
 
           <form action={createTask} className="grid gap-4">
+            {error && (
+              <p role="alert" className="text-sm text-error">
+                {error}
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={FIELD_LABEL_CLASS}>
@@ -191,7 +244,11 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
                 <label className={FIELD_LABEL_CLASS}>
                   Task Type <span className="text-error">*</span>
                 </label>
-                <Select items={TASK_TYPE_ITEMS} value={type} onValueChange={(value) => value && setType(value)}>
+                <Select
+                  items={TASK_TYPE_ITEMS}
+                  value={type}
+                  onValueChange={(value) => value && setType(value)}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
@@ -201,7 +258,9 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
                         {option.label}
                       </SelectItem>
                     ))}
-                    <SelectItem value={CUSTOM_TYPE}>{CUSTOM_TYPE_LABEL}</SelectItem>
+                    <SelectItem value={CUSTOM_TYPE}>
+                      {CUSTOM_TYPE_LABEL}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
                 {type === CUSTOM_TYPE && (
@@ -218,13 +277,29 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
             </div>
 
             <div>
-              <label className={FIELD_LABEL_CLASS}>Description (optional)</label>
-              <Textarea name="description" rows={2} className="text-copy-primary!" />
+              <label className={FIELD_LABEL_CLASS}>
+                Description (optional)
+              </label>
+              <Textarea
+                name="description"
+                rows={2}
+                className="text-copy-primary!"
+              />
             </div>
 
             <div className="grid grid-cols-3 gap-4">
-              <DateTimePicker label="Start" value={startDate} onChange={setStartDate} required />
-              <DateTimePicker label="End" value={dueDate} onChange={setDueDate} required />
+              <DateTimePicker
+                label="Start"
+                value={startDate}
+                onChange={setStartDate}
+                required
+              />
+              <DateTimePicker
+                label="End"
+                value={dueDate}
+                onChange={setDueDate}
+                required
+              />
               <div>
                 <label className={FIELD_LABEL_CLASS}>Priority</label>
                 <Select
@@ -252,13 +327,20 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
                 <Select
                   items={projectItems}
                   value={projectId}
-                  onValueChange={(value) => value && setProjectId(value)}
+                  onValueChange={(value) => {
+                    if (value) {
+                      setProjectId(value);
+                      setProjectAudience(false);
+                    }
+                  }}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NO_PROJECT}>{NO_PROJECT_LABEL}</SelectItem>
+                    <SelectItem value={NO_PROJECT}>
+                      {NO_PROJECT_LABEL}
+                    </SelectItem>
                     {projects.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.name}
@@ -275,33 +357,59 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
 
               {docs.length > 0 && (
                 <div>
-                  <p className={FIELD_LABEL_CLASS}>Related Documents (optional)</p>
+                  <p className={FIELD_LABEL_CLASS}>
+                    Related Documents (optional)
+                  </p>
                   <DocumentMultiSelect
                     docs={docs}
                     selectedIds={documentIds}
                     onChange={setDocumentIds}
-                    activeProjectId={projectId === NO_PROJECT ? undefined : projectId}
+                    activeProjectId={
+                      projectId === NO_PROJECT ? undefined : projectId
+                    }
                   />
                 </div>
               )}
             </div>
 
             <div>
-              <p className="mb-2 text-xs font-bold tracking-wide text-copy-primary uppercase">Assignees</p>
+              <p className="mb-2 text-xs font-bold tracking-wide text-copy-primary uppercase">
+                Assignees
+              </p>
               {isAdmin ? (
                 <>
                   <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-copy-primary">
                     <Checkbox
-                      checked={members.length > 0 && assigneeIds.length === members.length}
-                      onCheckedChange={() =>
-                        setAssigneeIds(assigneeIds.length === members.length ? [] : members.map((m) => m.id))
-                      }
+                      checked={wholeOrg}
+                      onCheckedChange={() => {
+                        setProjectAudience(false);
+                        setWholeOrg(!wholeOrg);
+                        setAssigneeIds(
+                          wholeOrg ? [] : members.map((m) => m.id),
+                        );
+                      }}
                     />
                     Select All (whole team — group task)
                   </label>
+                  {projectId !== NO_PROJECT && (
+                    <label className="mb-2 flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={projectAudience}
+                        onCheckedChange={(value) => {
+                          setProjectAudience(value === true);
+                          setWholeOrg(false);
+                          if (value) setAssigneeIds([currentMemberId]);
+                        }}
+                      />
+                      Members of the selected project
+                    </label>
+                  )}
                   <div className="grid max-h-32 grid-cols-3 gap-2 overflow-y-auto border-t border-surface-border-subtle pt-2">
                     {members.map((m) => (
-                      <label key={m.id} className="flex items-center gap-2 text-sm text-copy-primary">
+                      <label
+                        key={m.id}
+                        className="flex items-center gap-2 text-sm text-copy-primary"
+                      >
                         <Checkbox
                           checked={assigneeIds.includes(m.id)}
                           onCheckedChange={() => toggleAssignee(m.id)}
@@ -313,12 +421,14 @@ export function NewTaskDialog({ members, projects, docs, currentMemberId, isAdmi
                 </>
               ) : (
                 <p className="text-sm text-copy-secondary">
-                  Assigned to you — only Admins can assign tasks to other members.
+                  Assigned to you — only Admins can assign tasks to other
+                  members.
                 </p>
               )}
               {assigneeIds.length === 0 && (
                 <p className="mt-2 text-xs font-medium text-error">
-                  Select at least one assignee, or check Select All for a group task.
+                  Select at least one assignee, or check Select All for a group
+                  task.
                 </p>
               )}
             </div>

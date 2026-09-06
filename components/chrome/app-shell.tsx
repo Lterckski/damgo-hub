@@ -5,13 +5,19 @@ interface AppShellProps {
   isAdmin: boolean;
   /** Right section slot for the navbar — the Clerk UserButton, wired in by 03-auth.md. */
   navbarRightSlot?: React.ReactNode;
+  header?: React.ReactNode;
   children: React.ReactNode;
 }
 
-export function AppShell({ isAdmin, navbarRightSlot, children }: AppShellProps) {
+export function AppShell({
+  isAdmin,
+  navbarRightSlot,
+  header,
+  children,
+}: AppShellProps) {
   return (
     <div className="flex h-full min-h-screen flex-col bg-base">
-      <AppNavbar rightSlot={navbarRightSlot} />
+      {header ?? <AppNavbar rightSlot={navbarRightSlot} />}
       {/* min-h-0 overrides a flex item's default min-height:auto — without
           it, a tall page (a long extracted doc, a big textarea) can grow
           `main` past its flex-basis allocation, which grows this whole

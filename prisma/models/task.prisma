@@ -11,11 +11,12 @@ enum TaskPriority {
 }
 
 model Task {
-  id          String         @id @default(cuid())
-  title       String
-  description String?
-  status      TaskStatus     @default(TODO)
-  priority    TaskPriority   @default(MEDIUM)
+  visibilityScope String       @default("user")
+  id              String       @id @default(cuid())
+  title           String
+  description     String?
+  status          TaskStatus   @default(TODO)
+  priority        TaskPriority @default(MEDIUM)
   // Free text, not the FunctionalRole enum anymore — was originally
   // reusing it as one taxonomy shared with Member Roles (see
   // 08-task-assignment.md), but the user explicitly asked for a Custom
@@ -24,26 +25,26 @@ model Task {
   // the same 7 presets first; "Custom…" just reveals a free-text field
   // instead of being blocked. Member Roles (MemberFunctionalRole) still
   // use the real FunctionalRole enum — unaffected by this.
-  type        String
+  type            String
   // Both mandatory, per the user's explicit request — a task always has a
   // defined start and a deadline. startDate is date-only (no time
   // component expected in the UI); dueDate carries the actual time, since
   // that's what matters for reminders/calendar precision.
-  startDate   DateTime
-  dueDate     DateTime
-  createdById String
-  createdBy   Member         @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  startDate       DateTime
+  dueDate         DateTime
+  createdById     String
+  createdBy       Member       @relation("TaskCreatedBy", fields: [createdById], references: [id])
   // Optional — a task doesn't have to belong to a project. Was a plain
   // nullable column until 11-project-proposals.md; now a real relation.
-  projectId   String?
-  project     Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  projectId       String?
+  project         Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
   // Stamped when status first becomes DONE, cleared if it's reopened.
   // `updatedAt` cannot stand in for this: any later edit to a finished
   // task moves it, which would silently re-date the completion and make
   // "completion rate this month" wrong in the member's favour.
-  completedAt DateTime?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  completedAt     DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   assignees        TaskAssignee[]
   relatedDocuments TaskDocument[]
@@ -56,11 +57,12 @@ model Task {
 }
 
 model TaskAssignee {
-  id       String @id @default(cuid())
-  taskId   String
-  task     Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  memberId String
-  member   Member @relation("TaskAssignments", fields: [memberId], references: [id], onDelete: Cascade)
+  acceptedAt DateTime?
+  id         String    @id @default(cuid())
+  taskId     String
+  task       Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  memberId   String
+  member     Member    @relation("TaskAssignments", fields: [memberId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, memberId])
 }

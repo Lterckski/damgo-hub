@@ -1,21 +1,38 @@
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 
 import type { Prisma } from "@/app/generated/prisma/client";
 
 import { requireAdmin, toErrorResponse } from "@/lib/admin/guard";
 import { recordAuditEvent } from "@/lib/audit-log";
-import { ORG_SETTINGS_ID, getOrgSettings, parsePenaltyRules } from "@/lib/org-settings";
+import {
+  ORG_SETTINGS_ID,
+  getOrgSettings,
+  parsePenaltyRules,
+} from "@/lib/org-settings";
 import { prisma } from "@/lib/prisma";
 
 const CADENCES = ["WEEKLY", "BIWEEKLY", "MONTHLY", "AD_HOC"] as const;
 const INVITE_POLICIES = ["ADMIN_ONLY", "ANY_MEMBER"] as const;
 
-function oneOf<T extends string>(options: readonly T[], value: unknown): T | null {
-  return typeof value === "string" && (options as readonly string[]).includes(value) ? (value as T) : null;
+function oneOf<T extends string>(
+  options: readonly T[],
+  value: unknown,
+): T | null {
+  return typeof value === "string" &&
+    (options as readonly string[]).includes(value)
+    ? (value as T)
+    : null;
 }
 
 function positiveInt(value: unknown, max: number): number | null {
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > max) return null;
+  if (
+    typeof value !== "number" ||
+    !Number.isInteger(value) ||
+    value < 1 ||
+    value > max
+  )
+    return null;
   return value;
 }
 
@@ -23,12 +40,18 @@ function positiveInt(value: unknown, max: number): number | null {
 // keys present in the body are written, so each sub-form can save on its
 // own without round-tripping the whole settings object.
 export async function PATCH(request: Request) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
 
   const body: unknown = await request.json().catch(() => null);
   if (typeof body !== "object" || body === null) {
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 },
+    );
   }
   const input = body as Record<string, unknown>;
 
@@ -36,7 +59,8 @@ export async function PATCH(request: Request) {
   const errors: string[] = [];
 
   if ("penaltyRules" in input) {
-    if (!Array.isArray(input.penaltyRules)) errors.push("penaltyRules must be a list");
+    if (!Array.isArray(input.penaltyRules))
+      errors.push("penaltyRules must be a list");
     else data.penaltyRules = parsePenaltyRules(input.penaltyRules);
   }
   if ("penaltyDueDays" in input) {
@@ -56,7 +80,8 @@ export async function PATCH(request: Request) {
           .map((c) => c.trim())
           .filter((c) => c !== "")
       : null;
-    if (!categories || categories.length === 0) errors.push("At least one finance category is required");
+    if (!categories || categories.length === 0)
+      errors.push("At least one finance category is required");
     else data.financeCategories = [...new Set(categories)];
   }
   if ("meetingCadence" in input) {
@@ -85,7 +110,11 @@ export async function PATCH(request: Request) {
         where: { id: ORG_SETTINGS_ID },
         // The row may not exist yet — getOrgSettings() serves defaults
         // rather than requiring a seed, so the first save is the create.
-        create: { id: ORG_SETTINGS_ID, ...data, updatedById: guard.context.actor.id },
+        create: {
+          id: ORG_SETTINGS_ID,
+          ...data,
+          updatedById: guard.context.actor.id,
+        },
         update: { ...data, updatedById: guard.context.actor.id },
       });
 
@@ -97,7 +126,10 @@ export async function PATCH(request: Request) {
           entityId: ORG_SETTINGS_ID,
           entityLabel: "Organization settings",
           before: Object.fromEntries(
-            Object.keys(data).map((key) => [key, before[key as keyof typeof before] ?? null]),
+            Object.keys(data).map((key) => [
+              key,
+              before[key as keyof typeof before] ?? null,
+            ]),
           ) as Prisma.InputJsonObject,
           after: data as Prisma.InputJsonObject,
           reason: null,
@@ -106,7 +138,11 @@ export async function PATCH(request: Request) {
       );
     });
 
-    return NextResponse.json({ ok: true, settings: await getOrgSettings(), message: "Settings saved" });
+    return NextResponse.json({
+      ok: true,
+      settings: await getOrgSettings(),
+      message: "Settings saved",
+    });
   } catch (error) {
     return toErrorResponse(error);
   }

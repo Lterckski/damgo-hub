@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
+import { cookies } from "next/headers";
 import "./globals.css";
 import { clerkAppearance } from "@/lib/clerk-appearance";
 
@@ -24,11 +25,15 @@ export const metadata: Metadata = {
   description: "Collaborative platform for the Damgo Hub hackathon team.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const preference = (await cookies()).get("damgo_theme")?.value;
+  const theme =
+    preference === "dark" || preference === "light" ? preference : "system";
   return (
     <ClerkProvider appearance={clerkAppearance}>
       <html
         lang="en"
+        data-theme={theme}
         className={`${geistSans.variable} ${geistMono.variable} ${playfairDisplay.variable} h-full antialiased`}
       >
         {/* h-full, not min-h-full — a minimum lets body grow past the

@@ -1,9 +1,12 @@
+import { requireWorkspacePage as requireWorkspaceSession } from "@/lib/hub/context";
 import { getCurrentMember } from "@/lib/current-member";
 import { getMemberPickerOptions } from "@/lib/members";
 import { BackButton } from "@/components/shared/back-button";
 import { IdeasBoard } from "@/components/ideas/ideas-board";
 
 export default async function IdeasPage() {
+  await requireWorkspaceSession();
+
   // Sequential, not Promise.all: on a genuine first visit, getCurrentMember()
   // upserts this member's own row, and getMemberPickerOptions() does its own
   // separate Clerk-roster upsert of the same row — running them concurrently

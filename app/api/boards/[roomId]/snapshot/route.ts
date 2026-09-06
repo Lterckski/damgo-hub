@@ -1,8 +1,13 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { del, get, put } from "@vercel/blob";
 
-import { hasVerifiedOrgMembership, memberHasRoomAccess } from "@/lib/board-access";
+import {
+  hasVerifiedOrgMembership,
+  memberHasRoomAccess,
+} from "@/lib/board-access";
 import { getCurrentMember } from "@/lib/current-member";
 import { prisma } from "@/lib/prisma";
 
@@ -29,7 +34,8 @@ const IDEAS_BOARD_ID = "ideas-board";
  */
 function resolveBoardOwner(room: string): BoardOwner | null {
   if (room === "ideas") return { kind: "ideas" };
-  if (room.startsWith("project:")) return { kind: "project", projectId: room.slice("project:".length) };
+  if (room.startsWith("project:"))
+    return { kind: "project", projectId: room.slice("project:".length) };
   return null;
 }
 
@@ -53,10 +59,15 @@ function pointerFor(owner: BoardOwner): SnapshotPointer {
       blobKeyPrefix: `boards/project-${owner.projectId}`,
       async read() {
         const project = await prisma.project.findUnique({
-          where: { id: owner.projectId },
+          where: {
+            ...{ id: owner.projectId },
+            AND: [await entityVisibilityWhere("project")],
+          },
           select: { roadmapSnapshotPath: true },
         });
-        return project ? { exists: true, path: project.roadmapSnapshotPath } : { exists: false, path: null };
+        return project
+          ? { exists: true, path: project.roadmapSnapshotPath }
+          : { exists: false, path: null };
       },
       async write(previousPath, newPath) {
         const result = await prisma.project.updateMany({
@@ -100,27 +111,41 @@ async function deleteSnapshotBlob(pathname: string) {
 async function authorizeRoom(room: string) {
   const { userId, orgId } = await auth();
   if (!userId) {
-    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) } as const;
+    return {
+      error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    } as const;
   }
   if (!orgId || !(await hasVerifiedOrgMembership(userId, orgId))) {
-    return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) } as const;
+    return {
+      error: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
+    } as const;
   }
 
   const member = await getCurrentMember();
   if (!(await memberHasRoomAccess(room, member))) {
-    return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) } as const;
+    return {
+      error: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
+    } as const;
   }
 
   const owner = resolveBoardOwner(room);
   if (!owner) {
-    return { error: NextResponse.json({ error: "Unknown room" }, { status: 404 }) } as const;
+    return {
+      error: NextResponse.json({ error: "Unknown room" }, { status: 404 }),
+    } as const;
   }
 
   return { member, owner } as const;
 }
 
 // PUT /api/boards/[roomId]/snapshot — save the latest board JSON.
-export async function PUT(request: Request, { params }: { params: Promise<{ roomId: string }> }) {
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ roomId: string }> },
+) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { roomId } = await params;
   const authResult = await authorizeRoom(roomId);
   if ("error" in authResult) return authResult.error;
@@ -128,24 +153,34 @@ export async function PUT(request: Request, { params }: { params: Promise<{ room
 
   const body = await request.json().catch(() => null);
   if (!body || !Array.isArray(body.nodes) || !Array.isArray(body.edges)) {
-    return NextResponse.json({ error: "nodes and edges arrays are required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "nodes and edges arrays are required" },
+      { status: 400 },
+    );
   }
 
   const pointer = pointerFor(owner);
   const current = await pointer.read();
   if (!current.exists) {
-    return NextResponse.json({ error: "Board owner not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Board owner not found" },
+      { status: 404 },
+    );
   }
 
   const previousPath = current.path;
   let blob: Awaited<ReturnType<typeof put>> | null = null;
 
   try {
-    blob = await put(`${pointer.blobKeyPrefix}-${Date.now()}.json`, JSON.stringify(body), {
-      access: "private",
-      contentType: "application/json",
-      addRandomSuffix: true,
-    });
+    blob = await put(
+      `${pointer.blobKeyPrefix}-${Date.now()}.json`,
+      JSON.stringify(body),
+      {
+        access: "private",
+        contentType: "application/json",
+        addRandomSuffix: true,
+      },
+    );
 
     // Compare-and-swap the pointer. If another save advanced it while this
     // request was uploading, this stale request must not move it backwards.
@@ -153,7 +188,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ room
 
     if (!swapped) {
       await deleteSnapshotBlob(blob.pathname);
-      return NextResponse.json({ error: "A newer board snapshot was already saved" }, { status: 409 });
+      return NextResponse.json(
+        { error: "A newer board snapshot was already saved" },
+        { status: 409 },
+      );
     }
   } catch (error) {
     if (blob) await deleteSnapshotBlob(blob.pathname);
@@ -164,12 +202,25 @@ export async function PUT(request: Request, { params }: { params: Promise<{ room
   // failed upload or losing concurrent save can never strand the database.
   if (previousPath) await deleteSnapshotBlob(previousPath);
 
+  if (authResult.owner.kind === "ideas") {
+    const { getHubViewer } = await import("@/lib/hub/context");
+    const { syncIdeas } = await import("@/lib/hub/ideas");
+    await syncIdeas(await getHubViewer()).catch((error: unknown) =>
+      console.error("Ideas search refresh failed", error),
+    );
+  }
   return NextResponse.json({ ok: true });
 }
 
 // GET /api/boards/[roomId]/snapshot — load the last saved board JSON, or an
 // empty board if nothing has been saved yet.
-export async function GET(request: Request, { params }: { params: Promise<{ roomId: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ roomId: string }> },
+) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { roomId } = await params;
   const authResult = await authorizeRoom(roomId);
   if ("error" in authResult) return authResult.error;
@@ -190,5 +241,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ room
 
   const text = await new Response(blob.stream).text();
   const snapshot = JSON.parse(text);
-  return NextResponse.json({ nodes: snapshot.nodes ?? [], edges: snapshot.edges ?? [] });
+  return NextResponse.json({
+    nodes: snapshot.nodes ?? [],
+    edges: snapshot.edges ?? [],
+  });
 }

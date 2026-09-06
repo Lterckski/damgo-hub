@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
@@ -22,8 +24,20 @@ import { prisma } from "@/lib/prisma";
 // Email Notifications section — description is deliberately excluded
 // (shown in every email, but changing it alone never triggers one).
 function detailsChanged(
-  before: { title: string; scheduledAt: Date; endsAt: Date | null; location: string | null; meetingUrl: string | null },
-  after: { title: string; scheduledAt: Date; endsAt: Date | null; location: string | null; meetingUrl: string | null },
+  before: {
+    title: string;
+    scheduledAt: Date;
+    endsAt: Date | null;
+    location: string | null;
+    meetingUrl: string | null;
+  },
+  after: {
+    title: string;
+    scheduledAt: Date;
+    endsAt: Date | null;
+    location: string | null;
+    meetingUrl: string | null;
+  },
 ): boolean {
   return (
     before.title !== after.title ||
@@ -57,22 +71,39 @@ function meetingSnapshot(meeting: {
 }
 
 // GET /api/meetings/[meetingId] — requires participation or Admin.
-export async function GET(_request: Request, { params }: { params: Promise<{ meetingId: string }> }) {
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ meetingId: string }> },
+) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { meetingId } = await params;
-  const [member, isAdmin] = await Promise.all([getCurrentMember(), isCurrentMemberAdmin()]);
+  const [member, isAdmin] = await Promise.all([
+    getCurrentMember(),
+    isCurrentMemberAdmin(),
+  ]);
 
-  const meeting = await prisma.meeting.findUnique({ where: { id: meetingId }, include: MEETING_DETAIL_INCLUDE });
+  const meeting = await prisma.meeting.findUnique({
+    where: {
+      ...{ id: meetingId },
+      AND: [await entityVisibilityWhere("meeting")],
+    },
+    include: MEETING_DETAIL_INCLUDE,
+  });
   if (!meeting) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
 
-  const isParticipant = meeting.participants.some((p) => p.member.id === member.id);
-  if (!isParticipant && !isAdmin) {
+  const isParticipant = meeting.participants.some(
+    (p) => p.member.id === member.id,
+  );
+  if (!isParticipant && !isAdmin && meeting.visibilityScope !== "org") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -82,7 +113,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ mee
 // PATCH /api/meetings/[meetingId] — organizer only. Edits meeting details
 // and participants together (a full replace of the editable fields, not a
 // partial patch) — see this spec's Routes section.
-export async function PATCH(request: Request, { params }: { params: Promise<{ meetingId: string }> }) {
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ meetingId: string }> },
+) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -91,27 +128,53 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ me
   const { meetingId } = await params;
   const member = await getCurrentMember();
 
-  const existing = await prisma.meeting.findUnique({ where: { id: meetingId }, include: MEETING_DETAIL_INCLUDE });
+  const existing = await prisma.meeting.findUnique({
+    where: {
+      ...{ id: meetingId },
+      AND: [await entityVisibilityWhere("meeting")],
+    },
+    include: MEETING_DETAIL_INCLUDE,
+  });
   if (!existing) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
   // Organizer only — Admin agenda authority does not extend to another
   // organizer's meeting details, per this spec's explicit call-out.
   if (existing.organizerId !== member.id) {
-    return NextResponse.json({ error: "Only the organizer can edit this meeting" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Only the organizer can edit this meeting" },
+      { status: 403 },
+    );
   }
 
   const body = await request.json().catch(() => null);
   if (!body) {
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 },
+    );
   }
-  const { title, description, scheduledAt, endsAt, location, meetingUrl, participantIds } = body;
+  const {
+    title,
+    description,
+    scheduledAt,
+    endsAt,
+    location,
+    meetingUrl,
+    participantIds,
+  } = body;
 
   if (typeof title !== "string" || title.trim() === "") {
     return NextResponse.json({ error: "title is required" }, { status: 400 });
   }
-  if (typeof scheduledAt !== "string" || Number.isNaN(Date.parse(scheduledAt))) {
-    return NextResponse.json({ error: "scheduledAt must be a valid date" }, { status: 400 });
+  if (
+    typeof scheduledAt !== "string" ||
+    Number.isNaN(Date.parse(scheduledAt))
+  ) {
+    return NextResponse.json(
+      { error: "scheduledAt must be a valid date" },
+      { status: 400 },
+    );
   }
   const scheduledAtDate = new Date(scheduledAt);
 
@@ -128,18 +191,27 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ me
   let endsAtDate: Date | null = null;
   if (endsAtProvided && typeof endsAt === "string" && endsAt !== "") {
     if (Number.isNaN(Date.parse(endsAt))) {
-      return NextResponse.json({ error: "endsAt must be a valid date" }, { status: 400 });
+      return NextResponse.json(
+        { error: "endsAt must be a valid date" },
+        { status: 400 },
+      );
     }
     endsAtDate = new Date(endsAt);
     if (!isEndsAtValid(scheduledAtDate, endsAtDate)) {
-      return NextResponse.json({ error: "endsAt must be later than scheduledAt" }, { status: 400 });
+      return NextResponse.json(
+        { error: "endsAt must be later than scheduledAt" },
+        { status: 400 },
+      );
     }
   }
 
   let meetingUrlValue: string | null = null;
   if (typeof meetingUrl === "string" && meetingUrl.trim() !== "") {
     if (!isValidHttpUrl(meetingUrl.trim())) {
-      return NextResponse.json({ error: "meetingUrl must be a valid http(s) URL" }, { status: 400 });
+      return NextResponse.json(
+        { error: "meetingUrl must be a valid http(s) URL" },
+        { status: 400 },
+      );
     }
     meetingUrlValue = meetingUrl.trim();
   }
@@ -147,7 +219,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ me
   const requestedIds: string[] = Array.isArray(participantIds)
     ? participantIds.filter((id): id is string => typeof id === "string")
     : [];
-  const uniqueRequestedIds = [...new Set([...requestedIds, existing.organizerId])];
+  const uniqueRequestedIds = [
+    ...new Set([...requestedIds, existing.organizerId]),
+  ];
   const realMembers = await prisma.member.findMany({
     where: { id: { in: uniqueRequestedIds } },
     select: { id: true },
@@ -157,99 +231,139 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ me
   const newDetails = {
     title: title.trim(),
     scheduledAt: scheduledAtDate,
-    location: typeof location === "string" && location.trim() !== "" ? location.trim() : null,
+    location:
+      typeof location === "string" && location.trim() !== ""
+        ? location.trim()
+        : null,
     meetingUrl: meetingUrlValue,
   };
-  const transactionResult = await runSerializableMeetingTransaction(async (tx) => {
-    const current = await tx.meeting.findUnique({ where: { id: meetingId }, include: MEETING_DETAIL_INCLUDE });
-    if (!current) return { kind: "not-found" } as const;
-    if (current.organizerId !== member.id) return { kind: "forbidden" } as const;
+  const transactionResult = await runSerializableMeetingTransaction(
+    async (tx) => {
+      const current = await tx.meeting.findUnique({
+        where: { id: meetingId },
+        include: MEETING_DETAIL_INCLUDE,
+      });
+      if (!current) return { kind: "not-found" } as const;
+      if (current.organizerId !== member.id)
+        return { kind: "forbidden" } as const;
 
-    const effectiveEndsAt = resolveEffectiveEndsAt(endsAtProvided, endsAtDate, current.endsAt);
+      const effectiveEndsAt = resolveEffectiveEndsAt(
+        endsAtProvided,
+        endsAtDate,
+        current.endsAt,
+      );
 
-    const oldParticipantIds = new Set(current.participants.map((participant) => participant.member.id));
-    const addedIds = [...newParticipantIds].filter((id) => !oldParticipantIds.has(id));
-    const removedIds = [...oldParticipantIds].filter((id) => !newParticipantIds.has(id));
-    const remainingIds = [...newParticipantIds].filter((id) => oldParticipantIds.has(id));
-    const emailRelevantChange = detailsChanged(current, { ...newDetails, endsAt: effectiveEndsAt });
-    const participantsChanged = addedIds.length > 0 || removedIds.length > 0;
-
-    const meeting = await tx.meeting.update({
-      where: { id: meetingId },
-      data: {
+      const oldParticipantIds = new Set(
+        current.participants.map((participant) => participant.member.id),
+      );
+      const addedIds = [...newParticipantIds].filter(
+        (id) => !oldParticipantIds.has(id),
+      );
+      const removedIds = [...oldParticipantIds].filter(
+        (id) => !newParticipantIds.has(id),
+      );
+      const remainingIds = [...newParticipantIds].filter((id) =>
+        oldParticipantIds.has(id),
+      );
+      const emailRelevantChange = detailsChanged(current, {
         ...newDetails,
-        ...(endsAtProvided ? { endsAt: endsAtDate } : {}),
-        description: typeof description === "string" && description.trim() !== "" ? description.trim() : null,
-        ...(emailRelevantChange || participantsChanged ? { notificationRevision: { increment: 1 } } : {}),
-      },
-    });
+        endsAt: effectiveEndsAt,
+      });
+      const participantsChanged = addedIds.length > 0 || removedIds.length > 0;
 
-    if (participantsChanged) {
-      if (removedIds.length > 0) {
-        await tx.meetingParticipant.deleteMany({ where: { meetingId, memberId: { in: removedIds } } });
+      const meeting = await tx.meeting.update({
+        where: { id: meetingId },
+        data: {
+          ...newDetails,
+          ...(endsAtProvided ? { endsAt: endsAtDate } : {}),
+          description:
+            typeof description === "string" && description.trim() !== ""
+              ? description.trim()
+              : null,
+          ...(emailRelevantChange || participantsChanged
+            ? { notificationRevision: { increment: 1 } }
+            : {}),
+        },
+      });
+
+      if (participantsChanged) {
+        if (removedIds.length > 0) {
+          await tx.meetingParticipant.deleteMany({
+            where: { meetingId, memberId: { in: removedIds } },
+          });
+        }
+        if (addedIds.length > 0) {
+          await tx.meetingParticipant.createMany({
+            data: addedIds.map((memberId) => ({ meetingId, memberId })),
+            skipDuplicates: true,
+          });
+        }
       }
-      if (addedIds.length > 0) {
-        await tx.meetingParticipant.createMany({
-          data: addedIds.map((memberId) => ({ meetingId, memberId })),
-          skipDuplicates: true,
-        });
-      }
-    }
 
-    const full = await tx.meeting.findUniqueOrThrow({ where: { id: meetingId }, include: MEETING_DETAIL_INCLUDE });
-    const snapshot = meetingSnapshot(full);
-    const outboxIds = await Promise.all([
-      createMeetingNotificationOutbox(
-        tx,
-        "INVITATION",
-        meetingId,
-        meeting.notificationRevision,
-        addedIds,
-        snapshot,
-      ),
-      createMeetingNotificationOutbox(
-        tx,
-        "PARTICIPANT_REMOVED",
-        meetingId,
-        meeting.notificationRevision,
-        removedIds,
-        snapshot,
-      ),
-      emailRelevantChange
-        ? createMeetingNotificationOutbox(
-            tx,
-            "UPDATED",
-            meetingId,
-            meeting.notificationRevision,
-            remainingIds,
-            snapshot,
-          )
-        : null,
-    ]);
+      const full = await tx.meeting.findUniqueOrThrow({
+        where: { id: meetingId },
+        include: MEETING_DETAIL_INCLUDE,
+      });
+      const snapshot = meetingSnapshot(full);
+      const outboxIds = await Promise.all([
+        createMeetingNotificationOutbox(
+          tx,
+          "INVITATION",
+          meetingId,
+          meeting.notificationRevision,
+          addedIds,
+          snapshot,
+        ),
+        createMeetingNotificationOutbox(
+          tx,
+          "PARTICIPANT_REMOVED",
+          meetingId,
+          meeting.notificationRevision,
+          removedIds,
+          snapshot,
+        ),
+        emailRelevantChange
+          ? createMeetingNotificationOutbox(
+              tx,
+              "UPDATED",
+              meetingId,
+              meeting.notificationRevision,
+              remainingIds,
+              snapshot,
+            )
+          : null,
+      ]);
 
-    return {
-      kind: "success",
-      full,
-      outboxIds,
-      previousReminderRuns: {
-        reminder24hRunId: current.reminder24hRunId,
-        reminder1hRunId: current.reminder1hRunId,
-      },
-    } as const;
-  });
+      return {
+        kind: "success",
+        full,
+        outboxIds,
+        previousReminderRuns: {
+          reminder24hRunId: current.reminder24hRunId,
+          reminder1hRunId: current.reminder1hRunId,
+        },
+      } as const;
+    },
+  );
 
   if (transactionResult.kind === "not-found") {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
   if (transactionResult.kind === "forbidden") {
-    return NextResponse.json({ error: "Only the organizer can edit this meeting" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Only the organizer can edit this meeting" },
+      { status: 403 },
+    );
   }
   const { full, outboxIds, previousReminderRuns } = transactionResult;
 
   try {
     await enqueueMeetingNotificationOutboxes(outboxIds);
   } catch (error) {
-    console.error("Failed to enqueue meeting notification outboxes after update", { meetingId, error });
+    console.error(
+      "Failed to enqueue meeting notification outboxes after update",
+      { meetingId, error },
+    );
   }
 
   // Reschedule reminders on every successful edit, per this spec's
@@ -267,14 +381,23 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ me
       await cancelMeetingReminders(scheduledRuns);
     }
   } catch (error) {
-    console.error("Failed to reconcile reminder runs after meeting update", { meetingId, error });
+    console.error("Failed to reconcile reminder runs after meeting update", {
+      meetingId,
+      error,
+    });
   }
 
   return NextResponse.json({ meeting: serializeMeeting(full) });
 }
 
 // DELETE /api/meetings/[meetingId] — organizer only.
-export async function DELETE(_request: Request, { params }: { params: Promise<{ meetingId: string }> }) {
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ meetingId: string }> },
+) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -283,12 +406,21 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const { meetingId } = await params;
   const member = await getCurrentMember();
 
-  const meeting = await prisma.meeting.findUnique({ where: { id: meetingId }, include: MEETING_DETAIL_INCLUDE });
+  const meeting = await prisma.meeting.findUnique({
+    where: {
+      ...{ id: meetingId },
+      AND: [await entityVisibilityWhere("meeting")],
+    },
+    include: MEETING_DETAIL_INCLUDE,
+  });
   if (!meeting) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
   if (meeting.organizerId !== member.id) {
-    return NextResponse.json({ error: "Only the organizer can delete this meeting" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Only the organizer can delete this meeting" },
+      { status: 403 },
+    );
   }
 
   const participantIds = meeting.participants.map((p) => p.member.id);
@@ -312,9 +444,13 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   });
 
   await cancelMeetingReminders(meeting).catch((error) => {
-    console.error("Failed to cancel reminders after meeting deletion", { meetingId, error });
+    console.error("Failed to cancel reminders after meeting deletion", {
+      meetingId,
+      error,
+    });
   });
-  if (cancellationOutboxId) await enqueueMeetingNotificationOutboxes([cancellationOutboxId]);
+  if (cancellationOutboxId)
+    await enqueueMeetingNotificationOutboxes([cancellationOutboxId]);
 
   return NextResponse.json({ ok: true });
 }

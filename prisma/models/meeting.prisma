@@ -32,39 +32,40 @@ enum MeetingNotificationOutboxStatus {
 }
 
 model Meeting {
-  id          String    @id @default(cuid())
-  title       String
-  description String?
-  scheduledAt DateTime
-  endsAt      DateTime?
+  visibilityScope      String    @default("user")
+  id                   String    @id @default(cuid())
+  title                String
+  description          String?
+  scheduledAt          DateTime
+  endsAt               DateTime?
   // Physical location and/or an external meeting link (Google Meet, Zoom,
   // Teams, ...) — Damgo Hub never hosts the meeting itself, see this
   // spec's own Goal section.
-  location    String?
-  meetingUrl  String?
-  organizerId String
+  location             String?
+  meetingUrl           String?
+  organizerId          String
   // Restrict, not Cascade/SetNull — a meeting always needs a real
   // organizer to attribute it to. Deleting the organizer's Member row
   // must reassign this first (see the member-deletion policy below), the
   // same pattern Task.createdBy/Doc.author already rely on.
-  organizer   Member    @relation("MeetingOrganizer", fields: [organizerId], references: [id], onDelete: Restrict)
+  organizer            Member    @relation("MeetingOrganizer", fields: [organizerId], references: [id], onDelete: Restrict)
   // Bumped transactionally whenever email-relevant details (title,
   // start/end, location, meetingUrl) or the participant list change.
   // MeetingEmailDelivery's uniqueness is keyed on this, so the same
   // notification type can be legitimately re-sent after a real change
   // without colliding with the delivery record for the previous revision.
-  notificationRevision Int @default(1)
+  notificationRevision Int       @default(1)
   // Trigger.dev run IDs for the two scheduled reminders, so a
   // reschedule/cancellation can cancel the previously-scheduled run
   // instead of leaving a stale reminder firing against old details.
-  reminder24hRunId String?
-  reminder1hRunId  String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  reminder24hRunId     String?
+  reminder1hRunId      String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  participants      MeetingParticipant[]
-  agendaProposals   AgendaProposal[]
-  agendaItems       AgendaItem[]
+  participants    MeetingParticipant[]
+  agendaProposals AgendaProposal[]
+  agendaItems     AgendaItem[]
 
   @@index([scheduledAt])
   @@index([organizerId])
@@ -102,29 +103,29 @@ model AgendaProposal {
 }
 
 model AgendaItem {
-  id        String   @id @default(cuid())
-  meetingId String
-  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  text      String
+  id               String          @id @default(cuid())
+  meetingId        String
+  meeting          Meeting         @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  text             String
   // Contiguous, zero-based, unique per meeting. Adding/accepting appends
   // at the next position; removing compacts the remaining ones;
   // reordering rewrites every affected position — always in one
   // transaction, per this spec's own note on AgendaItem records.
-  position  Int
-  addedById String
+  position         Int
+  addedById        String
   // Restrict — always the Leader/Assistant Leader who added or accepted
   // this item; reassigned to the acting admin on member deletion, same as
   // Meeting.organizer/AgendaProposal.proposedBy.
-  addedBy   Member   @relation("AgendaItemAddedBy", fields: [addedById], references: [id], onDelete: Restrict)
+  addedBy          Member          @relation("AgendaItemAddedBy", fields: [addedById], references: [id], onDelete: Restrict)
   // Optional — set only when this item came from an accepted proposal.
   // SetNull (not Restrict/Cascade): if the source proposal is ever
   // removed some other way, the agenda item it produced is still real
   // content and should survive as a standalone item, just without the
   // provenance link.
   sourceProposalId String?         @unique
-  sourceProposal    AgendaProposal? @relation(fields: [sourceProposalId], references: [id], onDelete: SetNull)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  sourceProposal   AgendaProposal? @relation(fields: [sourceProposalId], references: [id], onDelete: SetNull)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   @@unique([meetingId, position])
   @@index([meetingId])

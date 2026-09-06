@@ -1,9 +1,13 @@
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
-import { cancelCalendarReminder, scheduleCalendarReminder } from "@/lib/calendar-reminders";
+import {
+  cancelCalendarReminder,
+  scheduleCalendarReminder,
+} from "@/lib/calendar-reminders";
 import { enqueueGoogleCalendarSync } from "@/lib/sync-calendar";
 import { serializeCalendarEvent } from "@/lib/calendar";
 
@@ -12,15 +16,23 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ eventId: string }> },
 ) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [member, isAdmin] = await Promise.all([getCurrentMember(), isCurrentMemberAdmin()]);
+  const [member, isAdmin] = await Promise.all([
+    getCurrentMember(),
+    isCurrentMemberAdmin(),
+  ]);
   const { eventId } = await params;
 
-  const existing = await prisma.calendarEvent.findUnique({ where: { id: eventId } });
+  const existing = await prisma.calendarEvent.findUnique({
+    where: { id: eventId },
+  });
   if (!existing) {
     return NextResponse.json({ error: "Event not found" }, { status: 404 });
   }
@@ -37,13 +49,25 @@ export async function PATCH(
   const event = await prisma.calendarEvent.update({
     where: { id: eventId },
     data: {
-      ...(typeof title === "string" && title.trim() !== "" ? { title: title.trim() } : {}),
+      ...(typeof title === "string" && title.trim() !== ""
+        ? { title: title.trim() }
+        : {}),
       ...(description !== undefined
-        ? { description: typeof description === "string" && description.trim() !== "" ? description.trim() : null }
+        ? {
+            description:
+              typeof description === "string" && description.trim() !== ""
+                ? description.trim()
+                : null,
+          }
         : {}),
       ...(typeof startAt === "string" ? { startAt: new Date(startAt) } : {}),
       ...(endAt !== undefined
-        ? { endAt: typeof endAt === "string" && endAt !== "" ? new Date(endAt) : null }
+        ? {
+            endAt:
+              typeof endAt === "string" && endAt !== ""
+                ? new Date(endAt)
+                : null,
+          }
         : {}),
       // Cleared immediately, before the cancel/reschedule awaits below. If
       // the old run fires in that window (cancellation hasn't taken effect
@@ -64,13 +88,19 @@ export async function PATCH(
   const reminderRunId = await scheduleCalendarReminder(event);
   if (reminderRunId) {
     try {
-      await prisma.calendarEvent.update({ where: { id: eventId }, data: { reminderRunId } });
+      await prisma.calendarEvent.update({
+        where: { id: eventId },
+        data: { reminderRunId },
+      });
     } catch (error) {
       // Persisting the new id failed after the run was already created —
       // cancel it rather than leave an orphaned scheduled run that will
       // fire later and silently no-op (its id will never match what's in
       // the database).
-      console.error("Failed to persist reminderRunId, cancelling orphaned reminder run", error);
+      console.error(
+        "Failed to persist reminderRunId, cancelling orphaned reminder run",
+        error,
+      );
       await cancelCalendarReminder(reminderRunId);
     }
   }
@@ -83,15 +113,23 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ eventId: string }> },
 ) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [member, isAdmin] = await Promise.all([getCurrentMember(), isCurrentMemberAdmin()]);
+  const [member, isAdmin] = await Promise.all([
+    getCurrentMember(),
+    isCurrentMemberAdmin(),
+  ]);
   const { eventId } = await params;
 
-  const existing = await prisma.calendarEvent.findUnique({ where: { id: eventId } });
+  const existing = await prisma.calendarEvent.findUnique({
+    where: { id: eventId },
+  });
   if (!existing) {
     return NextResponse.json({ error: "Event not found" }, { status: 404 });
   }

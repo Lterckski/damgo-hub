@@ -1,13 +1,24 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
-import { nextAgendaPosition, runSerializableMeetingTransaction } from "@/lib/meetings";
+import {
+  nextAgendaPosition,
+  runSerializableMeetingTransaction,
+} from "@/lib/meetings";
 import { prisma } from "@/lib/prisma";
 
 // POST /api/meetings/[meetingId]/agenda-items — Leader or Assistant
 // Leader only; adds an item directly to the end of the final agenda.
-export async function POST(request: Request, { params }: { params: Promise<{ meetingId: string }> }) {
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ meetingId: string }> },
+) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -22,7 +33,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ mee
   const { meetingId } = await params;
   const member = await getCurrentMember();
 
-  const meeting = await prisma.meeting.findUnique({ where: { id: meetingId }, select: { id: true } });
+  const meeting = await prisma.meeting.findUnique({
+    where: {
+      ...{ id: meetingId },
+      AND: [await entityVisibilityWhere("meeting")],
+    },
+    select: { id: true },
+  });
   if (!meeting) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }

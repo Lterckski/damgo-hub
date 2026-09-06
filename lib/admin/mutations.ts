@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { taskVisibilityWhere } from "@/lib/hub/context";
 import { clerkClient } from "@clerk/nextjs/server";
 
 import { prisma } from "@/lib/prisma";
@@ -54,25 +56,42 @@ export async function applyQueueAction(
   // payload the client could have edited, so it isn't what's trusted.
   const reason = REASON_REQUIRED_ACTION_IDS.has(actionId)
     ? requireReason(rawReason)
-    : typeof rawReason === "string" && rawReason.trim() ? rawReason.trim() : null;
+    : typeof rawReason === "string" && rawReason.trim()
+      ? rawReason.trim()
+      : null;
 
   const { actor } = context;
 
   switch (actionId) {
     case "transaction.approve":
     case "transaction.reject":
-      return decideTransaction(actor, entityId, actionId === "transaction.approve" ? "APPROVED" : "REJECTED", reason);
+      return decideTransaction(
+        actor,
+        entityId,
+        actionId === "transaction.approve" ? "APPROVED" : "REJECTED",
+        reason,
+      );
 
     case "transaction.request_receipt":
       return requestReceipt(actor, entityId);
 
     case "request.approve":
     case "request.deny":
-      return decideMemberRequest(context, entityId, actionId === "request.approve", reason);
+      return decideMemberRequest(
+        context,
+        entityId,
+        actionId === "request.approve",
+        reason,
+      );
 
     case "agenda_proposal.accept":
     case "agenda_proposal.decline":
-      return decideAgendaProposal(actor, entityId, actionId === "agenda_proposal.accept", reason);
+      return decideAgendaProposal(
+        actor,
+        entityId,
+        actionId === "agenda_proposal.accept",
+        reason,
+      );
 
     case "project.approve":
       return setProjectStatus(actor, entityId, "ACTIVE", reason);
@@ -101,46 +120,59 @@ async function decideTransaction(
   reason: string | null,
 ): Promise<MutationOutcome> {
   const existing = await prisma.transaction.findUnique({
-    where: { id: transactionId },
+    where: {
+      ...{ id: transactionId },
+      AND: [await entityVisibilityWhere("transaction")],
+    },
     include: { member: { select: { displayName: true } } },
   });
   if (!existing) return notFound("Transaction");
-  if (existing.status !== "PENDING") return conflict("This transaction has already been decided");
+  if (existing.status !== "PENDING")
+    return conflict("This transaction has already been decided");
 
-  await prisma.$transaction(async (tx) => {
-    // Conditional update, matching the existing finance route: two admins
-    // clicking Approve at once must not both succeed.
-    const claim = await tx.transaction.updateMany({
-      where: { id: transactionId, status: "PENDING" },
-      data: { status },
-    });
-    if (claim.count !== 1) throw new ConcurrentDecisionError();
+  await prisma
+    .$transaction(async (tx) => {
+      // Conditional update, matching the existing finance route: two admins
+      // clicking Approve at once must not both succeed.
+      const claim = await tx.transaction.updateMany({
+        where: { id: transactionId, status: "PENDING" },
+        data: { status },
+      });
+      if (claim.count !== 1) throw new ConcurrentDecisionError();
 
-    await recordAuditEvent(
-      {
-        actor,
-        action: `transaction.${status.toLowerCase()}`,
-        entityType: "TRANSACTION",
-        entityId: transactionId,
-        entityLabel: `${existing.category} ${formatPHP(existing.amount)} · ${existing.member.displayName}`,
-        before: { status: existing.status },
-        after: { status },
-        reason,
-      },
-      tx,
-    );
-  }).catch(rethrowUnlessConcurrent);
+      await recordAuditEvent(
+        {
+          actor,
+          action: `transaction.${status.toLowerCase()}`,
+          entityType: "TRANSACTION",
+          entityId: transactionId,
+          entityLabel: `${existing.category} ${formatPHP(existing.amount)} · ${existing.member.displayName}`,
+          before: { status: existing.status },
+          after: { status },
+          reason,
+        },
+        tx,
+      );
+    })
+    .catch(rethrowUnlessConcurrent);
 
   return { ok: true, message: `Transaction ${status.toLowerCase()}` };
 }
 
-async function requestReceipt(actor: AuditActor, transactionId: string): Promise<MutationOutcome> {
+async function requestReceipt(
+  actor: AuditActor,
+  transactionId: string,
+): Promise<MutationOutcome> {
   const transaction = await prisma.transaction.findUnique({
-    where: { id: transactionId },
+    where: {
+      ...{ id: transactionId },
+      AND: [await entityVisibilityWhere("transaction")],
+    },
     include: { member: { select: { id: true, displayName: true } } },
   });
   if (!transaction) return notFound("Transaction");
-  if (transaction.receiptPath) return conflict("This transaction already has a receipt");
+  if (transaction.receiptPath)
+    return conflict("This transaction already has a receipt");
 
   await prisma.$transaction(async (tx) => {
     await sendBroadcast(
@@ -169,7 +201,10 @@ async function requestReceipt(actor: AuditActor, transactionId: string): Promise
     );
   });
 
-  return { ok: true, message: `Receipt requested from ${transaction.member.displayName}` };
+  return {
+    ok: true,
+    message: `Receipt requested from ${transaction.member.displayName}`,
+  };
 }
 
 async function decideMemberRequest(
@@ -179,15 +214,27 @@ async function decideMemberRequest(
   reason: string | null,
 ): Promise<MutationOutcome> {
   const { actor, orgId, isLeader } = context;
-  const request = await prisma.memberRequest.findUnique({ where: { id: requestId } });
+  const request = await prisma.memberRequest.findUnique({
+    where: { id: requestId },
+  });
   if (!request) return notFound("Request");
-  if (request.status !== "PENDING") return conflict("This request has already been decided");
+  if (request.status !== "PENDING")
+    return conflict("This request has already been decided");
 
   // Granting org:admin is the Leader's seat to give — the same rule
   // /api/members/[memberId]/assistant-leader enforces. An Assistant Leader
   // approving an admin promotion here would route around it.
-  if (approve && request.type === "ROLE_CHANGE" && request.requestedRole === "org:admin" && !isLeader) {
-    return { ok: false, status: 403, error: "Only the Leader can grant the Admin role" };
+  if (
+    approve &&
+    request.type === "ROLE_CHANGE" &&
+    request.requestedRole === "org:admin" &&
+    !isLeader
+  ) {
+    return {
+      ok: false,
+      status: 403,
+      error: "Only the Leader can grant the Admin role",
+    };
   }
 
   if (approve) {
@@ -211,36 +258,45 @@ async function decideMemberRequest(
       // Nothing local has changed yet, so the request stays PENDING and the
       // admin can retry — better than marking it approved when Clerk, the
       // actual source of truth for membership, refused.
-      return { ok: false, status: 502, error: "Clerk rejected this change. The request is still pending." };
+      return {
+        ok: false,
+        status: 502,
+        error: "Clerk rejected this change. The request is still pending.",
+      };
     }
   }
 
-  await prisma.$transaction(async (tx) => {
-    const claim = await tx.memberRequest.updateMany({
-      where: { id: requestId, status: "PENDING" },
-      data: {
-        status: approve ? "APPROVED" : "DENIED",
-        decidedById: actor.id,
-        decidedAt: new Date(),
-        decisionNote: reason,
-      },
-    });
-    if (claim.count !== 1) throw new ConcurrentDecisionError();
+  await prisma
+    .$transaction(async (tx) => {
+      const claim = await tx.memberRequest.updateMany({
+        where: { id: requestId, status: "PENDING" },
+        data: {
+          status: approve ? "APPROVED" : "DENIED",
+          decidedById: actor.id,
+          decidedAt: new Date(),
+          decisionNote: reason,
+        },
+      });
+      if (claim.count !== 1) throw new ConcurrentDecisionError();
 
-    await recordAuditEvent(
-      {
-        actor,
-        action: approve ? "member_request.approved" : "member_request.denied",
-        entityType: "MEMBER_REQUEST",
-        entityId: requestId,
-        entityLabel: `${request.type === "JOIN" ? "Join" : "Role change"} — ${request.displayName}`,
-        before: { status: "PENDING" },
-        after: { status: approve ? "APPROVED" : "DENIED", role: request.requestedRole },
-        reason,
-      },
-      tx,
-    );
-  }).catch(rethrowUnlessConcurrent);
+      await recordAuditEvent(
+        {
+          actor,
+          action: approve ? "member_request.approved" : "member_request.denied",
+          entityType: "MEMBER_REQUEST",
+          entityId: requestId,
+          entityLabel: `${request.type === "JOIN" ? "Join" : "Role change"} — ${request.displayName}`,
+          before: { status: "PENDING" },
+          after: {
+            status: approve ? "APPROVED" : "DENIED",
+            role: request.requestedRole,
+          },
+          reason,
+        },
+        tx,
+      );
+    })
+    .catch(rethrowUnlessConcurrent);
 
   return { ok: true, message: approve ? "Request approved" : "Request denied" };
 }
@@ -256,50 +312,58 @@ async function decideAgendaProposal(
     include: { meeting: { select: { title: true } } },
   });
   if (!proposal) return notFound("Proposal");
-  if (proposal.status !== "PENDING") return conflict("This proposal has already been decided");
+  if (proposal.status !== "PENDING")
+    return conflict("This proposal has already been decided");
 
-  await prisma.$transaction(async (tx) => {
-    const claim = await tx.agendaProposal.updateMany({
-      where: { id: proposalId, status: "PENDING" },
-      data: { status: accept ? "ACCEPTED" : "DECLINED" },
-    });
-    if (claim.count !== 1) throw new ConcurrentDecisionError();
-
-    if (accept) {
-      // Positions are contiguous and unique per meeting (see
-      // prisma/models/meeting.prisma) — append at the end.
-      const last = await tx.agendaItem.findFirst({
-        where: { meetingId: proposal.meetingId },
-        orderBy: { position: "desc" },
-        select: { position: true },
+  await prisma
+    .$transaction(async (tx) => {
+      const claim = await tx.agendaProposal.updateMany({
+        where: { id: proposalId, status: "PENDING" },
+        data: { status: accept ? "ACCEPTED" : "DECLINED" },
       });
-      await tx.agendaItem.create({
-        data: {
-          meetingId: proposal.meetingId,
-          text: proposal.text,
-          position: (last?.position ?? -1) + 1,
-          addedById: actor.id,
-          sourceProposalId: proposal.id,
+      if (claim.count !== 1) throw new ConcurrentDecisionError();
+
+      if (accept) {
+        // Positions are contiguous and unique per meeting (see
+        // prisma/models/meeting.prisma) — append at the end.
+        const last = await tx.agendaItem.findFirst({
+          where: { meetingId: proposal.meetingId },
+          orderBy: { position: "desc" },
+          select: { position: true },
+        });
+        await tx.agendaItem.create({
+          data: {
+            meetingId: proposal.meetingId,
+            text: proposal.text,
+            position: (last?.position ?? -1) + 1,
+            addedById: actor.id,
+            sourceProposalId: proposal.id,
+          },
+        });
+      }
+
+      await recordAuditEvent(
+        {
+          actor,
+          action: accept
+            ? "agenda_proposal.accepted"
+            : "agenda_proposal.declined",
+          entityType: "AGENDA_PROPOSAL",
+          entityId: proposalId,
+          entityLabel: `${proposal.text} · ${proposal.meeting.title}`,
+          before: { status: "PENDING" },
+          after: { status: accept ? "ACCEPTED" : "DECLINED" },
+          reason,
         },
-      });
-    }
+        tx,
+      );
+    })
+    .catch(rethrowUnlessConcurrent);
 
-    await recordAuditEvent(
-      {
-        actor,
-        action: accept ? "agenda_proposal.accepted" : "agenda_proposal.declined",
-        entityType: "AGENDA_PROPOSAL",
-        entityId: proposalId,
-        entityLabel: `${proposal.text} · ${proposal.meeting.title}`,
-        before: { status: "PENDING" },
-        after: { status: accept ? "ACCEPTED" : "DECLINED" },
-        reason,
-      },
-      tx,
-    );
-  }).catch(rethrowUnlessConcurrent);
-
-  return { ok: true, message: accept ? "Proposal added to the agenda" : "Proposal declined" };
+  return {
+    ok: true,
+    message: accept ? "Proposal added to the agenda" : "Proposal declined",
+  };
 }
 
 async function setProjectStatus(
@@ -308,9 +372,15 @@ async function setProjectStatus(
   status: "PROPOSED" | "ACTIVE" | "COMPLETED" | "ARCHIVED",
   reason: string | null,
 ): Promise<MutationOutcome> {
-  const project = await prisma.project.findUnique({ where: { id: projectId } });
+  const project = await prisma.project.findUnique({
+    where: {
+      ...{ id: projectId },
+      AND: [await entityVisibilityWhere("project")],
+    },
+  });
   if (!project) return notFound("Project");
-  if (project.status === status) return conflict(`This project is already ${status.toLowerCase()}`);
+  if (project.status === status)
+    return conflict(`This project is already ${status.toLowerCase()}`);
 
   await prisma.$transaction(async (tx) => {
     await tx.project.update({ where: { id: projectId }, data: { status } });
@@ -329,7 +399,10 @@ async function setProjectStatus(
     );
   });
 
-  return { ok: true, message: `${project.name} is now ${status.toLowerCase()}` };
+  return {
+    ok: true,
+    message: `${project.name} is now ${status.toLowerCase()}`,
+  };
 }
 
 async function decidePenalty(
@@ -339,52 +412,65 @@ async function decidePenalty(
   reason: string | null,
 ): Promise<MutationOutcome> {
   const penalty = await prisma.penalty.findUnique({
-    where: { id: penaltyId },
+    where: {
+      ...{ id: penaltyId },
+      AND: [await entityVisibilityWhere("penalty")],
+    },
     include: { member: { select: { displayName: true } } },
   });
   if (!penalty) return notFound("Penalty");
-  if (penalty.status !== "OPEN") return conflict("This penalty has already been decided");
+  if (penalty.status !== "OPEN")
+    return conflict("This penalty has already been decided");
 
-  await prisma.$transaction(async (tx) => {
-    const claim = await tx.penalty.updateMany({
-      where: { id: penaltyId, status: "OPEN" },
-      data: { status, resolvedAt: new Date() },
-    });
-    if (claim.count !== 1) throw new ConcurrentDecisionError();
-
-    // Same rule as PATCH /api/penalties/[penaltyId]: only a monetary
-    // penalty being RESOLVED (never WAIVED) produces a ledger entry, and
-    // it's auto-approved because only an admin can reach this path.
-    if (status === "RESOLVED" && penalty.amountCents !== null) {
-      await tx.transaction.create({
-        data: {
-          memberId: actor.id,
-          type: "INCOME",
-          category: "Penalty",
-          amount: penalty.amountCents,
-          status: "APPROVED",
-          description: penalty.reason,
-          penaltyId: penalty.id,
-        },
+  await prisma
+    .$transaction(async (tx) => {
+      const claim = await tx.penalty.updateMany({
+        where: { id: penaltyId, status: "OPEN" },
+        data: { status, resolvedAt: new Date() },
       });
-    }
+      if (claim.count !== 1) throw new ConcurrentDecisionError();
 
-    await recordAuditEvent(
-      {
-        actor,
-        action: `penalty.${status.toLowerCase()}`,
-        entityType: "PENALTY",
-        entityId: penaltyId,
-        entityLabel: `${penalty.reason} · ${penalty.member.displayName}`,
-        before: { status: "OPEN" },
-        after: { status, ledgerEntryCreated: status === "RESOLVED" && penalty.amountCents !== null },
-        reason,
-      },
-      tx,
-    );
-  }).catch(rethrowUnlessConcurrent);
+      // Same rule as PATCH /api/penalties/[penaltyId]: only a monetary
+      // penalty being RESOLVED (never WAIVED) produces a ledger entry, and
+      // it's auto-approved because only an admin can reach this path.
+      if (status === "RESOLVED" && penalty.amountCents !== null) {
+        await tx.transaction.create({
+          data: {
+            memberId: actor.id,
+            type: "INCOME",
+            category: "Penalty",
+            amount: penalty.amountCents,
+            status: "APPROVED",
+            description: penalty.reason,
+            penaltyId: penalty.id,
+          },
+        });
+      }
 
-  return { ok: true, message: status === "RESOLVED" ? "Penalty marked paid" : "Penalty waived" };
+      await recordAuditEvent(
+        {
+          actor,
+          action: `penalty.${status.toLowerCase()}`,
+          entityType: "PENALTY",
+          entityId: penaltyId,
+          entityLabel: `${penalty.reason} · ${penalty.member.displayName}`,
+          before: { status: "OPEN" },
+          after: {
+            status,
+            ledgerEntryCreated:
+              status === "RESOLVED" && penalty.amountCents !== null,
+          },
+          reason,
+        },
+        tx,
+      );
+    })
+    .catch(rethrowUnlessConcurrent);
+
+  return {
+    ok: true,
+    message: status === "RESOLVED" ? "Penalty marked paid" : "Penalty waived",
+  };
 }
 
 async function completeTask(
@@ -392,7 +478,9 @@ async function completeTask(
   taskId: string,
   reason: string | null,
 ): Promise<MutationOutcome> {
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  const task = await prisma.task.findUnique({
+    where: { ...{ id: taskId }, AND: [await taskVisibilityWhere()] },
+  });
   if (!task) return notFound("Task");
   if (task.status === "DONE") return conflict("This task is already done");
 
@@ -421,7 +509,9 @@ async function extendTask(
   taskId: string,
   reason: string | null,
 ): Promise<MutationOutcome> {
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  const task = await prisma.task.findUnique({
+    where: { ...{ id: taskId }, AND: [await taskVisibilityWhere()] },
+  });
   if (!task) return notFound("Task");
 
   // Extend from today, not from the original due date — a task three weeks
@@ -493,11 +583,25 @@ export async function applyInlineEdit(
     case "members.status":
       return updateMemberStatus(context.actor, input.recordId, input.value);
     case "finance.amount":
-      return updateTransactionAmount(context.actor, input.recordId, input.value, input.reason);
+      return updateTransactionAmount(
+        context.actor,
+        input.recordId,
+        input.value,
+        input.reason,
+      );
     case "finance.category":
-      return updateTransactionCategory(context.actor, input.recordId, input.value);
+      return updateTransactionCategory(
+        context.actor,
+        input.recordId,
+        input.value,
+      );
     case "penalties.amount":
-      return updatePenaltyAmount(context.actor, input.recordId, input.value, input.reason);
+      return updatePenaltyAmount(
+        context.actor,
+        input.recordId,
+        input.value,
+        input.reason,
+      );
     case "penalties.dueAt":
       return updatePenaltyDueAt(context.actor, input.recordId, input.value);
     case "penalties.status":
@@ -523,7 +627,11 @@ export async function applyInlineEdit(
     case "activity.dueAt":
       return updateTaskDueDate(context.actor, input.recordId, input.value);
     default:
-      return { ok: false, status: 400, error: `${input.field} is not editable on ${input.kind}` };
+      return {
+        ok: false,
+        status: 400,
+        error: `${input.field} is not editable on ${input.kind}`,
+      };
   }
 }
 
@@ -533,7 +641,11 @@ async function updateMemberRole(
   value: unknown,
 ): Promise<MutationOutcome> {
   if (value !== "org:admin" && value !== "org:member") {
-    return { ok: false, status: 400, error: "Role must be org:admin or org:member" };
+    return {
+      ok: false,
+      status: 400,
+      error: "Role must be org:admin or org:member",
+    };
   }
 
   const member = await prisma.member.findUnique({ where: { id: memberId } });
@@ -543,10 +655,18 @@ async function updateMemberRole(
   // Leader hands out the Assistant Leader's org:admin. Both checks live
   // here, on the server, not only on the select that renders the options.
   if (member.isLeader) {
-    return { ok: false, status: 400, error: "The Leader's role can't be changed" };
+    return {
+      ok: false,
+      status: 400,
+      error: "The Leader's role can't be changed",
+    };
   }
   if (!context.isLeader) {
-    return { ok: false, status: 403, error: "Only the Leader can change a member's Admin role" };
+    return {
+      ok: false,
+      status: 403,
+      error: "Only the Leader can change a member's Admin role",
+    };
   }
 
   const client = await clerkClient();
@@ -571,7 +691,10 @@ async function updateMemberRole(
     reason: null,
   });
 
-  return { ok: true, message: `${member.displayName} is now ${value === "org:admin" ? "an Admin" : "a Member"}` };
+  return {
+    ok: true,
+    message: `${member.displayName} is now ${value === "org:admin" ? "an Admin" : "a Member"}`,
+  };
 }
 
 async function updateMemberStatus(
@@ -580,14 +703,21 @@ async function updateMemberStatus(
   value: unknown,
 ): Promise<MutationOutcome> {
   if (value !== "ACTIVE" && value !== "INACTIVE") {
-    return { ok: false, status: 400, error: "Status must be ACTIVE or INACTIVE" };
+    return {
+      ok: false,
+      status: 400,
+      error: "Status must be ACTIVE or INACTIVE",
+    };
   }
 
   const member = await prisma.member.findUnique({ where: { id: memberId } });
   if (!member) return notFound("Member");
 
   await prisma.$transaction(async (tx) => {
-    await tx.member.update({ where: { id: memberId }, data: { status: value } });
+    await tx.member.update({
+      where: { id: memberId },
+      data: { status: value },
+    });
     await recordAuditEvent(
       {
         actor,
@@ -603,7 +733,10 @@ async function updateMemberStatus(
     );
   });
 
-  return { ok: true, message: `${member.displayName} set ${value.toLowerCase()}` };
+  return {
+    ok: true,
+    message: `${member.displayName} set ${value.toLowerCase()}`,
+  };
 }
 
 function parseCentavos(value: unknown): number | null {
@@ -626,11 +759,19 @@ async function updateTransactionAmount(
   rawReason: unknown,
 ): Promise<MutationOutcome> {
   const amount = parseCentavos(value);
-  if (amount === null) return { ok: false, status: 400, error: "Amount must be a whole number of centavos" };
+  if (amount === null)
+    return {
+      ok: false,
+      status: 400,
+      error: "Amount must be a whole number of centavos",
+    };
 
   const reason = requireReason(rawReason);
   const existing = await prisma.transaction.findUnique({
-    where: { id: transactionId },
+    where: {
+      ...{ id: transactionId },
+      AND: [await entityVisibilityWhere("transaction")],
+    },
     include: { member: { select: { displayName: true } } },
   });
   if (!existing) return notFound("Transaction");
@@ -640,7 +781,10 @@ async function updateTransactionAmount(
 
   if (existing.status === "PENDING") {
     await prisma.$transaction(async (tx) => {
-      await tx.transaction.update({ where: { id: transactionId }, data: { amount } });
+      await tx.transaction.update({
+        where: { id: transactionId },
+        data: { amount },
+      });
       await recordAuditEvent(
         {
           actor,
@@ -685,7 +829,11 @@ async function updateTransactionAmount(
         entityId: transactionId,
         entityLabel: label,
         before: { amount: existing.amount, status: existing.status },
-        after: { intendedAmount: amount, adjustmentId: adjustment.id, deltaCents: delta },
+        after: {
+          intendedAmount: amount,
+          adjustmentId: adjustment.id,
+          deltaCents: delta,
+        },
         reason,
       },
       tx,
@@ -711,13 +859,19 @@ async function updateTransactionCategory(
   const category = value.trim();
 
   const existing = await prisma.transaction.findUnique({
-    where: { id: transactionId },
+    where: {
+      ...{ id: transactionId },
+      AND: [await entityVisibilityWhere("transaction")],
+    },
     include: { member: { select: { displayName: true } } },
   });
   if (!existing) return notFound("Transaction");
 
   await prisma.$transaction(async (tx) => {
-    await tx.transaction.update({ where: { id: transactionId }, data: { category } });
+    await tx.transaction.update({
+      where: { id: transactionId },
+      data: { category },
+    });
     await recordAuditEvent(
       {
         actor,
@@ -744,12 +898,19 @@ async function updatePenaltyAmount(
 ): Promise<MutationOutcome> {
   const amount = value === null ? null : parseCentavos(value);
   if (value !== null && amount === null) {
-    return { ok: false, status: 400, error: "Amount must be a whole number of centavos" };
+    return {
+      ok: false,
+      status: 400,
+      error: "Amount must be a whole number of centavos",
+    };
   }
 
   const reason = requireReason(rawReason);
   const penalty = await prisma.penalty.findUnique({
-    where: { id: penaltyId },
+    where: {
+      ...{ id: penaltyId },
+      AND: [await entityVisibilityWhere("penalty")],
+    },
     include: { member: { select: { displayName: true } } },
   });
   if (!penalty) return notFound("Penalty");
@@ -760,7 +921,10 @@ async function updatePenaltyAmount(
   }
 
   await prisma.$transaction(async (tx) => {
-    await tx.penalty.update({ where: { id: penaltyId }, data: { amountCents: amount } });
+    await tx.penalty.update({
+      where: { id: penaltyId },
+      data: { amountCents: amount },
+    });
     await recordAuditEvent(
       {
         actor,
@@ -776,7 +940,11 @@ async function updatePenaltyAmount(
     );
   });
 
-  return { ok: true, message: amount === null ? "Amount cleared" : `Amount set to ${formatPHP(amount)}` };
+  return {
+    ok: true,
+    message:
+      amount === null ? "Amount cleared" : `Amount set to ${formatPHP(amount)}`,
+  };
 }
 
 function parseDate(value: unknown): Date | null {
@@ -791,10 +959,18 @@ async function updatePenaltyDueAt(
   value: unknown,
 ): Promise<MutationOutcome> {
   const dueAt = parseDate(value);
-  if (!dueAt) return { ok: false, status: 400, error: "Due date must be an ISO date string" };
+  if (!dueAt)
+    return {
+      ok: false,
+      status: 400,
+      error: "Due date must be an ISO date string",
+    };
 
   const penalty = await prisma.penalty.findUnique({
-    where: { id: penaltyId },
+    where: {
+      ...{ id: penaltyId },
+      AND: [await entityVisibilityWhere("penalty")],
+    },
     include: { member: { select: { displayName: true } } },
   });
   if (!penalty) return notFound("Penalty");
@@ -825,14 +1001,26 @@ async function updateProjectPriority(
   value: unknown,
 ): Promise<MutationOutcome> {
   if (value !== "LOW" && value !== "MEDIUM" && value !== "HIGH") {
-    return { ok: false, status: 400, error: "Priority must be LOW, MEDIUM or HIGH" };
+    return {
+      ok: false,
+      status: 400,
+      error: "Priority must be LOW, MEDIUM or HIGH",
+    };
   }
 
-  const project = await prisma.project.findUnique({ where: { id: projectId } });
+  const project = await prisma.project.findUnique({
+    where: {
+      ...{ id: projectId },
+      AND: [await entityVisibilityWhere("project")],
+    },
+  });
   if (!project) return notFound("Project");
 
   await prisma.$transaction(async (tx) => {
-    await tx.project.update({ where: { id: projectId }, data: { priority: value } });
+    await tx.project.update({
+      where: { id: projectId },
+      data: { priority: value },
+    });
     await recordAuditEvent(
       {
         actor,
@@ -848,7 +1036,10 @@ async function updateProjectPriority(
     );
   });
 
-  return { ok: true, message: `${project.name} set to ${value.toLowerCase()} priority` };
+  return {
+    ok: true,
+    message: `${project.name} set to ${value.toLowerCase()} priority`,
+  };
 }
 
 async function updateTaskStatus(
@@ -857,10 +1048,16 @@ async function updateTaskStatus(
   value: unknown,
 ): Promise<MutationOutcome> {
   if (value !== "TODO" && value !== "IN_PROGRESS" && value !== "DONE") {
-    return { ok: false, status: 400, error: "Status must be TODO, IN_PROGRESS or DONE" };
+    return {
+      ok: false,
+      status: 400,
+      error: "Status must be TODO, IN_PROGRESS or DONE",
+    };
   }
 
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  const task = await prisma.task.findUnique({
+    where: { ...{ id: taskId }, AND: [await taskVisibilityWhere()] },
+  });
   if (!task) return notFound("Task");
 
   await prisma.$transaction(async (tx) => {
@@ -889,9 +1086,16 @@ async function updateTaskDueDate(
   value: unknown,
 ): Promise<MutationOutcome> {
   const dueDate = parseDate(value);
-  if (!dueDate) return { ok: false, status: 400, error: "Due date must be an ISO date string" };
+  if (!dueDate)
+    return {
+      ok: false,
+      status: 400,
+      error: "Due date must be an ISO date string",
+    };
 
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  const task = await prisma.task.findUnique({
+    where: { ...{ id: taskId }, AND: [await taskVisibilityWhere()] },
+  });
   if (!task) return notFound("Task");
 
   await prisma.$transaction(async (tx) => {
@@ -924,17 +1128,29 @@ export async function reassignTask(
   memberIds: unknown,
   rawReason: unknown,
 ): Promise<MutationOutcome> {
-  if (!Array.isArray(memberIds) || memberIds.some((id) => typeof id !== "string")) {
-    return { ok: false, status: 400, error: "memberIds must be an array of member ids" };
+  if (
+    !Array.isArray(memberIds) ||
+    memberIds.some((id) => typeof id !== "string")
+  ) {
+    return {
+      ok: false,
+      status: 400,
+      error: "memberIds must be an array of member ids",
+    };
   }
   const reason = requireReason(rawReason);
 
   const [task, members] = await Promise.all([
     prisma.task.findUnique({
-      where: { id: taskId },
-      include: { assignees: { include: { member: { select: { displayName: true } } } } },
+      where: { ...{ id: taskId }, AND: [await taskVisibilityWhere()] },
+      include: {
+        assignees: { include: { member: { select: { displayName: true } } } },
+      },
     }),
-    prisma.member.findMany({ where: { id: { in: memberIds as string[] } }, select: { id: true, displayName: true } }),
+    prisma.member.findMany({
+      where: { id: { in: memberIds as string[] } },
+      select: { id: true, displayName: true },
+    }),
   ]);
   if (!task) return notFound("Task");
   if (members.length !== memberIds.length) {
@@ -944,10 +1160,16 @@ export async function reassignTask(
   const before = task.assignees.map((a) => a.member.displayName);
 
   await prisma.$transaction(async (tx) => {
-    await tx.taskAssignee.deleteMany({ where: { taskId } });
+    await tx.taskAssignee.deleteMany({
+      where: {
+        taskId,
+        memberId: { notIn: members.map((member) => member.id) },
+      },
+    });
     if (members.length > 0) {
       await tx.taskAssignee.createMany({
         data: members.map((member) => ({ taskId, memberId: member.id })),
+        skipDuplicates: true,
       });
     }
     await recordAuditEvent(
@@ -965,7 +1187,10 @@ export async function reassignTask(
     );
   });
 
-  return { ok: true, message: `Reassigned to ${members.map((m) => m.displayName).join(", ") || "no one"}` };
+  return {
+    ok: true,
+    message: `Reassigned to ${members.map((m) => m.displayName).join(", ") || "no one"}`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -985,7 +1210,10 @@ export const BULK_ACTIONS = [
 export type BulkAction = (typeof BULK_ACTIONS)[number];
 
 export function isBulkAction(value: unknown): value is BulkAction {
-  return typeof value === "string" && (BULK_ACTIONS as readonly string[]).includes(value);
+  return (
+    typeof value === "string" &&
+    (BULK_ACTIONS as readonly string[]).includes(value)
+  );
 }
 
 export interface BulkResult {
@@ -1019,16 +1247,31 @@ export async function applyBulkAction(
           outcome = await updateMemberStatus(context.actor, id, value);
           break;
         case "penalties.waive":
-          outcome = await decidePenalty(context.actor, id, "WAIVED", requireReason(rawReason));
+          outcome = await decidePenalty(
+            context.actor,
+            id,
+            "WAIVED",
+            requireReason(rawReason),
+          );
           break;
         case "penalties.resolve":
           outcome = await decidePenalty(context.actor, id, "RESOLVED", null);
           break;
         case "finance.approve":
-          outcome = await decideTransaction(context.actor, id, "APPROVED", null);
+          outcome = await decideTransaction(
+            context.actor,
+            id,
+            "APPROVED",
+            null,
+          );
           break;
         case "finance.reject":
-          outcome = await decideTransaction(context.actor, id, "REJECTED", null);
+          outcome = await decideTransaction(
+            context.actor,
+            id,
+            "REJECTED",
+            null,
+          );
           break;
         case "projects.archive":
           outcome = await setProjectStatus(

@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { get } from "@vercel/blob";
@@ -14,22 +16,36 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ transactionId: string }> },
 ) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { transactionId } = await params;
-  const transaction = await prisma.transaction.findUnique({ where: { id: transactionId } });
+  const transaction = await prisma.transaction.findUnique({
+    where: {
+      ...{ id: transactionId },
+      AND: [await entityVisibilityWhere("transaction")],
+    },
+  });
 
   if (!transaction?.receiptPath) {
-    return NextResponse.json({ error: "This transaction has no receipt" }, { status: 404 });
+    return NextResponse.json(
+      { error: "This transaction has no receipt" },
+      { status: 404 },
+    );
   }
 
   const blob = await get(transaction.receiptPath, { access: "private" });
 
   if (!blob?.stream) {
-    return NextResponse.json({ error: "Receipt not found in storage" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Receipt not found in storage" },
+      { status: 404 },
+    );
   }
 
   const filename = transaction.receiptPath.split("/").pop() ?? "receipt";

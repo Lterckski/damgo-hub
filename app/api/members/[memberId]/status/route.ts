@@ -1,3 +1,4 @@
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
@@ -10,6 +11,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ memberId: string }> },
 ) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const isAdmin = await isCurrentMemberAdmin();
   if (!isAdmin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

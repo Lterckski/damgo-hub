@@ -1,3 +1,6 @@
+import { activityVisibilityWhere } from "@/lib/hub/context";
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { taskVisibilityWhere } from "@/lib/hub/context";
 import { getOrgSettings } from "@/lib/org-settings";
 import { penaltyDueAt } from "@/lib/admin/queue";
 import { prisma } from "@/lib/prisma";
@@ -45,39 +48,86 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * for inclusion is deliberately high: something is overdue, owed, or
  * starting within a day.
  */
-export async function getNeedsYouToday(memberId: string): Promise<UrgentItem[]> {
+export async function getNeedsYouToday(
+  memberId: string,
+): Promise<UrgentItem[]> {
   const now = new Date();
   const settings = await getOrgSettings();
   const in24h = new Date(now.getTime() + DAY_MS);
 
-  const [overdueTasks, openPenalties, soonMeetings, myPendingProposals] = await Promise.all([
-    prisma.task.findMany({
-      where: { assignees: { some: { memberId } }, status: { not: "DONE" }, dueDate: { lt: now } },
-      select: { id: true, title: true, dueDate: true, project: { select: { name: true } } },
-      orderBy: { dueDate: "asc" },
-    }),
-    prisma.penalty.findMany({
-      where: { memberId, status: "OPEN" },
-      select: { id: true, reason: true, amountCents: true, dueAt: true, createdAt: true },
-      orderBy: { createdAt: "asc" },
-    }),
-    prisma.meeting.findMany({
-      where: {
-        scheduledAt: { gte: now, lte: in24h },
-        participants: { some: { memberId } },
-      },
-      select: { id: true, title: true, scheduledAt: true, meetingUrl: true, location: true },
-      orderBy: { scheduledAt: "asc" },
-    }),
-    // Agenda proposals this member submitted that an admin hasn't decided.
-    // "Awaiting your reply" in the other direction — they're waiting on
-    // someone else — so it's informational, never red.
-    prisma.agendaProposal.findMany({
-      where: { proposedById: memberId, status: "PENDING" },
-      select: { id: true, text: true, createdAt: true, meeting: { select: { title: true } } },
-      orderBy: { createdAt: "asc" },
-    }),
-  ]);
+  const [overdueTasks, openPenalties, soonMeetings, myPendingProposals] =
+    await Promise.all([
+      prisma.task.findMany({
+        where: {
+          AND: [
+            await taskVisibilityWhere(),
+            {
+              OR: [
+                { visibilityScope: "org" },
+                { visibilityScope: "project" },
+                { assignees: { some: { memberId } } },
+              ],
+              status: { not: "DONE" },
+              dueDate: { lt: now },
+            },
+          ],
+        },
+        select: {
+          id: true,
+          title: true,
+          dueDate: true,
+          project: {
+            where: await entityVisibilityWhere("project"),
+            select: { name: true },
+          },
+        },
+        orderBy: { dueDate: "asc" },
+      }),
+      prisma.penalty.findMany({
+        where: {
+          ...{ memberId, status: "OPEN" },
+          AND: [await entityVisibilityWhere("penalty")],
+        },
+        select: {
+          id: true,
+          reason: true,
+          amountCents: true,
+          dueAt: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.meeting.findMany({
+        where: {
+          ...{
+            scheduledAt: { gte: now, lte: in24h },
+            participants: { some: { memberId } },
+          },
+          AND: [await entityVisibilityWhere("meeting")],
+        },
+        select: {
+          id: true,
+          title: true,
+          scheduledAt: true,
+          meetingUrl: true,
+          location: true,
+        },
+        orderBy: { scheduledAt: "asc" },
+      }),
+      // Agenda proposals this member submitted that an admin hasn't decided.
+      // "Awaiting your reply" in the other direction — they're waiting on
+      // someone else — so it's informational, never red.
+      prisma.agendaProposal.findMany({
+        where: { proposedById: memberId, status: "PENDING" },
+        select: {
+          id: true,
+          text: true,
+          createdAt: true,
+          meeting: { select: { title: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
 
   const items: UrgentItem[] = [];
 
@@ -168,14 +218,29 @@ export async function getMyTasks(memberId: string): Promise<MyTaskRow[]> {
   const now = new Date();
 
   const tasks = await prisma.task.findMany({
-    where: { assignees: { some: { memberId } }, status: { not: "DONE" } },
+    where: {
+      AND: [
+        await taskVisibilityWhere(),
+        {
+          OR: [
+            { visibilityScope: "org" },
+            { visibilityScope: "project" },
+            { assignees: { some: { memberId } } },
+          ],
+          status: { not: "DONE" },
+        },
+      ],
+    },
     select: {
       id: true,
       title: true,
       status: true,
       priority: true,
       dueDate: true,
-      project: { select: { name: true } },
+      project: {
+        where: await entityVisibilityWhere("project"),
+        select: { name: true },
+      },
       createdBy: { select: { displayName: true } },
     },
     orderBy: { dueDate: "asc" },
@@ -205,13 +270,18 @@ export async function getMyTasks(memberId: string): Promise<MyTaskRow[]> {
  * shared, so "my" upcoming showed everyone's — this marks each row with
  * `isMine` and the caller decides. Nothing is silently team-wide.
  */
-export async function getUpcomingTimeline(memberId: string): Promise<TimelineItem[]> {
+export async function getUpcomingTimeline(
+  memberId: string,
+): Promise<TimelineItem[]> {
   const now = new Date();
   const weekOut = teamDayStartPlus(8, now);
 
   const [meetings, tasks, events, hackathons, dues] = await Promise.all([
     prisma.meeting.findMany({
-      where: { scheduledAt: { gte: now, lt: weekOut } },
+      where: {
+        ...{ scheduledAt: { gte: now, lt: weekOut } },
+        AND: [await entityVisibilityWhere("meeting")],
+      },
       select: {
         id: true,
         title: true,
@@ -223,12 +293,20 @@ export async function getUpcomingTimeline(memberId: string): Promise<TimelineIte
       orderBy: { scheduledAt: "asc" },
     }),
     prisma.task.findMany({
-      where: { dueDate: { gte: now, lt: weekOut }, status: { not: "DONE" } },
+      where: {
+        AND: [
+          await taskVisibilityWhere(),
+          { dueDate: { gte: now, lt: weekOut }, status: { not: "DONE" } },
+        ],
+      },
       select: {
         id: true,
         title: true,
         dueDate: true,
-        project: { select: { name: true } },
+        project: {
+          where: await entityVisibilityWhere("project"),
+          select: { name: true },
+        },
         assignees: { where: { memberId }, select: { id: true } },
       },
       orderBy: { dueDate: "asc" },
@@ -254,8 +332,16 @@ export async function getUpcomingTimeline(memberId: string): Promise<TimelineIte
       },
     }),
     prisma.duesAssessment.findMany({
-      where: { memberId, status: "UNPAID", period: { periodEnd: { gte: now, lt: weekOut } } },
-      select: { id: true, amountCents: true, period: { select: { label: true, periodEnd: true } } },
+      where: {
+        memberId,
+        status: "UNPAID",
+        period: { periodEnd: { gte: now, lt: weekOut } },
+      },
+      select: {
+        id: true,
+        amountCents: true,
+        period: { select: { label: true, periodEnd: true } },
+      },
     }),
   ]);
 
@@ -289,7 +375,10 @@ export async function getUpcomingTimeline(memberId: string): Promise<TimelineIte
     })),
     ...hackathons.flatMap((hackathon) => {
       const rows: TimelineItem[] = [];
-      if (hackathon.registrationDeadline && hackathon.registrationDeadline >= now) {
+      if (
+        hackathon.registrationDeadline &&
+        hackathon.registrationDeadline >= now
+      ) {
         rows.push({
           id: `hackathon-reg:${hackathon.id}`,
           kind: "HACKATHON",
@@ -331,12 +420,14 @@ export async function getUpcomingTimeline(memberId: string): Promise<TimelineIte
 // Row 4 — My Penalties
 // ---------------------------------------------------------------------------
 
-export async function getMyPenalties(memberId: string): Promise<MyPenaltyRow[]> {
+export async function getMyPenalties(
+  memberId: string,
+): Promise<MyPenaltyRow[]> {
   const now = new Date();
   const settings = await getOrgSettings();
 
   const penalties = await prisma.penalty.findMany({
-    where: { memberId },
+    where: { ...{ memberId }, AND: [await entityVisibilityWhere("penalty")] },
     select: {
       id: true,
       reason: true,
@@ -381,33 +472,46 @@ export async function getMyMoney(memberId: string): Promise<MyMoney> {
   const monthStart = teamMonthStart(now);
   const monthEnd = teamNextMonthStart(now);
 
-  const [openPenalties, unpaidDues, pendingReimbursements, contributions] = await Promise.all([
-    prisma.penalty.findMany({
-      where: { memberId, status: "OPEN" },
-      select: { amountCents: true },
-    }),
-    prisma.duesAssessment.findMany({
-      where: { memberId, status: "UNPAID" },
-      select: { amountCents: true },
-    }),
-    // An expense this member submitted that hasn't been approved yet is
-    // money they are out of pocket for — "you're owed".
-    prisma.transaction.findMany({
-      where: { memberId, type: "EXPENSE", status: "PENDING" },
-      select: { amount: true },
-    }),
-    prisma.transaction.findMany({
-      where: {
-        memberId,
-        type: "INCOME",
-        status: "APPROVED",
-        createdAt: { gte: monthStart, lt: monthEnd },
-      },
-      select: { amount: true },
-    }),
-  ]);
+  const [openPenalties, unpaidDues, pendingReimbursements, contributions] =
+    await Promise.all([
+      prisma.penalty.findMany({
+        where: {
+          ...{ memberId, status: "OPEN" },
+          AND: [await entityVisibilityWhere("penalty")],
+        },
+        select: { amountCents: true },
+      }),
+      prisma.duesAssessment.findMany({
+        where: { memberId, status: "UNPAID" },
+        select: { amountCents: true },
+      }),
+      // An expense this member submitted that hasn't been approved yet is
+      // money they are out of pocket for — "you're owed".
+      prisma.transaction.findMany({
+        where: {
+          ...{ memberId, type: "EXPENSE", status: "PENDING" },
+          AND: [await entityVisibilityWhere("transaction")],
+        },
+        select: { amount: true },
+      }),
+      prisma.transaction.findMany({
+        where: {
+          ...{
+            memberId,
+            type: "INCOME",
+            status: "APPROVED",
+            createdAt: { gte: monthStart, lt: monthEnd },
+          },
+          AND: [await entityVisibilityWhere("transaction")],
+        },
+        select: { amount: true },
+      }),
+    ]);
 
-  const penaltiesCents = openPenalties.reduce((sum, p) => sum + (p.amountCents ?? 0), 0);
+  const penaltiesCents = openPenalties.reduce(
+    (sum, p) => sum + (p.amountCents ?? 0),
+    0,
+  );
   const duesCents = unpaidDues.reduce((sum, d) => sum + d.amountCents, 0);
 
   return {
@@ -430,8 +534,11 @@ export async function getMyProjects(memberId: string): Promise<MyProjectRow[]> {
 
   const projects = await prisma.project.findMany({
     where: {
-      status: { in: ["PROPOSED", "ACTIVE"] },
-      OR: [{ ownerId: memberId }, { members: { some: { memberId } } }],
+      ...{
+        status: { in: ["PROPOSED", "ACTIVE"] },
+        OR: [{ ownerId: memberId }, { members: { some: { memberId } } }],
+      },
+      AND: [await entityVisibilityWhere("project")],
     },
     select: {
       id: true,
@@ -439,7 +546,10 @@ export async function getMyProjects(memberId: string): Promise<MyProjectRow[]> {
       status: true,
       ownerId: true,
       blockedReason: true,
-      tasks: { select: { id: true, status: true } },
+      tasks: {
+        where: await taskVisibilityWhere(),
+        select: { id: true, status: true },
+      },
       milestones: {
         where: { completedAt: null },
         orderBy: [{ dueAt: "asc" }, { position: "asc" }],
@@ -451,7 +561,9 @@ export async function getMyProjects(memberId: string): Promise<MyProjectRow[]> {
   });
 
   return projects.map((project) => {
-    const completed = project.tasks.filter((task) => task.status === "DONE").length;
+    const completed = project.tasks.filter(
+      (task) => task.status === "DONE",
+    ).length;
     const milestone = project.milestones[0] ?? null;
 
     return {
@@ -484,9 +596,17 @@ export async function getMyProjects(memberId: string): Promise<MyProjectRow[]> {
  * `audienceMemberId` index is what makes this a different query rather
  * than a different rendering.
  */
-export async function getMyActivity(memberId: string, limit = 12): Promise<ActivityRow[]> {
+export async function getMyActivity(
+  memberId: string,
+  limit = 12,
+): Promise<ActivityRow[]> {
   const events = await prisma.activityEvent.findMany({
-    where: { OR: [{ audienceMemberId: memberId }, { actorId: memberId }] },
+    where: {
+      AND: [
+        await activityVisibilityWhere(),
+        { OR: [{ audienceMemberId: memberId }, { actorId: memberId }] },
+      ],
+    },
     orderBy: { createdAt: "desc" },
     take: limit,
   });

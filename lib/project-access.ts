@@ -1,3 +1,4 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
 import { prisma } from "@/lib/prisma";
 import type { Member } from "@/app/generated/prisma/client";
 
@@ -14,7 +15,10 @@ export async function getProjectAccess(
   member: Member,
 ): Promise<ProjectAccessLevel | null> {
   const project = await prisma.project.findUnique({
-    where: { id: projectId },
+    where: {
+      ...{ id: projectId },
+      AND: [await entityVisibilityWhere("project")],
+    },
     select: {
       ownerId: true,
       members: { where: { memberId: member.id }, select: { id: true } },

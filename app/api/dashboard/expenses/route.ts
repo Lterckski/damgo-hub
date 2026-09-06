@@ -1,3 +1,4 @@
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 
 import { pesosToCentavos } from "@/lib/currency";
@@ -28,19 +29,32 @@ import { prisma } from "@/lib/prisma";
  * join request — not a mutation of the ledger.
  */
 export async function POST(request: Request) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const guard = await requireMember();
   if (!guard.ok) return guard.response;
 
   const body: unknown = await request.json().catch(() => null);
   if (typeof body !== "object" || body === null) {
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 },
+    );
   }
 
-  const { amountPesos, category, description } = body as Record<string, unknown>;
+  const { amountPesos, category, description } = body as Record<
+    string,
+    unknown
+  >;
 
-  const amount = typeof amountPesos === "number" ? amountPesos : Number(amountPesos);
+  const amount =
+    typeof amountPesos === "number" ? amountPesos : Number(amountPesos);
   if (!Number.isFinite(amount) || amount <= 0) {
-    return NextResponse.json({ error: "Enter an amount greater than zero" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Enter an amount greater than zero" },
+      { status: 400 },
+    );
   }
   if (typeof category !== "string" || category.trim() === "") {
     return NextResponse.json({ error: "Pick a category" }, { status: 400 });
@@ -50,7 +64,10 @@ export async function POST(request: Request) {
   // live list rather than a hardcoded one that would drift.
   const settings = await getOrgSettings();
   if (!settings.financeCategories.includes(category.trim())) {
-    return NextResponse.json({ error: "That isn't a valid category" }, { status: 400 });
+    return NextResponse.json(
+      { error: "That isn't a valid category" },
+      { status: 400 },
+    );
   }
 
   const transaction = await prisma.transaction.create({
@@ -59,7 +76,10 @@ export async function POST(request: Request) {
       type: "EXPENSE",
       category: category.trim(),
       amount: pesosToCentavos(amount),
-      description: typeof description === "string" && description.trim() !== "" ? description.trim() : null,
+      description:
+        typeof description === "string" && description.trim() !== ""
+          ? description.trim()
+          : null,
       status: "PENDING",
     },
     select: { id: true },

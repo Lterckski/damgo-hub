@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
@@ -8,7 +10,13 @@ import { prisma } from "@/lib/prisma";
 // propose an item; always created PENDING. Client-supplied status/position
 // are ignored entirely (not even read from the body), per this spec's
 // explicit "ignores/rejects client-supplied status or position fields."
-export async function POST(request: Request, { params }: { params: Promise<{ meetingId: string }> }) {
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ meetingId: string }> },
+) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -18,14 +26,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ mee
   const member = await getCurrentMember();
 
   const meeting = await prisma.meeting.findUnique({
-    where: { id: meetingId },
+    where: {
+      ...{ id: meetingId },
+      AND: [await entityVisibilityWhere("meeting")],
+    },
     select: { participants: { select: { memberId: true } } },
   });
   if (!meeting) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
   if (!meeting.participants.some((p) => p.memberId === member.id)) {
-    return NextResponse.json({ error: "Only participants can propose agenda items" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Only participants can propose agenda items" },
+      { status: 403 },
+    );
   }
 
   const body = await request.json().catch(() => null);

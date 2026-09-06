@@ -111,12 +111,13 @@ model ProjectLink {
 // snapshot, so nothing can query them by date. This is the queryable half;
 // the board stays the place you arrange them visually.
 model ProjectMilestone {
-  id        String  @id @default(cuid())
-  projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  blockedReason String?
+  id            String  @id @default(cuid())
+  projectId     String
+  project       Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  title String
-  dueAt DateTime
+  title       String
+  dueAt       DateTime
   /// Null while outstanding. The dashboard's "next milestone" is the
   /// earliest row where this is null.
   completedAt DateTime?

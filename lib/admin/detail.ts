@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { taskVisibilityWhere } from "@/lib/hub/context";
 import { prisma } from "@/lib/prisma";
 import { listOrgRoles } from "@/lib/organization-roles";
 import { getOrgSettings } from "@/lib/org-settings";
@@ -134,7 +136,11 @@ export type RecordDetail =
   | { kind: "docs"; doc: DocDetail };
 
 function formatDate(date: Date): string {
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 /** Audit entries touching one entity — the drawer's "what happened to this" list. */
@@ -148,7 +154,9 @@ async function entityHistory(entityId: string): Promise<RelatedItem[]> {
   return entries.map((entry) => ({
     id: entry.id,
     label: `${entry.actorName} · ${entry.action}`,
-    meta: [formatDate(entry.createdAt), entry.reason].filter(Boolean).join(" — "),
+    meta: [formatDate(entry.createdAt), entry.reason]
+      .filter(Boolean)
+      .join(" — "),
   }));
 }
 
@@ -184,27 +192,49 @@ async function getMemberDetail(memberId: string): Promise<RecordDetail | null> {
   });
   if (!member) return null;
 
-  const [orgRoles, taskLinks, penalties, contributions, participations, meetingsHeld, history] =
-    await Promise.all([
-      listOrgRoles(),
-      prisma.taskAssignee.findMany({
-        where: { memberId },
-        include: { task: { select: { id: true, title: true, status: true, dueDate: true } } },
-        take: 100,
-      }),
-      prisma.penalty.findMany({ where: { memberId }, orderBy: { createdAt: "desc" }, take: 50 }),
-      prisma.transaction.findMany({
-        where: { memberId, status: "APPROVED" },
-        orderBy: { createdAt: "desc" },
-        take: 50,
-      }),
-      prisma.meetingParticipant.count({ where: { memberId, meeting: { scheduledAt: { lt: now } } } }),
-      prisma.meeting.count({ where: { scheduledAt: { lt: now } } }),
-      entityHistory(memberId),
-    ]);
+  const [
+    orgRoles,
+    taskLinks,
+    penalties,
+    contributions,
+    participations,
+    meetingsHeld,
+    history,
+  ] = await Promise.all([
+    listOrgRoles(),
+    prisma.taskAssignee.findMany({
+      where: { memberId, task: await taskVisibilityWhere() },
+      include: {
+        task: {
+          select: { id: true, title: true, status: true, dueDate: true },
+        },
+      },
+      take: 100,
+    }),
+    prisma.penalty.findMany({
+      where: { ...{ memberId }, AND: [await entityVisibilityWhere("penalty")] },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    }),
+    prisma.transaction.findMany({
+      where: {
+        ...{ memberId, status: "APPROVED" },
+        AND: [await entityVisibilityWhere("transaction")],
+      },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    }),
+    prisma.meetingParticipant.count({
+      where: { memberId, meeting: { scheduledAt: { lt: now } } },
+    }),
+    prisma.meeting.count({ where: { scheduledAt: { lt: now } } }),
+    entityHistory(memberId),
+  ]);
 
   const openTasks = taskLinks.filter((link) => link.task.status !== "DONE");
-  const openPenalties = penalties.filter((penalty) => penalty.status === "OPEN");
+  const openPenalties = penalties.filter(
+    (penalty) => penalty.status === "OPEN",
+  );
 
   return {
     kind: "members",
@@ -225,7 +255,10 @@ async function getMemberDetail(memberId: string): Promise<RecordDetail | null> {
         openTasks: openTasks.length,
         completedTasks: taskLinks.length - openTasks.length,
         openPenalties: openPenalties.length,
-        penaltyOwedCents: openPenalties.reduce((sum, p) => sum + (p.amountCents ?? 0), 0),
+        penaltyOwedCents: openPenalties.reduce(
+          (sum, p) => sum + (p.amountCents ?? 0),
+          0,
+        ),
         contributionsCents: contributions
           .filter((t) => t.type === "INCOME")
           .reduce((sum, t) => sum + t.amount, 0),
@@ -252,7 +285,8 @@ async function getMemberDetail(memberId: string): Promise<RecordDetail | null> {
         label: penalty.reason,
         meta: `${penalty.status.toLowerCase()} · due ${formatDate(penaltyDueAt(penalty, settings.penaltyDueDays))}`,
         tone:
-          penalty.status === "OPEN" && penaltyDueAt(penalty, settings.penaltyDueDays) <= now
+          penalty.status === "OPEN" &&
+          penaltyDueAt(penalty, settings.penaltyDueDays) <= now
             ? "critical"
             : penalty.status === "OPEN"
               ? "warning"
@@ -268,9 +302,14 @@ async function getMemberDetail(memberId: string): Promise<RecordDetail | null> {
   };
 }
 
-async function getTransactionDetail(transactionId: string): Promise<RecordDetail | null> {
+async function getTransactionDetail(
+  transactionId: string,
+): Promise<RecordDetail | null> {
   const transaction = await prisma.transaction.findUnique({
-    where: { id: transactionId },
+    where: {
+      ...{ id: transactionId },
+      AND: [await entityVisibilityWhere("transaction")],
+    },
     include: {
       member: { select: { displayName: true } },
       penalty: { select: { reason: true } },
@@ -297,10 +336,15 @@ async function getTransactionDetail(transactionId: string): Promise<RecordDetail
   };
 }
 
-async function getPenaltyDetail(penaltyId: string): Promise<RecordDetail | null> {
+async function getPenaltyDetail(
+  penaltyId: string,
+): Promise<RecordDetail | null> {
   const settings = await getOrgSettings();
   const penalty = await prisma.penalty.findUnique({
-    where: { id: penaltyId },
+    where: {
+      ...{ id: penaltyId },
+      AND: [await entityVisibilityWhere("penalty")],
+    },
     include: {
       member: { select: { displayName: true } },
       issuedBy: { select: { displayName: true } },
@@ -332,13 +376,22 @@ async function getPenaltyDetail(penaltyId: string): Promise<RecordDetail | null>
   };
 }
 
-async function getProjectDetail(projectId: string): Promise<RecordDetail | null> {
+async function getProjectDetail(
+  projectId: string,
+): Promise<RecordDetail | null> {
   const project = await prisma.project.findUnique({
-    where: { id: projectId },
+    where: {
+      ...{ id: projectId },
+      AND: [await entityVisibilityWhere("project")],
+    },
     include: {
       owner: { select: { displayName: true } },
       members: { include: { member: { select: { displayName: true } } } },
-      tasks: { select: { id: true, title: true, status: true, dueDate: true }, take: 25 },
+      tasks: {
+        where: await taskVisibilityWhere(),
+        select: { id: true, title: true, status: true, dueDate: true },
+        take: 25,
+      },
     },
   });
   if (!project) return null;
@@ -370,7 +423,8 @@ async function getProjectDetail(projectId: string): Promise<RecordDetail | null>
         id: task.id,
         label: task.title,
         meta: `${task.status.replace("_", " ").toLowerCase()} · due ${formatDate(task.dueDate)}`,
-        tone: task.status !== "DONE" && task.dueDate < now ? "critical" : "default",
+        tone:
+          task.status !== "DONE" && task.dueDate < now ? "critical" : "default",
       })),
       history: await entityHistory(projectId),
     },
@@ -379,10 +433,17 @@ async function getProjectDetail(projectId: string): Promise<RecordDetail | null>
 
 async function getTaskDetail(taskId: string): Promise<RecordDetail | null> {
   const task = await prisma.task.findUnique({
-    where: { id: taskId },
+    where: { ...{ id: taskId }, AND: [await taskVisibilityWhere()] },
     include: {
-      assignees: { include: { member: { select: { id: true, displayName: true, avatarUrl: true } } } },
-      project: { select: { name: true } },
+      assignees: {
+        include: {
+          member: { select: { id: true, displayName: true, avatarUrl: true } },
+        },
+      },
+      project: {
+        where: await entityVisibilityWhere("project"),
+        select: { name: true },
+      },
       createdBy: { select: { displayName: true } },
     },
   });
@@ -414,10 +475,13 @@ async function getTaskDetail(taskId: string): Promise<RecordDetail | null> {
 
 async function getDocDetail(docId: string): Promise<RecordDetail | null> {
   const doc = await prisma.doc.findUnique({
-    where: { id: docId },
+    where: { ...{ id: docId }, AND: [await entityVisibilityWhere("document")] },
     include: {
       author: { select: { displayName: true } },
-      project: { select: { name: true } },
+      project: {
+        where: await entityVisibilityWhere("project"),
+        select: { name: true },
+      },
     },
   });
   if (!doc) return null;

@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
@@ -12,6 +14,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ transactionId: string }> },
 ) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const isAdmin = await isCurrentMemberAdmin();
   if (!isAdmin) {
     return NextResponse.json(
@@ -31,10 +36,18 @@ export async function PATCH(
   }
 
   const { transactionId } = await params;
-  const existing = await prisma.transaction.findUnique({ where: { id: transactionId } });
+  const existing = await prisma.transaction.findUnique({
+    where: {
+      ...{ id: transactionId },
+      AND: [await entityVisibilityWhere("transaction")],
+    },
+  });
 
   if (!existing) {
-    return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Transaction not found" },
+      { status: 404 },
+    );
   }
 
   if (existing.status !== "PENDING") {

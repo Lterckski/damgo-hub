@@ -1,3 +1,4 @@
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { isClerkAPIResponseError } from "@clerk/nextjs/errors";
@@ -21,9 +22,18 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ memberId: string }> },
 ) {
-  const [actingAdmin, isAdmin] = await Promise.all([getCurrentMember(), isCurrentMemberAdmin()]);
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
+  const [actingAdmin, isAdmin] = await Promise.all([
+    getCurrentMember(),
+    isCurrentMemberAdmin(),
+  ]);
   if (!isAdmin) {
-    return NextResponse.json({ error: "Only Admins can delete a member" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Only Admins can delete a member" },
+      { status: 403 },
+    );
   }
 
   const { memberId } = await params;
@@ -33,10 +43,16 @@ export async function DELETE(
     return NextResponse.json({ error: "Member not found" }, { status: 404 });
   }
   if (target.isLeader) {
-    return NextResponse.json({ error: "The Leader can't be deleted" }, { status: 400 });
+    return NextResponse.json(
+      { error: "The Leader can't be deleted" },
+      { status: 400 },
+    );
   }
   if (target.id === actingAdmin.id) {
-    return NextResponse.json({ error: "You can't delete yourself" }, { status: 400 });
+    return NextResponse.json(
+      { error: "You can't delete yourself" },
+      { status: 400 },
+    );
   }
 
   // Remove Clerk org access first — this is the guarantee that actually
@@ -54,7 +70,9 @@ export async function DELETE(
     if (!alreadyGone) {
       console.error("removeMemberFromOrg failed", error);
       return NextResponse.json(
-        { error: "Couldn't remove this member from the organization in Clerk." },
+        {
+          error: "Couldn't remove this member from the organization in Clerk.",
+        },
         { status: 502 },
       );
     }
@@ -62,14 +80,26 @@ export async function DELETE(
 
   try {
     await prisma.$transaction(async (tx) => {
-      await tx.task.updateMany({ where: { createdById: target.id }, data: { createdById: actingAdmin.id } });
-      await tx.doc.updateMany({ where: { authorId: target.id }, data: { authorId: actingAdmin.id } });
-      await tx.transaction.updateMany({ where: { memberId: target.id }, data: { memberId: actingAdmin.id } });
+      await tx.task.updateMany({
+        where: { createdById: target.id },
+        data: { createdById: actingAdmin.id },
+      });
+      await tx.doc.updateMany({
+        where: { authorId: target.id },
+        data: { authorId: actingAdmin.id },
+      });
+      await tx.transaction.updateMany({
+        where: { memberId: target.id },
+        data: { memberId: actingAdmin.id },
+      });
       await tx.calendarEvent.updateMany({
         where: { createdById: target.id },
         data: { createdById: actingAdmin.id },
       });
-      await tx.project.updateMany({ where: { ownerId: target.id }, data: { ownerId: actingAdmin.id } });
+      await tx.project.updateMany({
+        where: { ownerId: target.id },
+        data: { ownerId: actingAdmin.id },
+      });
 
       // Meetings organized by the deleted member reassign to the acting
       // admin — and that admin needs a deduplicated MeetingParticipant row
@@ -81,9 +111,15 @@ export async function DELETE(
         select: { id: true },
       });
       if (organizedMeetings.length > 0) {
-        await tx.meeting.updateMany({ where: { organizerId: target.id }, data: { organizerId: actingAdmin.id } });
+        await tx.meeting.updateMany({
+          where: { organizerId: target.id },
+          data: { organizerId: actingAdmin.id },
+        });
         await tx.meetingParticipant.createMany({
-          data: organizedMeetings.map((meeting) => ({ meetingId: meeting.id, memberId: actingAdmin.id })),
+          data: organizedMeetings.map((meeting) => ({
+            meetingId: meeting.id,
+            memberId: actingAdmin.id,
+          })),
           skipDuplicates: true,
         });
       }
@@ -94,7 +130,10 @@ export async function DELETE(
         where: { proposedById: target.id },
         data: { proposedById: actingAdmin.id },
       });
-      await tx.agendaItem.updateMany({ where: { addedById: target.id }, data: { addedById: actingAdmin.id } });
+      await tx.agendaItem.updateMany({
+        where: { addedById: target.id },
+        data: { addedById: actingAdmin.id },
+      });
 
       // Penalties reassign both directions — who it was issued against and
       // who issued it — same uniform policy as everything else here.
@@ -103,8 +142,14 @@ export async function DELETE(
       // onDelete override, so leaving this out would just turn into a raw
       // FK-constraint 500 the first time someone tried to delete a member
       // with any penalty history.
-      await tx.penalty.updateMany({ where: { memberId: target.id }, data: { memberId: actingAdmin.id } });
-      await tx.penalty.updateMany({ where: { issuedById: target.id }, data: { issuedById: actingAdmin.id } });
+      await tx.penalty.updateMany({
+        where: { memberId: target.id },
+        data: { memberId: actingAdmin.id },
+      });
+      await tx.penalty.updateMany({
+        where: { issuedById: target.id },
+        data: { issuedById: actingAdmin.id },
+      });
 
       // The deleted member's own MeetingParticipant rows cascade away via
       // the schema relation — nothing to do for those here.
@@ -116,7 +161,10 @@ export async function DELETE(
     });
   } catch (error) {
     console.error("Member delete transaction failed", error);
-    return NextResponse.json({ error: "Couldn't delete this member." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Couldn't delete this member." },
+      { status: 500 },
+    );
   }
 
   // The cached member-picker list (lib/members.ts) needs a new member to

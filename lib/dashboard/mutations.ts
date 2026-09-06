@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { taskVisibilityWhere } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 
 import { getCurrentMember } from "@/lib/current-member";
@@ -32,7 +34,10 @@ export async function requireMember(): Promise<DashboardGuard> {
     return { ok: true, member: await getCurrentMember() };
   } catch {
     // getCurrentMember() throws without an authenticated Clerk session.
-    return { ok: false, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    };
   }
 }
 
@@ -55,8 +60,13 @@ export async function completeMyTask(
   done: boolean,
 ): Promise<DashboardOutcome> {
   const task = await prisma.task.findUnique({
-    where: { id: taskId },
-    select: { id: true, title: true, status: true, assignees: { where: { memberId: member.id }, select: { id: true } } },
+    where: { ...{ id: taskId }, AND: [await taskVisibilityWhere()] },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      assignees: { where: { memberId: member.id }, select: { id: true } },
+    },
   });
 
   if (!task) return { ok: false, status: 404, error: "Task not found" };
@@ -94,10 +104,22 @@ export async function completeMyTask(
 }
 
 /** Records that the member says they've paid. An admin still has to confirm. */
-export async function claimPenaltyPaid(member: Member, penaltyId: string): Promise<DashboardOutcome> {
+export async function claimPenaltyPaid(
+  member: Member,
+  penaltyId: string,
+): Promise<DashboardOutcome> {
   const penalty = await prisma.penalty.findUnique({
-    where: { id: penaltyId },
-    select: { id: true, memberId: true, status: true, reason: true, paymentClaimedAt: true },
+    where: {
+      ...{ id: penaltyId },
+      AND: [await entityVisibilityWhere("penalty")],
+    },
+    select: {
+      id: true,
+      memberId: true,
+      status: true,
+      reason: true,
+      paymentClaimedAt: true,
+    },
   });
 
   if (!penalty) return { ok: false, status: 404, error: "Penalty not found" };
@@ -105,10 +127,18 @@ export async function claimPenaltyPaid(member: Member, penaltyId: string): Promi
     return { ok: false, status: 403, error: "That penalty isn't yours" };
   }
   if (penalty.status !== "OPEN") {
-    return { ok: false, status: 409, error: "This penalty has already been settled" };
+    return {
+      ok: false,
+      status: 409,
+      error: "This penalty has already been settled",
+    };
   }
   if (penalty.paymentClaimedAt) {
-    return { ok: false, status: 409, error: "You've already marked this as paid — an admin is confirming it" };
+    return {
+      ok: false,
+      status: 409,
+      error: "You've already marked this as paid — an admin is confirming it",
+    };
   }
 
   await prisma.penalty.update({
@@ -125,12 +155,25 @@ export async function disputePenalty(
   reason: unknown,
 ): Promise<DashboardOutcome> {
   if (typeof reason !== "string" || reason.trim().length < 3) {
-    return { ok: false, status: 400, error: "Tell us why you're disputing this" };
+    return {
+      ok: false,
+      status: 400,
+      error: "Tell us why you're disputing this",
+    };
   }
 
   const penalty = await prisma.penalty.findUnique({
-    where: { id: penaltyId },
-    select: { id: true, memberId: true, status: true, reason: true, dispute: { select: { status: true } } },
+    where: {
+      ...{ id: penaltyId },
+      AND: [await entityVisibilityWhere("penalty")],
+    },
+    select: {
+      id: true,
+      memberId: true,
+      status: true,
+      reason: true,
+      dispute: { select: { status: true } },
+    },
   });
 
   if (!penalty) return { ok: false, status: 404, error: "Penalty not found" };
@@ -138,17 +181,30 @@ export async function disputePenalty(
     return { ok: false, status: 403, error: "That penalty isn't yours" };
   }
   if (penalty.status !== "OPEN") {
-    return { ok: false, status: 409, error: "This penalty has already been settled" };
+    return {
+      ok: false,
+      status: 409,
+      error: "This penalty has already been settled",
+    };
   }
   if (penalty.dispute?.status === "OPEN") {
-    return { ok: false, status: 409, error: "You already have an open dispute on this" };
+    return {
+      ok: false,
+      status: 409,
+      error: "You already have an open dispute on this",
+    };
   }
 
   await prisma.penaltyDispute.upsert({
     where: { penaltyId },
     // Re-disputing a previously rejected penalty reuses the row rather
     // than accumulating history the member can't see anyway.
-    update: { reason: reason.trim(), status: "OPEN", resolvedAt: null, resolutionNote: null },
+    update: {
+      reason: reason.trim(),
+      status: "OPEN",
+      resolvedAt: null,
+      resolutionNote: null,
+    },
     create: { penaltyId, raisedById: member.id, reason: reason.trim() },
   });
 
@@ -156,7 +212,10 @@ export async function disputePenalty(
 }
 
 /** Toggles this member's vote. Idempotent per member by the composite unique. */
-export async function toggleIdeaVote(member: Member, ideaNodeId: unknown): Promise<DashboardOutcome> {
+export async function toggleIdeaVote(
+  member: Member,
+  ideaNodeId: unknown,
+): Promise<DashboardOutcome> {
   if (typeof ideaNodeId !== "string" || ideaNodeId.trim() === "") {
     return { ok: false, status: 400, error: "ideaNodeId is required" };
   }
@@ -181,10 +240,14 @@ export async function dismissAnnouncement(
   announcementId: string,
 ): Promise<DashboardOutcome> {
   const announcement = await prisma.announcement.findUnique({
-    where: { id: announcementId },
+    where: {
+      ...{ id: announcementId },
+      AND: [await entityVisibilityWhere("announcement")],
+    },
     select: { id: true },
   });
-  if (!announcement) return { ok: false, status: 404, error: "Announcement not found" };
+  if (!announcement)
+    return { ok: false, status: 404, error: "Announcement not found" };
 
   await prisma.announcementDismissal.upsert({
     where: { announcementId_memberId: { announcementId, memberId: member.id } },

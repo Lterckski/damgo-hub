@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
@@ -8,25 +10,45 @@ import { prisma } from "@/lib/prisma";
 // PATCH /api/penalties/[penaltyId] — Admin only. Resolves or waives an
 // OPEN penalty; an already-decided one can't be re-decided (409). See
 // 18-penalty-tracker.md's "Link to the financial ledger" section.
-export async function PATCH(request: Request, { params }: { params: Promise<{ penaltyId: string }> }) {
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ penaltyId: string }> },
+) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [resolvingAdmin, isAdmin] = await Promise.all([getCurrentMember(), isCurrentMemberAdmin()]);
+  const [resolvingAdmin, isAdmin] = await Promise.all([
+    getCurrentMember(),
+    isCurrentMemberAdmin(),
+  ]);
   if (!isAdmin) {
-    return NextResponse.json({ error: "Only Admins can resolve or waive a penalty" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Only Admins can resolve or waive a penalty" },
+      { status: 403 },
+    );
   }
 
   const body = await request.json().catch(() => null);
   const status = body?.status;
   if (status !== "RESOLVED" && status !== "WAIVED") {
-    return NextResponse.json({ error: "status must be RESOLVED or WAIVED" }, { status: 400 });
+    return NextResponse.json(
+      { error: "status must be RESOLVED or WAIVED" },
+      { status: 400 },
+    );
   }
 
   const { penaltyId } = await params;
-  const existing = await prisma.penalty.findUnique({ where: { id: penaltyId } });
+  const existing = await prisma.penalty.findUnique({
+    where: {
+      ...{ id: penaltyId },
+      AND: [await entityVisibilityWhere("penalty")],
+    },
+  });
   if (!existing) {
     return NextResponse.json({ error: "Penalty not found" }, { status: 404 });
   }
@@ -36,7 +58,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ pe
   // normal "someone already decided this" doesn't need a full transaction
   // to detect.
   if (existing.status !== "OPEN") {
-    return NextResponse.json({ error: "This penalty has already been decided" }, { status: 409 });
+    return NextResponse.json(
+      { error: "This penalty has already been decided" },
+      { status: 409 },
+    );
   }
 
   const resolvedAt = new Date();
@@ -55,7 +80,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ pe
       return null;
     }
 
-    const updated = await tx.penalty.findUniqueOrThrow({ where: { id: penaltyId } });
+    const updated = await tx.penalty.findUniqueOrThrow({
+      where: { id: penaltyId },
+    });
 
     // Only a monetary penalty being RESOLVED (not WAIVED) creates a
     // ledger entry — auto-approved, since only an Admin can reach this
@@ -74,11 +101,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ pe
       });
     }
 
-    return tx.penalty.findUniqueOrThrow({ where: { id: penaltyId }, include: PENALTY_INCLUDE });
+    return tx.penalty.findUniqueOrThrow({
+      where: { id: penaltyId },
+      include: PENALTY_INCLUDE,
+    });
   });
 
   if (lostRace || !penalty) {
-    return NextResponse.json({ error: "This penalty has already been decided" }, { status: 409 });
+    return NextResponse.json(
+      { error: "This penalty has already been decided" },
+      { status: 409 },
+    );
   }
 
   return NextResponse.json({ penalty: serializePenalty(penalty) });

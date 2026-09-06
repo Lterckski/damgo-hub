@@ -1,9 +1,17 @@
+import { activityVisibilityWhere } from "@/lib/hub/context";
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { taskVisibilityWhere } from "@/lib/hub/context";
 import { getOrgSettings } from "@/lib/org-settings";
 import { penaltyDueAt } from "@/lib/admin/queue";
 import { listOrgRoles } from "@/lib/organization-roles";
 import { getFinancialSnapshot } from "@/lib/finance";
 import { prisma } from "@/lib/prisma";
-import { teamDayStartPlus, teamMonthStart, teamNextMonthStart, teamTimeLabel } from "@/lib/team-time";
+import {
+  teamDayStartPlus,
+  teamMonthStart,
+  teamNextMonthStart,
+  teamTimeLabel,
+} from "@/lib/team-time";
 import type { ActivityRow } from "@/lib/dashboard/types";
 
 /**
@@ -17,7 +25,12 @@ import type { ActivityRow } from "@/lib/dashboard/types";
  */
 
 export interface TeamPulse {
-  nextMeeting: { id: string; title: string; at: string; joinUrl: string | null } | null;
+  nextMeeting: {
+    id: string;
+    title: string;
+    at: string;
+    joinUrl: string | null;
+  } | null;
   nearestDeadline: { title: string; at: string; kind: string } | null;
   activeProjectCount: number;
   /** Roster counts. See the note in getTeamPulse — this is not presence. */
@@ -31,35 +44,56 @@ export async function getTeamPulse(): Promise<TeamPulse> {
   const orgRoles = await listOrgRoles();
   const clerkUserIds = [...orgRoles.keys()];
 
-  const [nextMeeting, nextTask, nextMilestone, activeProjectCount, members] = await Promise.all([
-    prisma.meeting.findFirst({
-      where: { scheduledAt: { gte: now } },
-      orderBy: { scheduledAt: "asc" },
-      select: { id: true, title: true, scheduledAt: true, meetingUrl: true },
-    }),
-    prisma.task.findFirst({
-      where: { dueDate: { gte: now, lt: horizon }, status: { not: "DONE" } },
-      orderBy: { dueDate: "asc" },
-      select: { title: true, dueDate: true },
-    }),
-    prisma.projectMilestone.findFirst({
-      where: { completedAt: null, dueAt: { gte: now, lt: horizon } },
-      orderBy: { dueAt: "asc" },
-      select: { title: true, dueAt: true },
-    }),
-    prisma.project.count({ where: { status: "ACTIVE" } }),
-    prisma.member.findMany({
-      where: { clerkUserId: { in: clerkUserIds } },
-      select: { status: true },
-    }),
-  ]);
+  const [nextMeeting, nextTask, nextMilestone, activeProjectCount, members] =
+    await Promise.all([
+      prisma.meeting.findFirst({
+        where: {
+          ...{ scheduledAt: { gte: now } },
+          AND: [await entityVisibilityWhere("meeting")],
+        },
+        orderBy: { scheduledAt: "asc" },
+        select: { id: true, title: true, scheduledAt: true, meetingUrl: true },
+      }),
+      prisma.task.findFirst({
+        where: {
+          AND: [
+            await taskVisibilityWhere(),
+            { dueDate: { gte: now, lt: horizon }, status: { not: "DONE" } },
+          ],
+        },
+        orderBy: { dueDate: "asc" },
+        select: { title: true, dueDate: true },
+      }),
+      prisma.projectMilestone.findFirst({
+        where: { completedAt: null, dueAt: { gte: now, lt: horizon } },
+        orderBy: { dueAt: "asc" },
+        select: { title: true, dueAt: true },
+      }),
+      prisma.project.count({ where: { status: "ACTIVE" } }),
+      prisma.member.findMany({
+        where: { clerkUserId: { in: clerkUserIds } },
+        select: { status: true },
+      }),
+    ]);
 
   // Nearest deadline across kinds, not just tasks.
   const candidates = [
-    nextTask ? { title: nextTask.title, at: nextTask.dueDate, kind: "Task" } : null,
-    nextMilestone ? { title: nextMilestone.title, at: nextMilestone.dueAt, kind: "Milestone" } : null,
-  ].filter((candidate): candidate is { title: string; at: Date; kind: string } => candidate !== null);
-  const nearest = candidates.sort((a, b) => a.at.getTime() - b.at.getTime())[0] ?? null;
+    nextTask
+      ? { title: nextTask.title, at: nextTask.dueDate, kind: "Task" }
+      : null,
+    nextMilestone
+      ? {
+          title: nextMilestone.title,
+          at: nextMilestone.dueAt,
+          kind: "Milestone",
+        }
+      : null,
+  ].filter(
+    (candidate): candidate is { title: string; at: Date; kind: string } =>
+      candidate !== null,
+  );
+  const nearest =
+    candidates.sort((a, b) => a.at.getTime() - b.at.getTime())[0] ?? null;
 
   return {
     nextMeeting: nextMeeting
@@ -71,7 +105,11 @@ export async function getTeamPulse(): Promise<TeamPulse> {
         }
       : null,
     nearestDeadline: nearest
-      ? { title: nearest.title, at: nearest.at.toISOString(), kind: nearest.kind }
+      ? {
+          title: nearest.title,
+          at: nearest.at.toISOString(),
+          kind: nearest.kind,
+        }
       : null,
     activeProjectCount,
     // Roster status (MemberStatus), NOT live presence. Damgo Hub has no
@@ -79,8 +117,10 @@ export async function getTeamPulse(): Promise<TeamPulse> {
     // has a canvas open. Labelled "active/inactive on the roster" in the UI
     // rather than "present/away", which would be a claim the data can't
     // support.
-    activeMemberCount: members.filter((member) => member.status === "ACTIVE").length,
-    inactiveMemberCount: members.filter((member) => member.status !== "ACTIVE").length,
+    activeMemberCount: members.filter((member) => member.status === "ACTIVE")
+      .length,
+    inactiveMemberCount: members.filter((member) => member.status !== "ACTIVE")
+      .length,
   };
 }
 
@@ -182,12 +222,16 @@ export async function getWorkload(): Promise<WorkloadRow[]> {
   const orgRoles = await listOrgRoles();
 
   const members = await prisma.member.findMany({
-    where: { clerkUserId: { in: [...orgRoles.keys()] }, status: { not: "REMOVED" } },
+    where: {
+      clerkUserId: { in: [...orgRoles.keys()] },
+      status: { not: "REMOVED" },
+    },
     select: {
       id: true,
       displayName: true,
       avatarUrl: true,
       taskAssignments: {
+        where: { task: await taskVisibilityWhere() },
         select: {
           task: { select: { status: true, dueDate: true, completedAt: true } },
         },
@@ -245,7 +289,10 @@ export async function getTeamProjects(): Promise<TeamProjectRow[]> {
   const now = new Date();
 
   const projects = await prisma.project.findMany({
-    where: { status: "ACTIVE" },
+    where: {
+      ...{ status: "ACTIVE" },
+      AND: [await entityVisibilityWhere("project")],
+    },
     select: {
       id: true,
       name: true,
@@ -253,7 +300,7 @@ export async function getTeamProjects(): Promise<TeamProjectRow[]> {
       priority: true,
       blockedReason: true,
       owner: { select: { displayName: true, avatarUrl: true } },
-      tasks: { select: { status: true } },
+      tasks: { where: await taskVisibilityWhere(), select: { status: true } },
       milestones: {
         where: { completedAt: null },
         orderBy: [{ dueAt: "asc" }, { position: "asc" }],
@@ -273,10 +320,15 @@ export async function getTeamProjects(): Promise<TeamProjectRow[]> {
       ownerAvatarUrl: project.owner.avatarUrl,
       status: project.status,
       priority: project.priority,
-      completedTaskCount: project.tasks.filter((task) => task.status === "DONE").length,
+      completedTaskCount: project.tasks.filter((task) => task.status === "DONE")
+        .length,
       totalTaskCount: project.tasks.length,
       nextMilestone: milestone
-        ? { title: milestone.title, dueAt: milestone.dueAt.toISOString(), isOverdue: milestone.dueAt < now }
+        ? {
+            title: milestone.title,
+            dueAt: milestone.dueAt.toISOString(),
+            isOverdue: milestone.dueAt < now,
+          }
         : null,
       blockedReason: project.blockedReason,
     };
@@ -313,7 +365,10 @@ export async function getHackathonPipeline(): Promise<HackathonRow[]> {
       registrationDeadline: true,
       submissionDeadline: true,
       entryStatus: true,
-      project: { select: { name: true } },
+      project: {
+        where: await entityVisibilityWhere("project"),
+        select: { name: true },
+      },
     },
   });
 
@@ -321,28 +376,33 @@ export async function getHackathonPipeline(): Promise<HackathonRow[]> {
     .map((hackathon) => {
       // The next date that still matters: registration until it passes,
       // then submission.
-      const upcoming = [hackathon.registrationDeadline, hackathon.submissionDeadline]
-        .filter((date): date is Date => date !== null)
-        .filter((date) => date >= now)
-        .sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
+      const upcoming =
+        [hackathon.registrationDeadline, hackathon.submissionDeadline]
+          .filter((date): date is Date => date !== null)
+          .filter((date) => date >= now)
+          .sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
 
-      const anyDeadline = hackathon.submissionDeadline ?? hackathon.registrationDeadline;
+      const anyDeadline =
+        hackathon.submissionDeadline ?? hackathon.registrationDeadline;
 
       return {
         id: hackathon.id,
         name: hackathon.name,
         organizer: hackathon.organizer,
         url: hackathon.url,
-        registrationDeadline: hackathon.registrationDeadline?.toISOString() ?? null,
+        registrationDeadline:
+          hackathon.registrationDeadline?.toISOString() ?? null,
         submissionDeadline: hackathon.submissionDeadline?.toISOString() ?? null,
         entryStatus: hackathon.entryStatus,
         projectName: hackathon.project?.name ?? null,
         nextDeadline: upcoming?.toISOString() ?? null,
-        isPastDue: upcoming === null && anyDeadline !== null && anyDeadline < now,
+        isPastDue:
+          upcoming === null && anyDeadline !== null && anyDeadline < now,
       };
     })
     .sort((a, b) => {
-      if (a.nextDeadline && b.nextDeadline) return a.nextDeadline.localeCompare(b.nextDeadline);
+      if (a.nextDeadline && b.nextDeadline)
+        return a.nextDeadline.localeCompare(b.nextDeadline);
       if (a.nextDeadline) return -1;
       if (b.nextDeadline) return 1;
       return a.name.localeCompare(b.name);
@@ -369,7 +429,10 @@ export async function getPenaltyLedger(): Promise<LedgerRow[]> {
   const settings = await getOrgSettings();
 
   const penalties = await prisma.penalty.findMany({
-    where: { status: "OPEN" },
+    where: {
+      ...{ status: "OPEN" },
+      AND: [await entityVisibilityWhere("penalty")],
+    },
     select: {
       id: true,
       reason: true,
@@ -403,6 +466,7 @@ export async function getPenaltyLedger(): Promise<LedgerRow[]> {
 
 export async function getTeamActivity(limit = 30): Promise<ActivityRow[]> {
   const events = await prisma.activityEvent.findMany({
+    where: await activityVisibilityWhere(),
     orderBy: { createdAt: "desc" },
     take: limit,
   });
@@ -431,17 +495,28 @@ export interface AnnouncementRow {
 }
 
 /** Pinned, unexpired, and not yet dismissed by this member. */
-export async function getAnnouncements(memberId: string): Promise<AnnouncementRow[]> {
+export async function getAnnouncements(
+  memberId: string,
+): Promise<AnnouncementRow[]> {
   const now = new Date();
 
   const announcements = await prisma.announcement.findMany({
     where: {
-      pinned: true,
-      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-      dismissals: { none: { memberId } },
+      ...{
+        pinned: true,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        dismissals: { none: { memberId } },
+      },
+      AND: [await entityVisibilityWhere("announcement")],
     },
     orderBy: { createdAt: "desc" },
-    select: { id: true, title: true, body: true, authorName: true, createdAt: true },
+    select: {
+      id: true,
+      title: true,
+      body: true,
+      authorName: true,
+      createdAt: true,
+    },
   });
 
   return announcements.map((announcement) => ({

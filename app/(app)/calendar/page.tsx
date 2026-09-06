@@ -1,30 +1,57 @@
+import { taskInclude } from "@/lib/hub/task-include";
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { taskVisibilityWhere } from "@/lib/hub/context";
+import { requireWorkspacePage as requireWorkspaceSession } from "@/lib/hub/context";
 import { prisma } from "@/lib/prisma";
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
 import { getMemberPickerOptions } from "@/lib/members";
-import { serializeCalendarEvent, type UnifiedCalendarItem } from "@/lib/calendar";
-import { serializeTask, TASK_INCLUDE } from "@/lib/tasks";
+import {
+  serializeCalendarEvent,
+  type UnifiedCalendarItem,
+} from "@/lib/calendar";
+import { serializeTask } from "@/lib/tasks";
 import { TASK_LINKABLE_PROJECT_STATUSES } from "@/lib/projects";
 import { getVisibleMeetingCalendarItems } from "@/lib/meetings";
 import { BackButton } from "@/components/shared/back-button";
 import { CalendarView } from "@/components/calendar/calendar-view";
 
 export default async function CalendarPage() {
+  await requireWorkspaceSession();
+
   const currentMember = await getCurrentMember();
   const isAdmin = await isCurrentMemberAdmin();
 
-  const [eventRecords, taskRecords, memberRecords, linkableProjects, docs, meetingItems] = await Promise.all([
+  const [
+    eventRecords,
+    taskRecords,
+    memberRecords,
+    linkableProjects,
+    docs,
+    meetingItems,
+  ] = await Promise.all([
     prisma.calendarEvent.findMany({
       include: { createdBy: { select: { displayName: true } } },
       orderBy: { startAt: "asc" },
     }),
-    prisma.task.findMany({ include: TASK_INCLUDE, orderBy: { createdAt: "desc" } }),
+    prisma.task.findMany({
+      where: await taskVisibilityWhere(),
+      include: await taskInclude(),
+      orderBy: { createdAt: "desc" },
+    }),
     getMemberPickerOptions(),
     prisma.project.findMany({
-      where: { status: { in: [...TASK_LINKABLE_PROJECT_STATUSES] } },
+      where: {
+        ...{ status: { in: [...TASK_LINKABLE_PROJECT_STATUSES] } },
+        AND: [await entityVisibilityWhere("project")],
+      },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
-    prisma.doc.findMany({ select: { id: true, title: true, projectId: true }, orderBy: { title: "asc" } }),
+    prisma.doc.findMany({
+      where: await entityVisibilityWhere("document"),
+      select: { id: true, title: true, projectId: true },
+      orderBy: { title: "asc" },
+    }),
     getVisibleMeetingCalendarItems(currentMember.id, isAdmin),
   ]);
 
@@ -65,7 +92,8 @@ export default async function CalendarPage() {
         <h1 className="font-display text-3xl text-copy-primary">Calendar</h1>
       </div>
       <p className="mt-1 text-sm text-copy-secondary">
-        Team events and task deadlines — synced to your Google Calendar once it&apos;s connected.
+        Team events and task deadlines — synced to your Google Calendar once
+        it&apos;s connected.
       </p>
 
       <div className="mt-6">

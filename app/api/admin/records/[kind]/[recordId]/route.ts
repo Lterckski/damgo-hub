@@ -1,3 +1,4 @@
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 
 import { requireAdmin, toErrorResponse } from "@/lib/admin/guard";
@@ -12,6 +13,9 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ kind: string; recordId: string }> },
 ) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
 
@@ -22,7 +26,8 @@ export async function GET(
 
   try {
     const detail = await getRecordDetail(kind as AdminRecordKind, recordId);
-    if (!detail) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!detail)
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({ detail });
   } catch (error) {
     return toErrorResponse(error);

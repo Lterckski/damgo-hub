@@ -1,3 +1,4 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
 import type { BroadcastAudience, Prisma } from "@/app/generated/prisma/client";
 
 import { listOrgRoles } from "@/lib/organization-roles";
@@ -43,16 +44,27 @@ async function resolveRecipients(input: BroadcastInput): Promise<string[]> {
     case "PROJECT": {
       if (!input.projectId) return [];
       const links = await prisma.projectMember.findMany({
-        where: { projectId: input.projectId, member: { status: { not: "REMOVED" } } },
+        where: {
+          projectId: input.projectId,
+          member: { status: { not: "REMOVED" } },
+        },
         select: { memberId: true },
       });
       const project = await prisma.project.findUnique({
-        where: { id: input.projectId },
+        where: {
+          ...{ id: input.projectId },
+          AND: [await entityVisibilityWhere("project")],
+        },
         select: { ownerId: true },
       });
       // The owner is always a recipient even when they hold no
       // ProjectMember row of their own — they're the Team Lead.
-      return [...new Set([...links.map((link) => link.memberId), ...(project ? [project.ownerId] : [])])];
+      return [
+        ...new Set([
+          ...links.map((link) => link.memberId),
+          ...(project ? [project.ownerId] : []),
+        ]),
+      ];
     }
     case "ROLE": {
       if (!input.audienceRole) return [];
@@ -61,7 +73,10 @@ async function resolveRecipients(input: BroadcastInput): Promise<string[]> {
         .filter(([, role]) => role === input.audienceRole)
         .map(([clerkUserId]) => clerkUserId);
       const members = await prisma.member.findMany({
-        where: { clerkUserId: { in: clerkUserIds }, status: { not: "REMOVED" } },
+        where: {
+          clerkUserId: { in: clerkUserIds },
+          status: { not: "REMOVED" },
+        },
         select: { id: true },
       });
       return members.map((member) => member.id);
@@ -73,7 +88,10 @@ async function resolveRecipients(input: BroadcastInput): Promise<string[]> {
       // include someone who was removed from the org.
       const orgRoles = await listOrgRoles();
       const members = await prisma.member.findMany({
-        where: { clerkUserId: { in: [...orgRoles.keys()] }, status: { not: "REMOVED" } },
+        where: {
+          clerkUserId: { in: [...orgRoles.keys()] },
+          status: { not: "REMOVED" },
+        },
         select: { id: true },
       });
       return members.map((member) => member.id);

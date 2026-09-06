@@ -1,3 +1,6 @@
+import { RecordOpenTracker } from "@/components/chrome/record-open-tracker";
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { requireWorkspacePage as requireWorkspaceSession } from "@/lib/hub/context";
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
 import { getMemberPickerOptions } from "@/lib/members";
 import { MEETING_DETAIL_INCLUDE, serializeMeeting } from "@/lib/meetings";
@@ -10,11 +13,19 @@ export default async function MeetingDetailPage({
 }: {
   params: Promise<{ meetingId: string }>;
 }) {
+  await requireWorkspaceSession();
+
   const { meetingId } = await params;
-  const [member, isAdmin] = await Promise.all([getCurrentMember(), isCurrentMemberAdmin()]);
+  const [member, isAdmin] = await Promise.all([
+    getCurrentMember(),
+    isCurrentMemberAdmin(),
+  ]);
 
   const meetingRecord = await prisma.meeting.findUnique({
-    where: { id: meetingId },
+    where: {
+      ...{ id: meetingId },
+      AND: [await entityVisibilityWhere("meeting")],
+    },
     include: MEETING_DETAIL_INCLUDE,
   });
 
@@ -31,8 +42,10 @@ export default async function MeetingDetailPage({
   // A participant or an Admin can view — per 16-meeting-scheduling.md's
   // Permissions section. Non-participants (and non-Admins) never learn
   // whether a meeting exists at all from this response.
-  const isParticipant = meetingRecord.participants.some((p) => p.member.id === member.id);
-  if (!isParticipant && !isAdmin) {
+  const isParticipant = meetingRecord.participants.some(
+    (p) => p.member.id === member.id,
+  );
+  if (!isParticipant && !isAdmin && meetingRecord.visibilityScope !== "org") {
     return (
       <AccessDenied
         message="This meeting doesn't exist, or you don't have access to it."
@@ -45,12 +58,15 @@ export default async function MeetingDetailPage({
   const memberOptions = await getMemberPickerOptions();
 
   return (
-    <MeetingDetail
-      meeting={serializeMeeting(meetingRecord)}
-      members={memberOptions}
-      currentMemberId={member.id}
-      isOrganizer={meetingRecord.organizerId === member.id}
-      isAdmin={isAdmin}
-    />
+    <>
+      <RecordOpenTracker id={`meeting:${meetingId}`} />{" "}
+      <MeetingDetail
+        meeting={serializeMeeting(meetingRecord)}
+        members={memberOptions}
+        currentMemberId={member.id}
+        isOrganizer={meetingRecord.organizerId === member.id}
+        isAdmin={isAdmin}
+      />
+    </>
   );
 }

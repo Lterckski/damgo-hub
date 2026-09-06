@@ -1,7 +1,11 @@
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
-import { extractDocumentText, UnsupportedDocumentTypeError } from "@/lib/extract-document-text";
+import {
+  extractDocumentText,
+  UnsupportedDocumentTypeError,
+} from "@/lib/extract-document-text";
 
 export const runtime = "nodejs";
 
@@ -9,6 +13,9 @@ export const runtime = "nodejs";
 // upload and returns Markdown-ish text to seed a new Doc's content with,
 // before the doc itself is created. Doesn't touch the database.
 export async function POST(request: Request) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -30,7 +37,10 @@ export async function POST(request: Request) {
     }
     console.error("Failed to extract document text", error);
     return NextResponse.json(
-      { error: "Couldn't read that file — it may be corrupted or password-protected." },
+      {
+        error:
+          "Couldn't read that file — it may be corrupted or password-protected.",
+      },
       { status: 422 },
     );
   }

@@ -1,24 +1,42 @@
+import { taskInclude } from "@/lib/hub/task-include";
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { taskVisibilityWhere } from "@/lib/hub/context";
+import { requireWorkspacePage as requireWorkspaceSession } from "@/lib/hub/context";
 import { prisma } from "@/lib/prisma";
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
 import { getMemberPickerOptions } from "@/lib/members";
-import { serializeTask, TASK_INCLUDE } from "@/lib/tasks";
+import { serializeTask } from "@/lib/tasks";
 import { TASK_LINKABLE_PROJECT_STATUSES } from "@/lib/projects";
 import { BackButton } from "@/components/shared/back-button";
 import { TaskBoard } from "@/components/tasks/task-board";
 
 export default async function TasksPage() {
-  const [tasks, members, linkableProjects, docs, currentMember, isAdmin] = await Promise.all([
-    prisma.task.findMany({ include: TASK_INCLUDE, orderBy: { createdAt: "desc" } }),
-    getMemberPickerOptions(),
-    prisma.project.findMany({
-      where: { status: { in: [...TASK_LINKABLE_PROJECT_STATUSES] } },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
-    prisma.doc.findMany({ select: { id: true, title: true, projectId: true }, orderBy: { title: "asc" } }),
-    getCurrentMember(),
-    isCurrentMemberAdmin(),
-  ]);
+  await requireWorkspaceSession();
+
+  const [tasks, members, linkableProjects, docs, currentMember, isAdmin] =
+    await Promise.all([
+      prisma.task.findMany({
+        where: await taskVisibilityWhere(),
+        include: await taskInclude(),
+        orderBy: { createdAt: "desc" },
+      }),
+      getMemberPickerOptions(),
+      prisma.project.findMany({
+        where: {
+          ...{ status: { in: [...TASK_LINKABLE_PROJECT_STATUSES] } },
+          AND: [await entityVisibilityWhere("project")],
+        },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+      prisma.doc.findMany({
+        where: await entityVisibilityWhere("document"),
+        select: { id: true, title: true, projectId: true },
+        orderBy: { title: "asc" },
+      }),
+      getCurrentMember(),
+      isCurrentMemberAdmin(),
+    ]);
 
   return (
     <div className="p-6">

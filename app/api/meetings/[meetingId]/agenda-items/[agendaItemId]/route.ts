@@ -1,3 +1,4 @@
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
@@ -18,13 +19,18 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ meetingId: string; agendaItemId: string }> },
 ) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (!(await isCurrentMemberAdmin())) {
     return NextResponse.json(
-      { error: "Only the Leader or Assistant Leader can edit the final agenda" },
+      {
+        error: "Only the Leader or Assistant Leader can edit the final agenda",
+      },
       { status: 403 },
     );
   }
@@ -34,27 +40,47 @@ export async function PATCH(
   const { text, position } = body ?? {};
 
   if (text !== undefined && (typeof text !== "string" || text.trim() === "")) {
-    return NextResponse.json({ error: "text must be a non-empty string" }, { status: 400 });
+    return NextResponse.json(
+      { error: "text must be a non-empty string" },
+      { status: 400 },
+    );
   }
-  if (position !== undefined && (typeof position !== "number" || !Number.isInteger(position) || position < 0)) {
-    return NextResponse.json({ error: "position must be a non-negative integer" }, { status: 400 });
+  if (
+    position !== undefined &&
+    (typeof position !== "number" ||
+      !Number.isInteger(position) ||
+      position < 0)
+  ) {
+    return NextResponse.json(
+      { error: "position must be a non-negative integer" },
+      { status: 400 },
+    );
   }
 
   try {
     await runSerializableMeetingTransaction(async (tx) => {
-      const current = await tx.agendaItem.findUnique({ where: { id: agendaItemId } });
-      if (!current || current.meetingId !== meetingId) throw new AgendaItemNotFoundError();
+      const current = await tx.agendaItem.findUnique({
+        where: { id: agendaItemId },
+      });
+      if (!current || current.meetingId !== meetingId)
+        throw new AgendaItemNotFoundError();
 
       if (typeof position === "number") {
         await moveAgendaItemToPosition(tx, meetingId, agendaItemId, position);
       }
       if (typeof text === "string") {
-        await tx.agendaItem.update({ where: { id: agendaItemId }, data: { text: text.trim() } });
+        await tx.agendaItem.update({
+          where: { id: agendaItemId },
+          data: { text: text.trim() },
+        });
       }
     });
   } catch (error) {
     if (error instanceof AgendaItemNotFoundError) {
-      return NextResponse.json({ error: "Agenda item not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Agenda item not found" },
+        { status: 404 },
+      );
     }
     throw error;
   }
@@ -63,7 +89,11 @@ export async function PATCH(
     where: { id: agendaItemId },
     include: { addedBy: { select: { displayName: true } } },
   });
-  if (!updated) return NextResponse.json({ error: "Agenda item not found" }, { status: 404 });
+  if (!updated)
+    return NextResponse.json(
+      { error: "Agenda item not found" },
+      { status: 404 },
+    );
 
   return NextResponse.json({
     agendaItem: {
@@ -87,6 +117,9 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ meetingId: string; agendaItemId: string }> },
 ) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -101,8 +134,11 @@ export async function DELETE(
   const { meetingId, agendaItemId } = await params;
   try {
     await runSerializableMeetingTransaction(async (tx) => {
-      const current = await tx.agendaItem.findUnique({ where: { id: agendaItemId } });
-      if (!current || current.meetingId !== meetingId) throw new AgendaItemNotFoundError();
+      const current = await tx.agendaItem.findUnique({
+        where: { id: agendaItemId },
+      });
+      if (!current || current.meetingId !== meetingId)
+        throw new AgendaItemNotFoundError();
 
       await tx.agendaItem.delete({ where: { id: agendaItemId } });
       await compactAgendaPositions(tx, meetingId, current.position);
@@ -115,7 +151,10 @@ export async function DELETE(
     });
   } catch (error) {
     if (error instanceof AgendaItemNotFoundError) {
-      return NextResponse.json({ error: "Agenda item not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Agenda item not found" },
+        { status: 404 },
+      );
     }
     throw error;
   }

@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { requireWorkspacePage as requireWorkspaceSession } from "@/lib/hub/context";
 import { TrendingDown, TrendingUp, Wallet } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
@@ -11,7 +13,12 @@ import {
 } from "@/components/finance/finance-transactions-table";
 
 function computeSummary(
-  transactions: { type: string; amount: number; status: string; createdAt: Date }[],
+  transactions: {
+    type: string;
+    amount: number;
+    status: string;
+    createdAt: Date;
+  }[],
 ) {
   const approved = transactions.filter((t) => t.status === "APPROVED");
   const balance = approved.reduce(
@@ -33,8 +40,11 @@ function computeSummary(
 }
 
 export default async function FinancePage() {
+  await requireWorkspaceSession();
+
   const [transactions, isAdmin] = await Promise.all([
     prisma.transaction.findMany({
+      where: await entityVisibilityWhere("transaction"),
       include: { member: { select: { displayName: true } } },
       orderBy: { createdAt: "desc" },
     }),
@@ -67,13 +77,19 @@ export default async function FinancePage() {
 
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <DashboardWidget title="Balance" icon={Wallet}>
-          <p className="text-2xl font-bold text-copy-primary">{formatPHP(balance)}</p>
+          <p className="text-2xl font-bold text-copy-primary">
+            {formatPHP(balance)}
+          </p>
         </DashboardWidget>
         <DashboardWidget title="This Month's Income" icon={TrendingUp}>
-          <p className="text-2xl font-bold text-success">{formatPHP(monthIncome)}</p>
+          <p className="text-2xl font-bold text-success">
+            {formatPHP(monthIncome)}
+          </p>
         </DashboardWidget>
         <DashboardWidget title="This Month's Expenses" icon={TrendingDown}>
-          <p className="text-2xl font-bold text-error">{formatPHP(monthExpense)}</p>
+          <p className="text-2xl font-bold text-error">
+            {formatPHP(monthExpense)}
+          </p>
         </DashboardWidget>
       </div>
 

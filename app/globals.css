@@ -90,7 +90,7 @@
    base palette is redefined; every shadcn token above references it via
    var(), so it flips automatically. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg-base: #0b0f1a;
     --bg-surface: #121a2b;
     --bg-elevated: #182238;
@@ -221,4 +221,46 @@
 .react-flow__edge:hover .react-flow__edge-path,
 .react-flow__edge.selected .react-flow__edge-path {
   stroke: var(--accent-primary) !important;
+}
+
+/* Explicit choice uses the same palette as system dark mode. */
+:root[data-theme="dark"] {
+    --bg-base: #0b0f1a;
+    --bg-surface: #121a2b;
+    --bg-elevated: #182238;
+    --bg-subtle: #1e293b;
+    --border-default: #2a3650;
+    --border-subtle: #1c2740;
+    --text-primary: #f3f6fb;
+    --text-secondary: #b4c0d4;
+    --text-muted: #8592ac;
+    --text-faint: #55617c;
+    --accent-primary: #45d9c5;
+    --accent-primary-dim: rgba(69, 217, 197, 0.16);
+    --accent-collab: #5a8dc4;
+    --accent-collab-text: #8fb4de;
+    --state-error: #f0655c;
+    --state-success: #52c77d;
+    --state-warning: #e8b84b;
+
+    /* Dark-mode idea-note fill/text pairs, copied directly from
+       ui-context.md's Node Color Palette table (Neutral, Teal, Blue,
+       Purple, Amber, Red, Rose, Green, in that order). */
+    --idea-color-0-fill: #182238;
+    --idea-color-0-text: #f3f6fb;
+    --idea-color-1-fill: #173248;
+    --idea-color-1-text: #45d9c5;
+    --idea-color-2-fill: #1b2a45;
+    --idea-color-2-text: #7fb0e0;
+    --idea-color-3-fill: #2e2545;
+    --idea-color-3-text: #b79ce0;
+    --idea-color-4-fill: #332912;
+    --idea-color-4-text: #e8b84b;
+    --idea-color-5-fill: #331e1c;
+    --idea-color-5-text: #f0655c;
+    --idea-color-6-fill: #301e30;
+    --idea-color-6-text: #d888ac;
+    --idea-color-7-fill: #16301f;
+    --idea-color-7-text: #52c77d;
+
 }

@@ -1,3 +1,5 @@
+import { entityVisibilityWhere } from "@/lib/hub/context";
+import { requireWorkspacePage as requireWorkspaceSession } from "@/lib/hub/context";
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
 import { getMemberPickerOptions } from "@/lib/members";
 import { PENALTY_INCLUDE, serializePenalty } from "@/lib/penalties";
@@ -6,11 +8,19 @@ import { BackButton } from "@/components/shared/back-button";
 import { PenaltiesView } from "@/components/penalties/penalties-view";
 
 export default async function PenaltiesPage() {
-  const [member, isAdmin] = await Promise.all([getCurrentMember(), isCurrentMemberAdmin()]);
+  await requireWorkspaceSession();
+
+  const [member, isAdmin] = await Promise.all([
+    getCurrentMember(),
+    isCurrentMemberAdmin(),
+  ]);
 
   const [penaltyRecords, memberOptions] = await Promise.all([
     prisma.penalty.findMany({
-      where: isAdmin ? undefined : { memberId: member.id },
+      where: {
+        ...(isAdmin ? undefined : { memberId: member.id }),
+        AND: [await entityVisibilityWhere("penalty")],
+      },
       include: PENALTY_INCLUDE,
       orderBy: { createdAt: "desc" },
     }),

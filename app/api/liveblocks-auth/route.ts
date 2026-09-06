@@ -1,7 +1,11 @@
+import { hubApiGuard } from "@/lib/hub/context";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
-import { hasVerifiedOrgMembership, memberHasRoomAccess } from "@/lib/board-access";
+import {
+  hasVerifiedOrgMembership,
+  memberHasRoomAccess,
+} from "@/lib/board-access";
 import { getCurrentMember } from "@/lib/current-member";
 import { cursorColorForMember, liveblocksClient } from "@/lib/liveblocks";
 
@@ -10,6 +14,9 @@ import { cursorColorForMember, liveblocksClient } from "@/lib/liveblocks";
  * Liveblocks' client SDK calls this through its configured auth endpoint.
  */
 export async function POST(request: Request) {
+  const workspaceDenied = await hubApiGuard();
+  if (workspaceDenied) return workspaceDenied;
+
   const { userId, orgId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

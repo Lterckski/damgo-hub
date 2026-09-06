@@ -1,3 +1,4 @@
+import { requireWorkspacePage as requireWorkspaceSession } from "@/lib/hub/context";
 import { getCurrentMember, isCurrentMemberLeader } from "@/lib/current-member";
 import { getMemberTrackerRows } from "@/lib/members";
 import { BackButton } from "@/components/shared/back-button";
@@ -9,6 +10,8 @@ import { MemberDirectoryTable } from "@/components/members/member-directory-tabl
 // table already adapts to isAdmin (which is always true here, this route
 // is admin-gated by app/(app)/admin/layout.tsx).
 export default async function AdminMembersPage() {
+  await requireWorkspaceSession();
+
   const [rows, isLeader, currentMember] = await Promise.all([
     getMemberTrackerRows(),
     isCurrentMemberLeader(),
