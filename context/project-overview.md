@@ -143,6 +143,7 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 
 ### Notifications / Announcements Hub
 
+- Planned header inbox and shared search visibility are specified in [unit 23](feature-specs/23-global-search-notifications-header.md). Its Part 0 audit is complete; implementation awaits confirmation. The target adds user/org/project/role scopes, per-user read/dismiss state, event preferences and in-app/email delivery. Existing broadcasts and meeting email are partial foundations, not the finished inbox.
 - Real-time notification when a task is assigned to a member
 - Notification triggers for: task status change, upcoming deadlines, meeting reminders, milestone completion, proposal/expense approval or rejection
 - Centralized notification center/inbox (read/unread state)
@@ -180,10 +181,16 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 
 ### Global Search
 
-- Single search bar accessible from anywhere in the app
-- Searches across: tasks, documentation, members, meetings, projects, ideas, agenda items
-- Filter results by category/type
-- Quick-jump to result
+- Planned in [unit 23](feature-specs/23-global-search-notifications-header.md), awaiting implementation confirmation: desktop header search and mobile/keyboard palette backed by server-side PostgreSQL FTS and trigram matching.
+- Initial index: tasks, penalties, transactions, projects, meetings, documents, ideas, members and announcements. Agenda items are not a separate indexed type in this iteration.
+- Shared server-enforced visibility with notifications; grouped results, title-first ranking, typo/prefix matching and record navigation.
+- Empty input shows Recent, inline Quick actions, Needs you and Jump to; actual opens persist per-user recents.
+
+### Header Utilities
+
+- Planned extension of the existing header: Clerk organization switcher, visible org/role, search, modal quick create, notification bell and account/preferences/theme controls.
+- Preserve the bottom dock, navy/teal palette and serif page headings. Mobile collapses utilities into the avatar menu.
+- Organization switching must fail closed until underlying data is scoped; it does not by itself authorize a full multi-tenant rollout. See unit 23's audit decisions.
 
 ### Activity Feed
 
@@ -211,7 +218,7 @@ Damgo Hub is a collaborative platform for a hackathon group / organization. It b
 ### Out of Scope
 
 - Billing and subscription systems
-- Multi-organization / multi-tenant support (single organization only)
+- Full multi-organization / multi-tenant rollout (single organization today; unit 23 plans org-aware foundations and a safely gated Clerk switcher, pending audit confirmation)
 - Mobile-native applications
 - AI-generated content of any kind
 - Versioned history for documentation or board content
