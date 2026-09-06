@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
+import { cancelCalendarReminder, scheduleCalendarReminder } from "@/lib/calendar-reminders";
 import { enqueueGoogleCalendarSync } from "@/lib/sync-calendar";
 import { serializeCalendarEvent, type UnifiedCalendarItem } from "@/lib/calendar";
 import { getVisibleMeetingCalendarItems } from "@/lib/meetings";
@@ -101,6 +102,20 @@ export async function POST(request: Request) {
   });
 
   await enqueueGoogleCalendarSync("CALENDAR_EVENT", event.id);
+
+  const reminderRunId = await scheduleCalendarReminder(event);
+  if (reminderRunId) {
+    try {
+      await prisma.calendarEvent.update({ where: { id: event.id }, data: { reminderRunId } });
+    } catch (error) {
+      // Persisting the id failed after the run was already created —
+      // cancel it rather than leave an orphaned scheduled run that will
+      // fire later and silently no-op (its id will never match what's in
+      // the database).
+      console.error("Failed to persist reminderRunId, cancelling orphaned reminder run", error);
+      await cancelCalendarReminder(reminderRunId);
+    }
+  }
 
   return NextResponse.json({ event: serializeCalendarEvent(event) }, { status: 201 });
 }

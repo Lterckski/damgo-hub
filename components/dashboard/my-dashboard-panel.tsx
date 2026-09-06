@@ -5,7 +5,7 @@ import { DashboardWidget, WidgetEmptyState } from "@/components/dashboard/dashbo
 import { TaskStatusBadge, type TaskStatusValue } from "@/components/tasks/task-status-badge";
 import { formatPHP } from "@/lib/currency";
 import { getFinancialSnapshot } from "@/lib/finance";
-import { getUpcomingItems } from "@/lib/dashboard";
+import { getRecentIdeas, getUpcomingItems } from "@/lib/dashboard";
 import { prisma } from "@/lib/prisma";
 
 interface MyDashboardPanelProps {
@@ -14,14 +14,17 @@ interface MyDashboardPanelProps {
 
 /**
  * The member-scoped dashboard grid — My Tasks, Upcoming, Financial
- * Snapshot, Recent Ideas. Real data as of 22-dashboard-data-wiring.md
- * (previously mock — see lib/mock-dashboard-data.ts, now unused). Stays a
+ * Snapshot, Recent Ideas. All four now read real data per
+ * 22-dashboard-data-wiring.md (previously mock — see
+ * lib/mock-dashboard-data.ts, now unused); Recent Ideas is the last one
+ * wired, reading from the ideas board's autosaved snapshot rather than its
+ * live Liveblocks state (see lib/dashboard.ts's getRecentIdeas). Stays a
  * Server Component doing its own fetching — this is one of two panels
  * dashboard/page.tsx wraps in its own Suspense boundary, so a slow query
  * here streams in independently of Team Overview rather than blocking it.
  */
 export async function MyDashboardPanel({ memberId }: MyDashboardPanelProps) {
-  const [myTasks, upcoming, finance] = await Promise.all([
+  const [myTasks, upcoming, finance, recentIdeas] = await Promise.all([
     prisma.task.findMany({
       where: { assignees: { some: { memberId } } },
       select: { id: true, title: true, status: true, dueDate: true },
@@ -30,12 +33,8 @@ export async function MyDashboardPanel({ memberId }: MyDashboardPanelProps) {
     }),
     getUpcomingItems(),
     getFinancialSnapshot(),
+    getRecentIdeas(),
   ]);
-
-  // Ideas board doesn't exist yet (19-ideas-board.md) — no mock data
-  // pretending otherwise; this widget says so plainly instead, same as
-  // /ideas itself (components/shared/coming-soon.tsx).
-  const ideasAvailable = false;
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -101,8 +100,24 @@ export async function MyDashboardPanel({ memberId }: MyDashboardPanelProps) {
       </DashboardWidget>
 
       <DashboardWidget title="Recent Ideas" icon={Lightbulb} viewAllHref="/ideas" viewAllLabel="Open ideas board">
-        {ideasAvailable ? null : (
-          <WidgetEmptyState icon={Lightbulb} message="Ideas board isn't available yet." />
+        {recentIdeas.length === 0 ? (
+          <WidgetEmptyState icon={Lightbulb} message="No ideas posted yet." />
+        ) : (
+          <ul className="space-y-3">
+            {recentIdeas.map((idea) => (
+              <li key={idea.id} className="flex items-start gap-2">
+                <span
+                  aria-hidden
+                  className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: `var(--idea-color-${idea.colorIndex}-fill)` }}
+                />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-copy-primary">{idea.text}</p>
+                  <p className="text-xs text-copy-secondary">{idea.authorName}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </DashboardWidget>
     </div>
