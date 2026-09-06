@@ -39,10 +39,21 @@ import {
   type SerializedProject,
 } from "@/lib/projects";
 
-const DateTimePicker = dynamic(() =>
-  import("@/components/shared/date-time-picker").then(
-    (module) => module.DateTimePicker,
-  ),
+const DateTimePicker = dynamic(
+  () =>
+    import("@/components/shared/date-time-picker").then(
+      (module) => module.DateTimePicker,
+    ),
+  {
+    loading: () => (
+      <div
+        role="status"
+        className="flex h-10 items-center rounded-xl border border-surface-border bg-subtle px-3 text-sm text-copy-secondary"
+      >
+        Loading date picker…
+      </div>
+    ),
+  },
 );
 const RoadmapBoard = dynamic(
   () =>

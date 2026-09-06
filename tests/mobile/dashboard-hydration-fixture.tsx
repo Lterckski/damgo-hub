@@ -9,8 +9,9 @@ import {
 } from "@/components/dashboard/team-overview-panel";
 import { ToastProvider } from "@/components/ui/toast";
 
+const now = Date.parse("2026-09-06T12:00:00.000Z");
 const soon = (hours: number) =>
-  new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+  new Date(now + hours * 60 * 60 * 1000).toISOString();
 
 const myData: MyDashboardData = {
   urgent: Array.from({ length: 6 }, (_, index) => ({

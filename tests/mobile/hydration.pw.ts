@@ -1,5 +1,13 @@
 import { test } from "@playwright/test";
 
+const workspacePath = process.cwd();
+
+function sanitizeTrace(trace: string) {
+  return trace
+    .replaceAll(workspacePath, "/workspace/damgo-hub")
+    .replaceAll(encodeURI(workspacePath), "/workspace/damgo-hub");
+}
+
 for (const route of ["dashboard", "admin"] as const) {
   test(`${route} hydration trace`, async ({ page, context }, testInfo) => {
     const cdp = await context.newCDPSession(page);
@@ -44,6 +52,7 @@ for (const route of ["dashboard", "admin"] as const) {
       if (chunk.eof) break;
     }
     await cdp.send("IO.close", { handle: stream });
+    trace = sanitizeTrace(trace);
 
     const hydration = await page.evaluate(() => {
       const start = performance.getEntriesByName("damgo-hydration-start")[0]

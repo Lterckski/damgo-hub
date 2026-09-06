@@ -7,10 +7,24 @@ import { FileText, Lightbulb, ListPlus, Receipt, Zap } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const QuickCaptureDialog = dynamic(() =>
-  import("@/components/dashboard/my/quick-capture-dialog").then(
-    (module) => module.QuickCaptureDialog,
-  ),
+const QuickCaptureDialog = dynamic(
+  () =>
+    import("@/components/dashboard/my/quick-capture-dialog").then(
+      (module) => module.QuickCaptureDialog,
+    ),
+  {
+    loading: () => (
+      <div
+        role="status"
+        aria-live="polite"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-base/80 p-4"
+      >
+        <div className="rounded-2xl border border-surface-border bg-elevated px-5 py-4 text-sm font-medium text-copy-secondary shadow-xl">
+          Loading quick capture…
+        </div>
+      </div>
+    ),
+  },
 );
 
 /**

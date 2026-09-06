@@ -64,7 +64,7 @@ test("responsive controls remain reachable across screen sizes", async ({
     await dialog.waitFor();
     await fits(title + " dialog", dialog);
     if (trigger === "New Task") {
-      await dialog.getByRole("button", { name: "Start", exact: true }).click();
+      await dialog.getByRole("button", { name: /^Start:/ }).click();
       const picker = page.getByRole("dialog", { name: "Start", exact: true });
       await picker.waitFor();
       await fits("date picker dialog", picker);
