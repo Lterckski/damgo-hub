@@ -19,6 +19,7 @@ import {
   serializeMeeting,
 } from "@/lib/meetings";
 import { prisma } from "@/lib/prisma";
+import { enqueueGoogleCalendarSync } from "@/lib/sync-calendar";
 
 // Fields that count as "email-relevant meeting details" per this spec's
 // Email Notifications section — description is deliberately excluded
@@ -366,6 +367,12 @@ export async function PATCH(
     );
   }
 
+  // Reschedules, retitles and participant changes all have to reach the
+  // synced copies: the job re-upserts for current participants and deletes
+  // the copy of anyone dropped from the list. Outside the outbox try/catch
+  // on purpose — a failed email enqueue must not also skip the calendar.
+  await enqueueGoogleCalendarSync("MEETING", meetingId);
+
   // Reschedule reminders on every successful edit, per this spec's
   // "Creating/updating a meeting schedules new reminder runs and cancels
   // any still-pending reminder runs for the previous schedule" — not
@@ -451,6 +458,9 @@ export async function DELETE(
   });
   if (cancellationOutboxId)
     await enqueueMeetingNotificationOutboxes([cancellationOutboxId]);
+  // The meeting row is gone, so the job finds nothing and removes every
+  // synced copy from the participants' calendars.
+  await enqueueGoogleCalendarSync("MEETING", meetingId);
 
   return NextResponse.json({ ok: true });
 }

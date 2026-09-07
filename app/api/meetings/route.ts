@@ -18,6 +18,7 @@ import {
   serializeMeetingListItem,
 } from "@/lib/meetings";
 import { prisma } from "@/lib/prisma";
+import { enqueueGoogleCalendarSync } from "@/lib/sync-calendar";
 
 // GET /api/meetings — meetings visible to the current member (their own
 // participations, or every meeting for an Admin). ?upcoming=true limits
@@ -232,6 +233,11 @@ export async function POST(request: Request) {
   }
   if (invitationOutboxId)
     await enqueueMeetingNotificationOutbox(invitationOutboxId);
+  // Push the meeting onto each participant's own Google Calendar. Enqueued
+  // after commit, and a failure here never fails the create — the same
+  // "background enhancement, not a correctness requirement" rule tasks and
+  // calendar events already follow.
+  await enqueueGoogleCalendarSync("MEETING", meeting.id);
 
   return NextResponse.json(
     { meeting: serializeMeetingListItem(meeting) },
