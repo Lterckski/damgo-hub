@@ -149,7 +149,14 @@ Meetings appear in the existing organization calendar without duplicating them i
 - Apply the calendar route's existing overlap-based `?from=&to=` range filtering to the complete meeting interval. A missing `endsAt` is a single-point item.
 - Meeting create, edit, and delete UI refreshes the relevant server data so the meetings list, meeting detail, dashboard, and calendar reflect the mutation without a manual reload.
 - Clicking a meeting in the calendar navigates to `/meetings/[meetingId]`; the detail page still enforces participant/Admin access.
-- Google Calendar synchronization for meetings is not part of this unit; it remains limited to tasks and standalone calendar events unless a later requirement explicitly adds meetings.
+- **Google Calendar synchronization for meetings is now in scope (2026-09-08).** The original deferral ("unless a later requirement explicitly adds meetings") has been taken up:
+  - A meeting's schedule is pushed to **each participant's own Google Calendar**, reusing the existing `sync-calendar-item-to-google` Trigger.dev job and `GoogleCalendarSyncedEvent` mapping rather than a second mechanism. `SyncedEventSourceType` gains `MEETING` (migration `20260908090000_sync_meetings_to_google_calendar`).
+  - Audience is the participant list — not the whole org — matching who can see the meeting and who receives its email.
+  - The synced event runs `scheduledAt` → `endsAt`; a meeting with no `endsAt` is a single point in time, the same fallback tasks and events already use.
+  - The Google event's description carries the meeting description, then `Location:` and `Join:` lines when set, so the calendar entry alone says where to be.
+  - Create, edit/reschedule and delete all re-enqueue the job: it re-upserts for current participants and deletes the copy belonging to anyone removed from the list. Deleting the meeting removes every copy.
+  - Enqueued **after** the database commit, and a failure never fails the mutation — this is a background enhancement, the same rule `10-calendar.md` set for tasks and events. It is also enqueued outside the notification-outbox `try`, so a failed email enqueue cannot silently skip the calendar.
+  - It depends on the same external setup as the rest of the sync (Google Cloud project, Clerk Google connection with `calendar.events`); a member who has not connected Google is skipped silently, never an error.
 
 ## Email Notifications
 
@@ -237,6 +244,7 @@ The detail page is an asynchronous planning page, not a live meeting workspace. 
 ## Check When Done
 
 - Meetings can be scheduled with participants and an optional physical location or external meeting link.
+- A meeting's date/time appears on each participant's own Google Calendar, updates when it is rescheduled or retitled, and disappears when they are removed from the meeting or the meeting is cancelled.
 - Only `org:admin` members can create, edit, reschedule, or delete a meeting, enforced server-side; every Scheduling Permission acceptance criterion above passes.
 - Upcoming and past meetings are listed correctly.
 - Visible meetings appear on the shared calendar with their optional end time; inaccessible meetings are not leaked.

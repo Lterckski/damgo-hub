@@ -89,7 +89,7 @@ Background jobs are scheduled/reminder-driven, not AI generation. Current job ty
 - **Calendar reminders** — notify members ahead of deadlines and calendar events.
 - **Penalty escalation checks** — recurring scan for unresolved or overdue penalties.
 - **Financial summaries** — recurring generation of budget/transaction summaries for admin review.
-- **Google Calendar sync** (`sync-calendar-item-to-google`, implemented in `10-calendar.md`) — request-triggered, not scheduled: pushes a `Task`'s due date or a `CalendarEvent` onto every relevant member's own Google Calendar (via their Clerk-held Google OAuth token). "Relevant" means a task's assignees, or every member for anything group-wide (unassigned task, or any `CalendarEvent` — those have no individual-assignment concept at all).
+- **Google Calendar sync** (`sync-calendar-item-to-google`, implemented in `10-calendar.md`) — request-triggered, not scheduled: pushes a `Task`'s due date or a `CalendarEvent` onto every relevant member's own Google Calendar (via their Clerk-held Google OAuth token). "Relevant" means a task's assignees, a meeting's participants, or every member for anything group-wide (unassigned task, or any `CalendarEvent` — those have no individual-assignment concept at all). Meetings joined this job on 2026-09-08.
 
 Request handlers only enqueue these jobs; they never run the reminder/notification logic inline.
 

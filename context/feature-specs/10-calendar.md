@@ -43,6 +43,8 @@ Create `app/(app)/calendar/page.tsx`.
 
 ## Google Calendar Sync
 
+Meetings are a third synced source as of 2026-09-08 — see [16-meeting-scheduling.md](16-meeting-scheduling.md). They sync to their participants only, unlike tasks and calendar events, which fan out to the whole team when they are group-wide.
+
 Task deadlines and calendar events also sync out to each member's own Google Calendar — added per the user's explicit request. Two decisions drive the design, both made by the user directly (not defaults):
 
 - **Group items go to *everyone's own* calendar**, not one shared team calendar. A task with no assignees, and every `CalendarEvent` (which has no individual-assignment concept at all — see the Goal above), is "group-wide": it gets pushed as a separate copy onto each member's own Google Calendar. A task *with* assignees only syncs to those members' calendars.
