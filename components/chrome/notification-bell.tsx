@@ -42,15 +42,51 @@ export function NotificationBell() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const refreshRef = useRef<() => void>(() => {});
+  const actingRef = useRef(false);
+  /**
+   * Apply a read locally, in the same interaction as the click.
+   *
+   * The server write still happens (and still wins on the next poll); this
+   * is what stops the badge from keeping its pre-open value until the
+   * 15-second poll, a refocus, or an `online` event. Idempotent by
+   * construction — an already-read notice leaves both the list and the
+   * count untouched, so re-opening one never double-decrements.
+   *
+   * See context/current-issues/current-issues-notifications.md.
+   */
+  function markReadLocally(id: string) {
+    setData((current) => {
+      if (!current) return current;
+      const notice = current.items.find((item) => item.id === id);
+      if (!notice || notice.read) return current;
+      return {
+        // The count is per-member unread; never let it go below zero even
+        // if a poll and a click race each other.
+        unread: Math.max(0, current.unread - 1),
+        items: current.items.map((item) =>
+          item.id === id ? { ...item, read: true } : item,
+        ),
+      };
+    });
+  }
   useEffect(() => {
     let disposed = false;
     let inFlight = false;
+    // A refresh asked for while a poll is already running used to be
+    // dropped, so a stale response could overwrite an optimistic read and
+    // nothing reconciled it until the next timer tick. Remember that a
+    // refresh was wanted and run it once the in-flight one settles.
+    let refreshQueued = false;
     let failures = 0;
     let timer: ReturnType<typeof setTimeout>;
     const controller = new AbortController();
     async function refresh() {
       clearTimeout(timer);
-      if (disposed || inFlight) return;
+      if (disposed) return;
+      if (inFlight) {
+        refreshQueued = true;
+        return;
+      }
       if (document.visibilityState !== "hidden" && navigator.onLine) {
         inFlight = true;
         try {
@@ -74,6 +110,11 @@ export function NotificationBell() {
           inFlight = false;
         }
       }
+      if (!disposed && refreshQueued) {
+        refreshQueued = false;
+        void refresh();
+        return;
+      }
       if (!disposed)
         timer = setTimeout(refresh, Math.min(120000, 15000 * 2 ** failures));
     }
@@ -94,7 +135,11 @@ export function NotificationBell() {
     };
   }, [filter]);
   async function act(action: string, notice?: Notice) {
-    if (busy) return;
+    // Ref, not the `busy` state: a second click can land before a state
+    // update commits, which is exactly the double-submit this must stop.
+    // See ui-context.md — Single-activation action buttons.
+    if (actingRef.current) return;
+    actingRef.current = true;
     setBusy(notice?.id ?? action);
     setError("");
     // Open a blank tab in the click gesture; asynchronous join URL lookup
@@ -102,6 +147,21 @@ export function NotificationBell() {
     const tab = action === "join" ? window.open("about:blank", "_blank") : null;
     if (tab) tab.opener = null;
     try {
+      // Dismissing an unread row removes it from the list, so its unread
+      // contribution has to go with it or the badge outlives the item.
+      if ((action === "read" || action === "dismiss") && notice)
+        markReadLocally(notice.id);
+      // "Mark all read" with no notice: clear every currently visible row,
+      // which is exactly the scope the server applies it to.
+      else if (action === "read" && !notice)
+        setData((current) =>
+          current
+            ? {
+                unread: 0,
+                items: current.items.map((item) => ({ ...item, read: true })),
+              }
+            : current,
+        );
       const result = await hubPost({
         action,
         id:
@@ -118,6 +178,7 @@ export function NotificationBell() {
       tab?.close();
       setError(e instanceof Error ? e.message : "Action failed");
     } finally {
+      actingRef.current = false;
       setBusy(null);
     }
   }
@@ -250,12 +311,31 @@ export function NotificationBell() {
                         <button
                           className="block w-full rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-brand"
                           onClick={() => {
+                            // Same guard as every other action here: two
+                            // fast clicks would otherwise send overlapping
+                            // reads and push the route twice.
+                            if (actingRef.current) return;
+                            actingRef.current = true;
+                            // Clear the unread treatment and the badge
+                            // immediately; the popover is about to close,
+                            // so waiting for the response (or worse, the
+                            // next poll) leaves a stale count behind.
+                            markReadLocally(n.id);
                             void hubPost({ action: "read", id: n.id })
                               .then(() => {
                                 setOpen(false);
                                 router.push(n.url);
+                                refreshRef.current();
                               })
-                              .catch((e) => setError(e.message));
+                              .catch((e) => {
+                                // The optimistic update was wrong — say so
+                                // and let the next poll restore the truth.
+                                setError(e.message);
+                                refreshRef.current();
+                              })
+                              .finally(() => {
+                                actingRef.current = false;
+                              });
                           }}
                         >
                           <p className="text-xs text-copy-secondary">

@@ -54,8 +54,9 @@ export async function GET(request: Request) {
   });
 }
 
-// POST /api/meetings — any authenticated member can schedule a meeting
-// and becomes its organizer, automatically included as a participant.
+// POST /api/meetings — Admin only. Scheduling is an `org:admin` action
+// (Scheduling Permission in 16-meeting-scheduling.md); the scheduling
+// admin becomes the organizer and is automatically a participant.
 export async function POST(request: Request) {
   const workspaceDenied = await hubApiGuard();
   if (workspaceDenied) return workspaceDenied;
@@ -69,6 +70,14 @@ export async function POST(request: Request) {
     getCurrentMember(),
     isCurrentMemberAdmin(),
   ]);
+  // Enforced here, on the parsed request, before any write, outbox row or
+  // reminder is scheduled — hiding the dialog is presentation only.
+  if (!isAdmin) {
+    return NextResponse.json(
+      { error: "Only an admin can schedule a meeting" },
+      { status: 403 },
+    );
+  }
   const body = await request.json().catch(() => null);
   if (!body) {
     return NextResponse.json(

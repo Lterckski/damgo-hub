@@ -10,6 +10,7 @@ import { countdownLabel, dueLabel, relativeDateTimeLabel } from "@/lib/dashboard
 import type { UrgentItem } from "@/lib/dashboard/types";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 
 /**
  * Row 1 — the one merged urgency strip.
@@ -56,6 +57,8 @@ export function NeedsYouToday({ items }: NeedsYouTodayProps) {
   const [resolved, setResolved] = React.useState<Set<string>>(new Set());
 
   const live = items.filter((item) => !resolved.has(item.id));
+
+  const single = useSingleFlight();
 
   async function act(item: UrgentItem) {
     if (!item.action) return;
@@ -181,7 +184,7 @@ export function NeedsYouToday({ items }: NeedsYouTodayProps) {
                   // urgency the row's own accent already carries.
                   variant={item.action.kind === "JOIN_MEETING" ? "default" : "outline"}
                   disabled={isBusy}
-                  onClick={() => act(item)}
+                  onClick={single(() => act(item), item.id)}
                   className="shrink-0"
                 >
                   {item.action.kind === "JOIN_MEETING" && <ExternalLink className="h-3.5 w-3.5" />}

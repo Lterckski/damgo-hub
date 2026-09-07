@@ -5,6 +5,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { formatPHP } from "@/lib/currency";
 import { recordAuditEvent, requireReason } from "@/lib/audit-log";
+import { decideProject } from "@/lib/project-decisions";
 import type { AuditActor } from "@/lib/audit-log";
 import { sendBroadcast } from "@/lib/admin/broadcasts";
 import { REASON_REQUIRED_ACTION_IDS } from "@/lib/admin/queue";
@@ -93,8 +94,20 @@ export async function applyQueueAction(
         reason,
       );
 
+    // Approve/reject share one implementation with the /projects controls
+    // (lib/project-decisions.ts) so the two surfaces cannot drift apart.
     case "project.approve":
-      return setProjectStatus(actor, entityId, "ACTIVE", reason);
+    case "project.reject": {
+      const outcome = await decideProject(
+        actor,
+        entityId,
+        actionId === "project.approve" ? "APPROVE" : "REJECT",
+        rawReason,
+      );
+      return outcome.ok
+        ? { ok: true, message: outcome.message }
+        : { ok: false, status: outcome.status, error: outcome.error };
+    }
     case "project.archive":
       return setProjectStatus(actor, entityId, "ARCHIVED", reason);
 
@@ -369,7 +382,7 @@ async function decideAgendaProposal(
 async function setProjectStatus(
   actor: AuditActor,
   projectId: string,
-  status: "PROPOSED" | "ACTIVE" | "COMPLETED" | "ARCHIVED",
+  status: "PROPOSED" | "ACTIVE" | "COMPLETED" | "ARCHIVED" | "REJECTED",
   reason: string | null,
 ): Promise<MutationOutcome> {
   const project = await prisma.project.findUnique({
@@ -611,13 +624,30 @@ export async function applyInlineEdit(
         input.value === "WAIVED" ? "WAIVED" : "RESOLVED",
         input.value === "WAIVED" ? requireReason(input.reason) : null,
       );
-    case "projects.status":
-      return setProjectStatus(
-        context.actor,
-        input.recordId,
-        input.value as "PROPOSED" | "ACTIVE" | "COMPLETED" | "ARCHIVED",
+    case "projects.status": {
+      // Approval and rejection are decisions, not inline edits. Routing them
+      // through decideProject keeps the audit action, the rejection-reason
+      // requirement and the already-decided 409 in one place; letting the
+      // cell write them directly would skip all three. The value arrives as
+      // an unvalidated string, so it is checked here rather than asserted.
+      const value = String(input.value);
+      if (value === "ACTIVE" || value === "REJECTED") {
+        const outcome = await decideProject(
+          context.actor,
+          input.recordId,
+          value === "ACTIVE" ? "APPROVE" : "REJECT",
+          input.reason,
+        );
+        return outcome.ok
+          ? { ok: true, message: outcome.message }
+          : { ok: false, status: outcome.status, error: outcome.error };
+      }
+      if (value !== "PROPOSED" && value !== "COMPLETED" && value !== "ARCHIVED")
+        return { ok: false, status: 400, error: "Invalid project status" };
+      return setProjectStatus(context.actor, input.recordId, value,
         typeof input.reason === "string" ? input.reason : null,
       );
+    }
     case "projects.priority":
       return updateProjectPriority(context.actor, input.recordId, input.value);
     case "activity.status":

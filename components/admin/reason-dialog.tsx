@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 
 /**
  * The reason prompt every override action goes through.
@@ -57,6 +58,8 @@ function ReasonForm({ request, onClose }: { request: ReasonRequest; onClose: () 
   const phraseMatches =
     !phrase || confirmation.trim().toLowerCase() === phrase.trim().toLowerCase();
   const canSubmit = reason.trim().length >= 3 && phraseMatches && !isSubmitting;
+
+  const single = useSingleFlight();
 
   async function submit() {
     if (!canSubmit) return;
@@ -123,7 +126,7 @@ function ReasonForm({ request, onClose }: { request: ReasonRequest; onClose: () 
           </Button>
           <Button
             variant={request.destructive ? "destructive" : "default"}
-            onClick={submit}
+            onClick={single(submit)}
             disabled={!canSubmit}
           >
             {isSubmitting ? "Working…" : request.confirmLabel}

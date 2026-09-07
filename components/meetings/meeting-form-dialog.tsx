@@ -35,7 +35,6 @@ interface MeetingFormDialogProps {
   members: MeetingMemberOption[];
   currentMemberId: string;
   /** Leader/Assistant Leader — gates the inline "add an agenda" builder shown while scheduling. */
-  isAdmin: boolean;
   /** Present = edit this meeting (organizer only, enforced server-side too). Absent = create. */
   meeting?: SerializedMeeting;
 }
@@ -57,7 +56,6 @@ interface MeetingFormDialogProps {
 export function MeetingFormDialog({
   members,
   currentMemberId,
-  isAdmin,
   meeting,
   open,
   onOpenChange,
@@ -255,7 +253,6 @@ export function MeetingFormDialog({
             </div>
 
             <AgendaBuilder
-              isAdmin={isAdmin}
               isEdit={isEdit}
               drafts={agendaDrafts}
               onAdd={addAgendaDraft}
@@ -356,7 +353,6 @@ export function MeetingFormDialog({
 }
 
 interface AgendaBuilderProps {
-  isAdmin: boolean;
   isEdit: boolean;
   drafts: string[];
   onAdd: () => void;
@@ -365,17 +361,15 @@ interface AgendaBuilderProps {
 }
 
 /**
- * "Add an agenda" — inline agenda-item builder for the create flow, per
- * 16-meeting-scheduling.md's Permissions ("only Leader/Assistant Leader
- * add final agenda items directly") applied to this new surface: a
- * regular member gets a disabled, explanatory stand-in instead of a live
- * button, since proposals need a real meeting to attach to and none
- * exists yet at this point in the create flow. Not rendered at all in
- * edit mode — the detail page already owns agenda management for an
- * existing meeting.
+ * "Add an agenda" — inline agenda-item builder for the create flow. Items
+ * added here go straight onto the final agenda, which
+ * 16-meeting-scheduling.md restricts to the Leader/Assistant Leader; since
+ * scheduling itself is now admin-only, everyone who can reach this builder
+ * already holds that authority and it needs no role prop of its own. The
+ * server enforces it either way. Not rendered in edit mode — the detail
+ * page owns agenda management for an existing meeting.
  */
 function AgendaBuilder({
-  isAdmin,
   isEdit,
   drafts,
   onAdd,
@@ -419,21 +413,11 @@ function AgendaBuilder({
         </ul>
       )}
 
-      {isAdmin ? (
-        <Button type="button" variant="outline" size="sm" onClick={onAdd}>
-          <Plus className="h-3.5 w-3.5" /> Add an agenda
-        </Button>
-      ) : (
-        <div>
-          <Button type="button" variant="outline" size="sm" disabled>
-            Propose an agenda
-          </Button>
-          <p className="mt-1.5 text-xs text-copy-secondary">
-            You&apos;ll be able to propose agenda items once this meeting is
-            scheduled.
-          </p>
-        </div>
-      )}
+      {/* Only an admin can open this dialog at all, so the old disabled
+          "Propose an agenda" member stand-in is unreachable and gone. */}
+      <Button type="button" variant="outline" size="sm" onClick={onAdd}>
+        <Plus className="h-3.5 w-3.5" /> Add an agenda
+      </Button>
     </div>
   );
 }

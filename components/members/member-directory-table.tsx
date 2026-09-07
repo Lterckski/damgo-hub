@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 import {
   Dialog,
   DialogContent,
@@ -129,6 +130,7 @@ export function MemberDirectoryTable({
     });
   }
 
+  const single = useSingleFlight();
   async function saveRoleTags() {
     if (!editingMember) return;
     setIsSaving(true);
@@ -324,7 +326,7 @@ export function MemberDirectoryTable({
                         >
                           Edit role tags
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toggleStatus(member)}>
+                        <DropdownMenuItem onClick={single(() => toggleStatus(member), member.id)}>
                           {member.status === "ACTIVE"
                             ? "Set inactive"
                             : "Set active"}
@@ -419,7 +421,7 @@ export function MemberDirectoryTable({
             <Button variant="ghost" onClick={() => setEditingMember(null)}>
               Cancel
             </Button>
-            <Button onClick={saveRoleTags} disabled={isSaving}>
+            <Button onClick={single(saveRoleTags)} disabled={isSaving}>
               Save
             </Button>
           </DialogFooter>
@@ -460,7 +462,7 @@ export function MemberDirectoryTable({
                       variant="ghost"
                       size="sm"
                       disabled={isSaving}
-                      onClick={() => revokeAssistantLeader(member.id)}
+                      onClick={single(() => revokeAssistantLeader(member.id), member.id)}
                     >
                       Revoke
                     </Button>
@@ -469,7 +471,7 @@ export function MemberDirectoryTable({
                       variant="outline"
                       size="sm"
                       disabled={isSaving}
-                      onClick={() => assignAssistantLeader(member.id)}
+                      onClick={single(() => assignAssistantLeader(member.id), member.id)}
                     >
                       Assign
                     </Button>
@@ -515,7 +517,7 @@ export function MemberDirectoryTable({
             <Button
               variant="destructive"
               disabled={isDeleting}
-              onClick={deleteMember}
+              onClick={single(deleteMember)}
             >
               Delete member
             </Button>

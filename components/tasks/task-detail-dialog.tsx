@@ -28,6 +28,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { DateTimePicker } from "@/components/shared/date-time-picker";
 import { DocumentMultiSelect } from "@/components/tasks/document-multi-select";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 import {
   TaskPriorityBadge,
   type TaskPriorityValue,
@@ -168,6 +169,8 @@ export function TaskDetailDialog({
     [NO_PROJECT]: NO_PROJECT_LABEL,
     ...Object.fromEntries(projectOptions.map((p) => [p.id, p.name])),
   };
+
+  const single = useSingleFlight();
 
   async function saveTask() {
     setIsSaving(true);
@@ -523,7 +526,7 @@ export function TaskDetailDialog({
             <Button
               variant="ghost"
               disabled={isSaving}
-              onClick={deleteTask}
+              onClick={single(deleteTask)}
               className="text-error"
             >
               <Trash2 className="h-4 w-4" /> Delete
@@ -539,7 +542,7 @@ export function TaskDetailDialog({
                 Cancel
               </Button>
               <Button
-                onClick={saveTask}
+                onClick={single(saveTask)}
                 disabled={
                   isSaving ||
                   draftStartDate === "" ||

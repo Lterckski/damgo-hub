@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { DateTimePicker } from "@/components/shared/date-time-picker";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 import {
   PROJECT_CATEGORY_OPTIONS,
   PROJECT_PRIORITY_OPTIONS,
@@ -120,6 +121,8 @@ export function NewProjectDialog({
       prev.map((link) => (link.key === key ? { ...link, ...patch } : link)),
     );
   }
+
+  const single = useSingleFlight();
 
   function removeLink(key: string) {
     setLinks((prev) => prev.filter((link) => link.key !== key));
@@ -408,7 +411,7 @@ export function NewProjectDialog({
               <Button
                 type="button"
                 disabled={isSubmitting || name.trim() === ""}
-                onClick={createProject}
+                onClick={single(createProject)}
               >
                 Create Proposal
               </Button>

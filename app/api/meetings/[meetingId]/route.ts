@@ -126,7 +126,7 @@ export async function PATCH(
   }
 
   const { meetingId } = await params;
-  const member = await getCurrentMember();
+  const isAdmin = await isCurrentMemberAdmin();
 
   const existing = await prisma.meeting.findUnique({
     where: {
@@ -138,11 +138,12 @@ export async function PATCH(
   if (!existing) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
-  // Organizer only — Admin agenda authority does not extend to another
-  // organizer's meeting details, per this spec's explicit call-out.
-  if (existing.organizerId !== member.id) {
+  // Admin only. Editing a meeting is an `org:admin` action, and any admin
+  // may edit any meeting — that is what lets an admin correct a meeting a
+  // member organized before scheduling was restricted.
+  if (!isAdmin) {
     return NextResponse.json(
-      { error: "Only the organizer can edit this meeting" },
+      { error: "Only an admin can edit this meeting" },
       { status: 403 },
     );
   }
@@ -244,8 +245,7 @@ export async function PATCH(
         include: MEETING_DETAIL_INCLUDE,
       });
       if (!current) return { kind: "not-found" } as const;
-      if (current.organizerId !== member.id)
-        return { kind: "forbidden" } as const;
+      if (!isAdmin) return { kind: "forbidden" } as const;
 
       const effectiveEndsAt = resolveEffectiveEndsAt(
         endsAtProvided,
@@ -351,7 +351,7 @@ export async function PATCH(
   }
   if (transactionResult.kind === "forbidden") {
     return NextResponse.json(
-      { error: "Only the organizer can edit this meeting" },
+      { error: "Only an admin can edit this meeting" },
       { status: 403 },
     );
   }
@@ -404,7 +404,7 @@ export async function DELETE(
   }
 
   const { meetingId } = await params;
-  const member = await getCurrentMember();
+  const isAdmin = await isCurrentMemberAdmin();
 
   const meeting = await prisma.meeting.findUnique({
     where: {
@@ -416,9 +416,9 @@ export async function DELETE(
   if (!meeting) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
-  if (meeting.organizerId !== member.id) {
+  if (!isAdmin) {
     return NextResponse.json(
-      { error: "Only the organizer can delete this meeting" },
+      { error: "Only an admin can delete this meeting" },
       { status: 403 },
     );
   }

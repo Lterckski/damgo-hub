@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DateTimePicker } from "@/components/shared/date-time-picker";
 import type { SerializedCalendarEvent } from "@/lib/calendar";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 
 const FIELD_LABEL_CLASS = "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
 
@@ -28,6 +29,7 @@ interface EventDetailDialogProps {
 
 export function EventDetailDialog({ event, canEdit, onClose }: EventDetailDialogProps) {
   const router = useRouter();
+  const single = useSingleFlight();
   const [isSaving, setIsSaving] = useState(false);
   const [title, setTitle] = useState(event.title);
   const [startAt, setStartAt] = useState(event.startAt);
@@ -79,7 +81,7 @@ export function EventDetailDialog({ event, canEdit, onClose }: EventDetailDialog
         </DialogHeader>
 
         {canEdit ? (
-          <form action={saveEvent} className="grid gap-4">
+          <form action={single(saveEvent)} className="grid gap-4">
             <div>
               <label className={FIELD_LABEL_CLASS}>
                 Title <span className="text-error">*</span>
@@ -109,7 +111,7 @@ export function EventDetailDialog({ event, canEdit, onClose }: EventDetailDialog
                 variant="ghost"
                 className="text-error"
                 disabled={isSaving}
-                onClick={deleteEvent}
+                onClick={single(deleteEvent)}
               >
                 <Trash2 className="h-4 w-4" /> Delete
               </Button>

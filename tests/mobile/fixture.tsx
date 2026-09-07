@@ -108,7 +108,7 @@ export function MobileLayoutFixture() {
               currentMemberId="a"
               isAdmin
             />
-            <MeetingFormDialog members={members} currentMemberId="a" isAdmin />
+            <MeetingFormDialog members={members} currentMemberId="a" />
             <NewProjectDialog members={members} currentMemberId="a" />
           </div>
         )}

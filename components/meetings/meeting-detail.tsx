@@ -38,6 +38,7 @@ import { Input } from "@/components/ui/input";
 import { BackButton } from "@/components/shared/back-button";
 import { MeetingFormDialog } from "@/components/meetings/meeting-form-dialog";
 import { meetingServiceLabel } from "@/lib/meeting-format";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 import type {
   MeetingMemberOption,
   SerializedAgendaItem,
@@ -51,7 +52,6 @@ interface MeetingDetailProps {
   meeting: SerializedMeeting;
   members: MeetingMemberOption[];
   currentMemberId: string;
-  isOrganizer: boolean;
   isAdmin: boolean;
 }
 
@@ -88,7 +88,6 @@ export function MeetingDetail({
   meeting,
   members,
   currentMemberId,
-  isOrganizer,
   isAdmin,
 }: MeetingDetailProps) {
   const router = useRouter();
@@ -108,6 +107,8 @@ export function MeetingDetail({
 
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [busyProposalId, setBusyProposalId] = useState<string | null>(null);
+
+  const single = useSingleFlight();
 
   async function deleteMeeting() {
     setIsSaving(true);
@@ -337,12 +338,12 @@ export function MeetingDetail({
           </div>
         </div>
 
-        {isOrganizer && (
+        {/* Admin-only: any admin may edit or cancel any meeting. */}
+        {isAdmin && (
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <MeetingFormDialog
               members={members}
               currentMemberId={currentMemberId}
-              isAdmin={isAdmin}
               meeting={meeting}
             />
             <Button
@@ -413,7 +414,7 @@ export function MeetingDetail({
           <Button
             type="button"
             disabled={isSubmittingProposal || proposalText.trim() === ""}
-            onClick={submitProposal}
+            onClick={single(submitProposal, "submit-proposal")}
           >
             Propose
           </Button>
@@ -449,7 +450,7 @@ export function MeetingDetail({
                         variant="outline"
                         size="icon-xs"
                         disabled={busyProposalId === proposal.id}
-                        onClick={() => decideProposal(proposal.id, "ACCEPTED")}
+                        onClick={single(() => decideProposal(proposal.id, "ACCEPTED"), proposal.id)}
                         title="Accept"
                       >
                         <Check className="h-3.5 w-3.5" />
@@ -460,7 +461,7 @@ export function MeetingDetail({
                         size="icon-xs"
                         className="text-error"
                         disabled={busyProposalId === proposal.id}
-                        onClick={() => decideProposal(proposal.id, "DECLINED")}
+                        onClick={single(() => decideProposal(proposal.id, "DECLINED"), proposal.id)}
                         title="Decline"
                       >
                         <X className="h-3.5 w-3.5" />
@@ -523,7 +524,7 @@ export function MeetingDetail({
                       type="button"
                       size="icon-xs"
                       disabled={busyItemId === item.id}
-                      onClick={() => saveAgendaItemText(item.id)}
+                      onClick={single(() => saveAgendaItemText(item.id), item.id)}
                     >
                       <Check className="h-3.5 w-3.5" />
                     </Button>
@@ -554,7 +555,7 @@ export function MeetingDetail({
                       variant="ghost"
                       size="icon-xs"
                       disabled={index === 0 || busyItemId === item.id}
-                      onClick={() => moveAgendaItem(item, -1)}
+                      onClick={single(() => moveAgendaItem(item, -1), item.id)}
                       title="Move up"
                     >
                       <ChevronUp className="h-3.5 w-3.5" />
@@ -567,7 +568,7 @@ export function MeetingDetail({
                         index === meeting.agendaItems.length - 1 ||
                         busyItemId === item.id
                       }
-                      onClick={() => moveAgendaItem(item, 1)}
+                      onClick={single(() => moveAgendaItem(item, 1), item.id)}
                       title="Move down"
                     >
                       <ChevronDown className="h-3.5 w-3.5" />
@@ -590,7 +591,7 @@ export function MeetingDetail({
                       size="icon-xs"
                       className="text-error"
                       disabled={busyItemId === item.id}
-                      onClick={() => removeAgendaItem(item.id)}
+                      onClick={single(() => removeAgendaItem(item.id), item.id)}
                       title="Remove"
                     >
                       {busyItemId === item.id ? (
@@ -617,7 +618,7 @@ export function MeetingDetail({
             <Button
               type="button"
               disabled={isAddingItem || newItemText.trim() === ""}
-              onClick={addAgendaItem}
+              onClick={single(addAgendaItem, "add-agenda-item")}
             >
               <Plus className="h-3.5 w-3.5" /> Add
             </Button>
@@ -648,7 +649,7 @@ export function MeetingDetail({
               type="button"
               variant="destructive"
               disabled={isSaving}
-              onClick={deleteMeeting}
+              onClick={single(deleteMeeting, "delete-meeting")}
             >
               Delete
             </Button>

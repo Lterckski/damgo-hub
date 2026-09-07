@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { ProjectMemberOption } from "@/lib/projects";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 
 interface ManageCollaboratorsDialogProps {
   projectId: string;
@@ -52,6 +53,7 @@ export function ManageCollaboratorsDialog({
       .slice(0, 8);
   }, [allMembers, collaboratorIds, query]);
 
+  const single = useSingleFlight();
   async function addCollaborator(memberId: string) {
     setPendingId(memberId);
     try {
@@ -132,7 +134,7 @@ export function ManageCollaboratorsDialog({
                           type="button"
                           aria-label={`Remove ${collaborator.displayName}`}
                           disabled={pendingId === collaborator.id}
-                          onClick={() => removeCollaborator(collaborator.id)}
+                          onClick={single(() => removeCollaborator(collaborator.id), collaborator.id)}
                           className="text-copy-secondary hover:text-error"
                         >
                           <X className="h-4 w-4" />
@@ -162,7 +164,7 @@ export function ManageCollaboratorsDialog({
                         <button
                           type="button"
                           disabled={pendingId === result.id}
-                          onClick={() => addCollaborator(result.id)}
+                          onClick={single(() => addCollaborator(result.id), result.id)}
                           className="flex w-full items-center gap-2 rounded-xl border border-surface-border bg-surface px-3 py-2 text-left transition-colors hover:border-brand/40"
                         >
                           <Avatar className="h-6 w-6">

@@ -21,6 +21,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { CardEmptyState, PanelCard } from "@/components/dashboard/panel-card";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 
 /**
  * My Penalties.
@@ -48,6 +49,8 @@ export function MyPenaltiesCard({ penalties }: MyPenaltiesCardProps) {
   const open = penalties.filter((penalty) => penalty.status === "OPEN");
   const settled = penalties.filter((penalty) => penalty.status !== "OPEN");
   const owedCents = open.reduce((sum, penalty) => sum + (penalty.amountCents ?? 0), 0);
+
+  const single = useSingleFlight();
 
   async function post(body: Record<string, unknown>, penaltyId: string) {
     setBusyId(penaltyId);
@@ -146,7 +149,9 @@ export function MyPenaltiesCard({ penalties }: MyPenaltiesCardProps) {
                         size="sm"
                         variant="outline"
                         disabled={busyId === penalty.id}
-                        onClick={() => post({ action: "claim_paid", penaltyId: penalty.id }, penalty.id)}
+                        onClick={single(async () => {
+                          await post({ action: "claim_paid", penaltyId: penalty.id }, penalty.id);
+                        }, penalty.id)}
                       >
                         Mark as paid
                       </Button>
@@ -200,11 +205,11 @@ export function MyPenaltiesCard({ penalties }: MyPenaltiesCardProps) {
       <DisputeDialog
         penalty={disputing}
         onClose={() => setDisputing(null)}
-        onSubmit={async (reason) => {
+        onSubmit={single(async (reason: string) => {
           if (!disputing) return;
           const ok = await post({ action: "dispute", penaltyId: disputing.id, reason }, disputing.id);
           if (ok) setDisputing(null);
-        }}
+        }, disputing ? `dispute:${disputing.id}` : "dispute")}
       />
     </>
   );

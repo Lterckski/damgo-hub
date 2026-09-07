@@ -32,14 +32,21 @@ export function MeetingsList({ upcoming, past, members, currentMemberId, isAdmin
             Past
           </TabsTrigger>
         </TabsList>
-        <MeetingFormDialog members={members} currentMemberId={currentMemberId} isAdmin={isAdmin} />
+        {/* Scheduling is admin-only; the API refuses a member regardless. */}
+        {isAdmin && (
+          <MeetingFormDialog members={members} currentMemberId={currentMemberId} />
+        )}
       </div>
 
       <TabsContent value="upcoming" className="mt-6">
         <MeetingGrid
           meetings={upcoming}
           showJoinAction
-          emptyMessage="No upcoming meetings — schedule one to get started."
+          emptyMessage={
+            isAdmin
+              ? "No upcoming meetings — schedule one to get started."
+              : "No upcoming meetings yet."
+          }
         />
       </TabsContent>
       <TabsContent value="past" className="mt-6">

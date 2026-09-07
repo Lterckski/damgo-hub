@@ -8,6 +8,7 @@ import { agoLabel } from "@/lib/dashboard/relative-time";
 import type { AnnouncementRow } from "@/lib/dashboard/team";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 
 /**
  * Row 9 — admin-pinned notices, dismissed per member.
@@ -25,6 +26,7 @@ export function AnnouncementsStrip({ announcements }: { announcements: Announcem
   const router = useRouter();
   const { toast } = useToast();
   const [dismissed, setDismissed] = React.useState<Set<string>>(new Set());
+  const single = useSingleFlight();
 
   const live = announcements.filter((announcement) => !dismissed.has(announcement.id));
   if (live.length === 0) return null;
@@ -74,7 +76,7 @@ export function AnnouncementsStrip({ announcements }: { announcements: Announcem
             size="icon-xs"
             variant="ghost"
             aria-label={`Dismiss ${announcement.title}`}
-            onClick={() => dismiss(announcement.id)}
+            onClick={single(() => dismiss(announcement.id), announcement.id)}
           >
             <X className="h-3.5 w-3.5" />
           </Button>

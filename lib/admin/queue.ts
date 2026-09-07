@@ -83,6 +83,14 @@ const PROPOSAL_ACTIONS: QueueAction[] = [
 
 const PROJECT_ACTIONS: QueueAction[] = [
   { actionId: "project.approve", label: "Approve", variant: "primary" },
+  // Rejecting is a terminal decision on someone's proposal, so it carries
+  // the same "say why" rule as waiving a penalty.
+  {
+    actionId: "project.reject",
+    label: "Reject",
+    variant: "destructive",
+    requiresReason: true,
+  },
   { actionId: "project.archive", label: "Archive", variant: "destructive" },
 ];
 
@@ -122,7 +130,7 @@ export function isQueueActionId(value: unknown): value is string {
 
 /** The reason-required actions, so the route can enforce it server-side too. */
 export const REASON_REQUIRED_ACTION_IDS = new Set(
-  [...PENALTY_ACTIONS, ...TASK_ACTIONS]
+  [...PENALTY_ACTIONS, ...TASK_ACTIONS, ...PROJECT_ACTIONS]
     .filter((a) => a.requiresReason)
     .map((a) => a.actionId),
 );

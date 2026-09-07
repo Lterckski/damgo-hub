@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { AdminDrawerTarget } from "@/lib/admin/types";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 
 /**
  * Zone 2 — the Action Queue.
@@ -69,6 +70,7 @@ interface ActionQueueProps {
 }
 
 export function ActionQueue({ items, onAction, onOpenDrawer, pendingIds }: ActionQueueProps) {
+  const single = useSingleFlight();
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
 
   // Selection is read through the live item list rather than pruned when
@@ -227,7 +229,7 @@ export function ActionQueue({ items, onAction, onOpenDrawer, pendingIds }: Actio
                             : "outline"
                       }
                       disabled={isPending}
-                      onClick={() => onAction(action, [item.entityId])}
+                      onClick={single(() => onAction(action, [item.entityId]), `${action.actionId}:${item.entityId}`)}
                     >
                       {action.label}
                     </Button>

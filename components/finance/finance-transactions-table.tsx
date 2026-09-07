@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { formatPHP } from "@/lib/currency";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 
 export interface TransactionRow {
   id: string;
@@ -176,6 +177,7 @@ export function FinanceTransactionsTable({
     setCustomCategory("");
   }
 
+  const single = useSingleFlight();
   async function submitTransaction(formData: FormData) {
     setIsSubmitting(true);
     try {
@@ -316,7 +318,7 @@ export function FinanceTransactionsTable({
                               variant="ghost"
                               size="sm"
                               disabled={decidingId === transaction.id}
-                              onClick={() => decide(transaction.id, "APPROVED")}
+                              onClick={single(() => decide(transaction.id, "APPROVED"), transaction.id)}
                             >
                               Approve
                             </Button>
@@ -324,7 +326,7 @@ export function FinanceTransactionsTable({
                               variant="ghost"
                               size="sm"
                               disabled={decidingId === transaction.id}
-                              onClick={() => decide(transaction.id, "REJECTED")}
+                              onClick={single(() => decide(transaction.id, "REJECTED"), transaction.id)}
                             >
                               Reject
                             </Button>
@@ -357,7 +359,7 @@ export function FinanceTransactionsTable({
             </DialogDescription>
           </DialogHeader>
 
-          <form action={submitTransaction} className="grid gap-4">
+          <form action={single(submitTransaction)} className="grid gap-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={FIELD_LABEL_CLASS}>Type</label>

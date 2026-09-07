@@ -30,6 +30,7 @@ import { collapseDocImages, expandDocImages } from "@/lib/collapse-doc-images";
 import { getGoogleDriveEmbedUrl } from "@/lib/google-drive-embed";
 import { cn } from "@/lib/utils";
 import type { SerializedDoc, SerializedDocAttachment } from "@/lib/docs";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 
 const DriveFilePicker = dynamic(() =>
   import("@/components/docs/drive-file-picker").then(
@@ -99,6 +100,7 @@ export function DocDetail({
     setIsEditing(true);
   }
 
+  const single = useSingleFlight();
   async function save() {
     setIsSaving(true);
     try {
@@ -193,7 +195,7 @@ export function DocDetail({
                   type="button"
                   size="sm"
                   disabled={isSaving || title.trim() === ""}
-                  onClick={save}
+                  onClick={single(save)}
                 >
                   Save
                 </Button>
@@ -394,7 +396,7 @@ export function DocDetail({
               type="button"
               variant="destructive"
               disabled={isSaving}
-              onClick={deleteDoc}
+              onClick={single(deleteDoc)}
             >
               <Trash2 className="h-3.5 w-3.5" /> Delete
             </Button>

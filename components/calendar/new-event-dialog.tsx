@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DateTimePicker } from "@/components/shared/date-time-picker";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 
 const FIELD_LABEL_CLASS = "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
 
@@ -26,6 +27,7 @@ export function NewEventDialog() {
   const [title, setTitle] = useState("");
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
+  const single = useSingleFlight();
 
   function resetForm() {
     setTitle("");
@@ -77,7 +79,7 @@ export function NewEventDialog() {
             </DialogDescription>
           </DialogHeader>
 
-          <form action={createEvent} className="grid gap-4">
+          <form action={single(createEvent)} className="grid gap-4">
             <div>
               <label className={FIELD_LABEL_CLASS}>
                 Title <span className="text-error">*</span>

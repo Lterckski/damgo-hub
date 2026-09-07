@@ -10,6 +10,7 @@ import type { RankedIdea } from "@/lib/dashboard/ideas";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { CardEmptyState, PanelCard } from "@/components/dashboard/panel-card";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 
 /**
  * Row 6 — top ideas by vote, with inline upvoting.
@@ -27,6 +28,8 @@ export function IdeasCard({ ideas }: { ideas: RankedIdea[] }) {
   const router = useRouter();
   const { toast } = useToast();
   const [overrides, setOverrides] = React.useState<Record<string, { voted: boolean; delta: number }>>({});
+
+  const single = useSingleFlight();
 
   async function toggle(idea: RankedIdea) {
     const current = overrides[idea.ideaNodeId];
@@ -92,7 +95,7 @@ export function IdeasCard({ ideas }: { ideas: RankedIdea[] }) {
               <li key={idea.ideaNodeId} className="flex items-start gap-2.5">
                 <button
                   type="button"
-                  onClick={() => toggle(idea)}
+                  onClick={single(() => toggle(idea), idea.ideaNodeId)}
                   aria-pressed={voted}
                   aria-label={voted ? `Remove vote from ${idea.text}` : `Upvote ${idea.text}`}
                   className={cn(

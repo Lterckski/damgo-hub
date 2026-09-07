@@ -1,7 +1,7 @@
 import { entityVisibilityWhere } from "@/lib/hub/context";
 import { requireWorkspacePage as requireWorkspaceSession } from "@/lib/hub/context";
 import { prisma } from "@/lib/prisma";
-import { getCurrentMember } from "@/lib/current-member";
+import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
 import { getMemberPickerOptions } from "@/lib/members";
 import { PROJECT_INCLUDE, serializeProject } from "@/lib/projects";
 import { BackButton } from "@/components/shared/back-button";
@@ -17,19 +17,24 @@ export default async function ProjectsPage() {
   // projects") — this used to run as two separate findMany calls with the
   // same PROJECT_INCLUDE join, doubling this page's query cost for no
   // reason. Fetch once, derive the subset in JS instead.
-  const [allProjectRecords, memberRecords] = await Promise.all([
+  const [allProjectRecords, memberRecords, isAdmin] = await Promise.all([
     prisma.project.findMany({
       where: await entityVisibilityWhere("project"),
       include: PROJECT_INCLUDE,
       orderBy: { updatedAt: "desc" },
     }),
     getMemberPickerOptions(),
+    isCurrentMemberAdmin(),
   ]);
 
   const allProjects = allProjectRecords.map(serializeProject);
   const myProjects = allProjects.filter(
     (p) => p.ownerId === member.id || p.members.some((m) => m.id === member.id),
   );
+  // The org-wide queue of proposals still awaiting an admin decision. Same
+  // single fetch as the other two views — deriving the subset in JS keeps
+  // this page at one project query, per the server-latency work.
+  const proposedProjects = allProjects.filter((p) => p.status === "PROPOSED");
 
   return (
     <div className="p-6">
@@ -44,9 +49,11 @@ export default async function ProjectsPage() {
       <div className="mt-6">
         <ProjectsList
           myProjects={myProjects}
+          proposedProjects={proposedProjects}
           allProjects={allProjects}
           members={memberRecords}
           currentMemberId={member.id}
+          isAdmin={isAdmin}
         />
       </div>
     </div>

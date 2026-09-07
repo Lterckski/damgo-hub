@@ -29,6 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { downloadCsv } from "@/lib/admin/client";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 
 /**
  * Zone 4's one table, shared by all five tabs.
@@ -93,7 +94,9 @@ interface DataTableProps<Row> {
   activeFilterId: string | null;
   onFilterChange: (filterId: string | null) => void;
   onRowClick: (row: Row) => void;
-  onBulkAction: (action: BulkActionDef, ids: string[]) => void;
+  /** Must resolve when the mutation completes — the single-flight guard
+   *  below holds its key for exactly as long as this promise is pending. */
+  onBulkAction: (action: BulkActionDef, ids: string[]) => void | Promise<void>;
   /** Rows currently mid-flight, dimmed until the server confirms. */
   pendingIds: Set<string>;
 }
@@ -199,6 +202,12 @@ export function DataTable<Row>({
       return null;
     });
   }
+
+  // Export and bulk actions are the highest-risk repeat-activation surface
+  // in the app: both span the whole filtered dataset across pages, so a
+  // second activation would duplicate real work. See ui-context.md —
+  // Single-activation action buttons.
+  const single = useSingleFlight();
 
   async function exportCsv() {
     setExporting(true);
@@ -311,7 +320,7 @@ export function DataTable<Row>({
         <Button
           size="sm"
           variant="outline"
-          onClick={exportCsv}
+          onClick={single(exportCsv, "export")}
           disabled={visibleRows.length === 0 || exporting}
         >
           <Download className="h-4 w-4" />
@@ -336,7 +345,7 @@ export function DataTable<Row>({
                 key={action.id}
                 size="sm"
                 variant={action.destructive ? "destructive" : "outline"}
-                onClick={() => onBulkAction(action, selectedIds)}
+                onClick={single(() => onBulkAction(action, selectedIds), `bulk:${action.id}`)}
               >
                 {action.label}
               </Button>

@@ -459,9 +459,12 @@ export function projectsConfig(handlers: CellHandlers): TableConfig<ProjectTable
         cell: (row) => (
           <InlineSelect
             value={row.status}
+            // Approve/Reject live in the Action Queue and on /projects, where
+            // a rejection can collect its required reason. This cell offers
+            // only the statuses an inline edit may set; the server refuses
+            // the others here regardless.
             options={[
               { value: "PROPOSED", label: "Proposed" },
-              { value: "ACTIVE", label: "Active" },
               { value: "COMPLETED", label: "Completed" },
               { value: "ARCHIVED", label: "Archived" },
             ]}

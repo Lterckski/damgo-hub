@@ -93,7 +93,19 @@ export const PROJECT_STATUS_OPTIONS = [
   { value: "ACTIVE", label: "Active" },
   { value: "COMPLETED", label: "Completed" },
   { value: "ARCHIVED", label: "Archived" },
+  { value: "REJECTED", label: "Rejected" },
 ] as const;
+
+// The statuses an owner may set directly. Approval (ACTIVE) and rejection
+// (REJECTED) are admin decisions and are deliberately absent — they move
+// only through lib/project-decisions.ts. See 11-project-proposals.md.
+export const OWNER_SETTABLE_PROJECT_STATUSES = [
+  "COMPLETED",
+  "ARCHIVED",
+] as const;
+
+// Statuses that mean "an admin has decided this proposal", either way.
+export const DECIDED_PROJECT_STATUSES = ["ACTIVE", "REJECTED"] as const;
 
 export function projectStatusLabel(status: string): string {
   return PROJECT_STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status;
