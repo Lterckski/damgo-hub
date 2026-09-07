@@ -97,9 +97,70 @@ A few specifics the one-line spec bullets above didn't pin down, decided while b
 - **Editable via `PATCH`: name, description, objectives, status, priority, category, timeline, budget.** Not editable via `PATCH`: Team Lead (`ownerId`) and Supporting Links — reassigning ownership after creation and managing links both stayed out of scope for this pass rather than folded into the general update route. Team Members/Collaborators keep their own dedicated `POST`/`DELETE .../members` routes, unchanged from the original design.
 - **A task can only link to a `PROPOSED` or `ACTIVE` project**, not `COMPLETED`/`ARCHIVED` — the user's explicit call when asked directly, since the original ask ("Approved"/"In Progress") didn't map onto this schema's actual four statuses. See `lib/projects.ts`'s `TASK_LINKABLE_PROJECT_STATUSES`, enforced both in `POST`/`PATCH /api/tasks` and in which projects the New Task/task-detail dropdowns even offer.
 
+## Proposal Approval Flow
+
+Requirement recorded 2026-09-07. A project a member proposes does not become an active project on its own — it needs an Admin decision first. This **supersedes** the current rule that the owner may set `status` freely through `PATCH /api/projects/[projectId]`.
+
+### Required States
+
+The status is the single source of truth for whether work has been authorized. Nothing else — a filled-in timeline, an assigned collaborator, a linked task — implies approval.
+
+| State | Meaning | Who moves it there |
+| --- | --- | --- |
+| `PROPOSED` | Submitted, awaiting an Admin decision. The default at creation and still not settable by the proposer. | any member, by creating a proposal |
+| `ACTIVE` | Approved. The only transition that turns a proposal into a project the team works on. | `org:admin` only |
+| *rejected* | Declined by an Admin. **Not representable today** — `ProjectStatus` has no such value (see Open Questions). | `org:admin` only |
+| `COMPLETED` | Approved work that finished. Reachable only from `ACTIVE`. | owner or `org:admin`, unchanged |
+| `ARCHIVED` | Retired, kept for history. Reachable only from `ACTIVE`. | owner or `org:admin`, unchanged |
+
+- Creation always persists `PROPOSED`; `POST /api/projects` continues to ignore any client-supplied status. Nothing can be created directly as `ACTIVE`.
+- `PROPOSED → ACTIVE` and `PROPOSED → rejected` are Admin-only transitions. A proposal's own owner cannot make them by being the owner. (Whether an Admin may decide their own proposal is unresolved — see Open Questions.)
+- A decision is recorded, not just applied: who decided, when, and for a rejection a required reason, through the existing append-only `lib/audit-log.ts` and its `requireReason()` enforcement.
+- `TASK_LINKABLE_PROJECT_STATUSES` still allows `PROPOSED` and `ACTIVE`; a rejected proposal must not be task-linkable.
+- `/admin`'s existing Action Queue already lists `PROPOSED` projects and approves through `setProjectStatus(actor, id, "ACTIVE", reason)` (`lib/admin/mutations.ts`). The views below surface the same decision — they must call that same server module and write the same audit entry, not open a second approval path with its own rules.
+
+### Views
+
+The projects list separates three distinct views. They are separate destinations with their own contents and their own actions, not one grid behind a status dropdown.
+
+| View | Contents | Who sees it | Actions in it |
+| --- | --- | --- | --- |
+| My Projects | Projects the viewer owns or collaborates on. | every member | open; the owner's existing inline edit and Manage Collaborators |
+| Proposed Projects | Proposals in `PROPOSED`. **Whose** — the viewer's own submissions or the org-wide pending queue — is unresolved (see Open Questions), and the answer decides who sees this view. | unresolved | `org:admin`: Approve and Reject inline. Members: read-only, with no decision control rendered |
+| All Proposals | Every project in the org, deliberately not access-filtered — the existing open discovery list. The detail page still enforces `requireProjectAccess` regardless of how someone reached it. | every member | open; `org:admin` may decide a `PROPOSED` row from here |
+
+- Each view states its own empty state; an empty Proposed Projects reads as "nothing awaiting a decision," never as an error or an unstyled blank.
+- A proposal's state is visible in every view that can show it, using the existing status badge, so "waiting on an admin" is never inferred from which tab the row happens to be in.
+- The three views follow the [mobile browser requirements](../ui-context.md#mobile-browser-requirements): all three are reachable and readable at 320 CSS pixels, and Approve/Reject meet the touch-target rule.
+
+### Acceptance Criteria
+
+- `POST /api/projects` persists `PROPOSED` for every caller, including an Admin and including a body that supplies `status`.
+- `PATCH /api/projects/[projectId]` returns `403` when a non-admin sends a status change, while the owner's other edits (name, description, objectives, priority, category, timeline, budget) still succeed.
+- An `org:member` cannot reach `ACTIVE` through any route — project PATCH, the admin routes, or a bulk action — and a captured or hand-crafted request from that account is refused server-side, not merely hidden in the UI.
+- Approving writes exactly one audit entry naming the actor and the project; rejecting is refused without a reason.
+- Deciding an already-decided proposal returns `409` rather than applying twice, matching the existing "already decided" behavior on finance transactions and agenda proposals. This is also what makes the Approve/Reject buttons safe under [single activation](../ui-context.md#single-activation-action-buttons).
+- The proposer is notified of the decision in the header inbox, per the documented trigger list in [project-overview.md](../project-overview.md#notifications--announcements-hub); the notification is scoped to the proposer and does not widen access to the project.
+- My Projects, Proposed Projects, and All Proposals each render their own contents; no view is a client-side filter over a payload containing rows the viewer may not see.
+- A member sees no Approve or Reject control in any view, on any breakpoint.
+- Every surface that reads project status — dashboard cards, `/admin` stats and Action Queue, search results, task project pickers — derives it from the same status field, so an approval is reflected in all of them without a second write.
+
 ## Check When Done
 
 - proposals can be created, listed, renamed, and deleted by their owner
+- a proposal reaches `ACTIVE` only through an Admin decision, enforced server-side, and every Proposal Approval Flow acceptance criterion above passes
 - collaborators can be assigned/removed by the owner only
 - `AccessDenied` renders for members without access
 - `npm run build` passes
+
+## Open Questions
+
+Recorded 2026-09-07 with the Proposal Approval Flow requirement. These need a decision before it can be implemented.
+
+- **What is "Proposed Projects"?** Two readings: (a) the viewer's own submissions awaiting a decision — a personal "what I sent in" view every member gets; or (b) the org-wide pending queue — effectively an admin review list. The answer decides who the view is for, whether members see it at all, and whether it duplicates `/admin`'s existing Action Queue entry for `PROPOSED` projects or replaces it.
+- **Does "All Proposals" keep its current meaning?** Today that tab shows every project in the org at any status, as a deliberate discovery list. Should it stay that way, or narrow to proposals only — and if rejected proposals become representable, do they appear there?
+- **How is a rejection stored?** Add `REJECTED` to `ProjectStatus` (a migration and a new terminal state), keep the row `PROPOSED` with a separate decision record, or archive it? Related: may a rejected proposal be revised and resubmitted, and does that reuse the same record or create a new one?
+- **May an Admin approve their own proposal?** There are exactly two `org:admin` seats. Requiring a second Admin means the Leader and Assistant Leader can never self-start a project without the other one being available.
+- **Is approval a plain yes/no?** Can an Admin edit the proposal — budget, timeline, Team Lead, collaborators — as part of approving it, or does approval accept exactly what was submitted, leaving edits to the owner afterwards?
+- **Can a member still delete their own `PROPOSED` proposal?** Deletion is owner-only today. Does that survive, and can anything delete an `ACTIVE` project, or does `ARCHIVED` become the only exit?
+- **Where does "My Projects" draw the line?** Approved projects only, or does it also include the viewer's own pending proposals — which would put the same row in two of the three views?

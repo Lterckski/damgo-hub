@@ -68,3 +68,9 @@
 - Render display-only Markdown on the server. Keep heavy canvas/collaboration libraries route-local, and do not load a hidden board for an inactive tab.
 - Measure route JavaScript with `npm run analyze:client`; compare production file unions rather than unstable hashed chunk counts. See the [client bundle audit](current-issues/current-issues-client-bundle.md).
 - Validate interaction refactors with representative workloads and behavior checks. Record source-level risks separately from measured browser durations; fixture timing is not field INP. See the [interaction audit](current-issues/current-issues-interaction-performance.md).
+
+## Single-activation actions
+
+- Every action control must be safe against repeat activation; the canonical requirement, including its acceptance criteria and open questions, is [single-activation action buttons](ui-context.md#single-activation-action-buttons).
+- Set and read the guard synchronously, before the first `await` in the handler. A `disabled` prop set through state is feedback for the member, never the mechanism that prevents the second submission.
+- Mutations that must not happen twice are also refused server-side on the second attempt — return the existing `409` "already decided" shape rather than applying the change again.

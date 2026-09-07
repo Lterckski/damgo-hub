@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a place for members to schedule meetings, invite participants, and propose agenda topics before the meeting starts. Only the Leader and Assistant Leader may turn proposals into the final agenda or add agenda items directly.
+Build a place where Admins schedule meetings and invite participants, and participants propose agenda topics before the meeting starts (see Scheduling Permission — scheduling was originally open to any member). Only the Leader and Assistant Leader may turn proposals into the final agenda or add agenda items directly.
 
 Damgo Hub does **not** host the meeting itself. The actual meeting happens in person or through an external service such as Google Meet, Zoom, or Microsoft Teams. This feature must not add video, audio, screen sharing, recording, live meeting notes, a Liveblocks room, or a React Flow agenda board.
 
@@ -91,9 +91,31 @@ The `Restrict` relations intentionally prevent deleting a member without this re
 
 `MeetingEmailDelivery.recipientMemberId` is intentionally not reassigned or deleted. It is immutable delivery history, not current ownership, and must retain the original recipient identifier for auditing and duplicate prevention.
 
+## Scheduling Permission
+
+Requirement recorded 2026-09-07. Scheduling a meeting is an Admin action. This **supersedes** the "any authenticated member can schedule a meeting" rule in Permissions below; everything else about the meeting model — organizer ownership of the record, participant agenda proposals, and Leader/Assistant Leader agenda curation — is unchanged.
+
+- Only members holding the Clerk `org:admin` role may create, reschedule, edit, or delete a meeting, or change its participant list. Per [team-roster.md](../team-roster.md) that is the Leader and the Assistant Leader; per [architecture-context.md](../architecture-context.md#org-role-clerk-native-binary) `org:admin` is granted only through the Leader-gated "Assign Assistant Leader" flow. Meeting scheduling introduces no new role and no per-meeting permission of its own.
+- `org:member` keeps read access to the meetings already visible to them and gains no write path: no create, edit, reschedule, delete, or participant management, in the UI or through the API. (Whether member read access widens beyond today's participant-or-admin rule is unresolved — see Open Questions.)
+- Agenda behavior is unaffected. Any participant may still submit a `PENDING` agenda proposal, and only `org:admin` may accept or decline proposals and add, edit, reorder, or remove final agenda items.
+- The organizer is now always an `org:admin`. Keep `organizerId` and the organizer-only detail rules as written — they narrow *which* admin owns a record, they do not replace the role check.
+- Enforcement is server-side, in the `app/api/meetings` route handlers and any server action reaching the same mutations, on the parsed request, before any write, outbox row, or reminder is scheduled. Hiding the "Schedule Meeting" control is presentation only and never the check — [architecture invariant 3](../architecture-context.md#invariants).
+- The Meetings list dialog's non-admin fallback becomes unreachable: the disabled "Propose an agenda" stand-in described under Pages exists for a member who can open the Schedule Meeting dialog, and no member can. Remove it rather than leaving a dialog path that implies a member can schedule.
+
+### Acceptance Criteria
+
+- `POST /api/meetings` returns `403` for an authenticated `org:member` and `401` when signed out. The rejected request writes no `Meeting`, `MeetingParticipant`, `MeetingNotificationOutbox`, or `MeetingEmailDelivery` row and schedules no reminder run.
+- `PATCH /api/meetings/[meetingId]` and `DELETE /api/meetings/[meetingId]` return `403` for an `org:member`, including one who is a participant of that meeting.
+- The role is re-read from Clerk per request. A member demoted from `org:admin` loses meeting-write access on their next request without needing a new session, and no cached `Member` field is consulted for the decision.
+- A request replayed or hand-crafted from a non-admin account is refused at the mutation boundary, not merely absent from that account's UI.
+- The dev "View as Member" toggle refuses meeting mutations while active, the same way `requireAdmin()` already behaves for admin routes — so the toggle demonstrates a server denial, not a hidden button.
+- `GET /api/meetings` and `GET /api/meetings/[meetingId]` return exactly what they returned before this change for a member; no meeting data is newly exposed or newly hidden by it.
+- On `/meetings`, the meeting detail page, the calendar, dashboard widgets, and search results, a member sees no create, edit, reschedule, delete, or participant-management control — and removing those controls is not the only thing preventing the write.
+- Existing meeting email behavior is unchanged: invitations, updates, cancellations, and 24-hour/1-hour reminders still go to participants regardless of role, and an admin receives meeting email only when they are a participant.
+
 ## Permissions
 
-- Any authenticated member can schedule a meeting and becomes its organizer.
+- ~~Any authenticated member can schedule a meeting and becomes its organizer.~~ Superseded by Scheduling Permission above: only `org:admin` can schedule, and the scheduling admin becomes the organizer.
 - The organizer chooses the participants and is automatically included as a participant.
 - A participant or an Admin can view the meeting detail page.
 - Any participant can submit a `PENDING` agenda proposal. Members cannot set its status or position and cannot add directly to the final agenda.
@@ -215,6 +237,7 @@ The detail page is an asynchronous planning page, not a live meeting workspace. 
 ## Check When Done
 
 - Meetings can be scheduled with participants and an optional physical location or external meeting link.
+- Only `org:admin` members can create, edit, reschedule, or delete a meeting, enforced server-side; every Scheduling Permission acceptance criterion above passes.
 - Upcoming and past meetings are listed correctly.
 - Visible meetings appear on the shared calendar with their optional end time; inaccessible meetings are not leaked.
 - New participants receive one invitation email; removed participants and participants of a deleted meeting receive the appropriate cancellation email.
@@ -227,3 +250,13 @@ The detail page is an asynchronous planning page, not a live meeting workspace. 
 - Non-participants and non-Admins cannot view a meeting detail page.
 - No Liveblocks or in-app meeting experience is initialized from meeting pages.
 - `npm run build` passes.
+
+## Open Questions
+
+Recorded 2026-09-07 with the Scheduling Permission requirement. These need a decision before that requirement can be implemented.
+
+- **Does member read access widen?** "Members have read access to scheduled meetings" reads either as (a) keep today's rule — a member sees a meeting only when they are a participant (`lib/meetings.ts`'s `meetingVisibilityWhere`: participants or admin) — or (b) every member can read every scheduled meeting. (b) is a visibility change that reaches the meetings list, detail page, calendar merge, and unit 23's search and notification grants, so it is not something to infer.
+- **What happens to meetings a member already created?** Any existing meeting with a member as `organizerId` still has an organizer-only edit and delete path, which this requirement is meant to remove. Leave them as they are, or reassign their organizer to an admin?
+- **Who may edit a meeting the other admin created?** Today details are organizer-only and the agenda is admin-only. With both admins able to schedule, should either admin be able to edit or cancel any meeting, or does organizer-only still apply between the Leader and the Assistant Leader?
+- **May an admin schedule a meeting they are not part of?** The organizer is currently auto-added as a participant. Should an admin be able to schedule for others and exclude themselves, and if so do they still receive the invitation and reminder email?
+- **Does the Leader/Assistant Leader distinction matter here?** Nothing in this requirement needs `Member.isLeader`; confirm the Assistant Leader schedules and cancels with exactly the Leader's authority.
