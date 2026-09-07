@@ -94,7 +94,9 @@ interface DataTableProps<Row> {
   activeFilterId: string | null;
   onFilterChange: (filterId: string | null) => void;
   onRowClick: (row: Row) => void;
-  onBulkAction: (action: BulkActionDef, ids: string[]) => void;
+  /** Must resolve when the mutation completes — the single-flight guard
+   *  below holds its key for exactly as long as this promise is pending. */
+  onBulkAction: (action: BulkActionDef, ids: string[]) => void | Promise<void>;
   /** Rows currently mid-flight, dimmed until the server confirms. */
   pendingIds: Set<string>;
 }

@@ -72,12 +72,21 @@ export function NotificationBell() {
   useEffect(() => {
     let disposed = false;
     let inFlight = false;
+    // A refresh asked for while a poll is already running used to be
+    // dropped, so a stale response could overwrite an optimistic read and
+    // nothing reconciled it until the next timer tick. Remember that a
+    // refresh was wanted and run it once the in-flight one settles.
+    let refreshQueued = false;
     let failures = 0;
     let timer: ReturnType<typeof setTimeout>;
     const controller = new AbortController();
     async function refresh() {
       clearTimeout(timer);
-      if (disposed || inFlight) return;
+      if (disposed) return;
+      if (inFlight) {
+        refreshQueued = true;
+        return;
+      }
       if (document.visibilityState !== "hidden" && navigator.onLine) {
         inFlight = true;
         try {
@@ -100,6 +109,11 @@ export function NotificationBell() {
         } finally {
           inFlight = false;
         }
+      }
+      if (!disposed && refreshQueued) {
+        refreshQueued = false;
+        void refresh();
+        return;
       }
       if (!disposed)
         timer = setTimeout(refresh, Math.min(120000, 15000 * 2 ** failures));
@@ -297,6 +311,11 @@ export function NotificationBell() {
                         <button
                           className="block w-full rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-brand"
                           onClick={() => {
+                            // Same guard as every other action here: two
+                            // fast clicks would otherwise send overlapping
+                            // reads and push the route twice.
+                            if (actingRef.current) return;
+                            actingRef.current = true;
                             // Clear the unread treatment and the badge
                             // immediately; the popover is about to close,
                             // so waiting for the response (or worse, the
@@ -313,6 +332,9 @@ export function NotificationBell() {
                                 // and let the next poll restore the truth.
                                 setError(e.message);
                                 refreshRef.current();
+                              })
+                              .finally(() => {
+                                actingRef.current = false;
                               });
                           }}
                         >

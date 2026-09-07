@@ -134,6 +134,36 @@ describe("useSingleFlight", () => {
     });
   });
 
+  it("holds the key until deferred work resolves, not just until the call returns", async () => {
+    // The bug this covers: a handler that starts work and returns void
+    // released the guard immediately, so a second click resubmitted the
+    // same mutation. Only a returned promise keeps the slot held.
+    const { result } = renderHook(() => useSingleFlight());
+    const gate = deferred();
+    let submissions = 0;
+
+    const handler = result.current(() => {
+      submissions += 1;
+      return gate.promise;
+    });
+
+    let first!: Promise<void>;
+    await act(async () => {
+      first = handler();
+      void handler();
+    });
+    expect(submissions).toBe(1);
+
+    await act(async () => {
+      gate.resolve();
+      await first;
+    });
+    await act(async () => {
+      await handler();
+    });
+    expect(submissions).toBe(2);
+  });
+
   it("releases the key after the handler rejects", async () => {
     const { result } = renderHook(() => useSingleFlight());
     let calls = 0;

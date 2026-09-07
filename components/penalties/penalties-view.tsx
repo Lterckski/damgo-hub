@@ -451,14 +451,14 @@ function ResolvePenaltyDialog({
               type="button"
               variant="outline"
               disabled={isSubmitting}
-              onClick={single(() => decide("WAIVED"), "WAIVED")}
+              onClick={single(() => decide("WAIVED"))}
             >
               Waive
             </Button>
             <Button
               type="button"
               disabled={isSubmitting}
-              onClick={single(() => decide("RESOLVED"), "RESOLVED")}
+              onClick={single(() => decide("RESOLVED"))}
             >
               Resolve
             </Button>

@@ -624,13 +624,30 @@ export async function applyInlineEdit(
         input.value === "WAIVED" ? "WAIVED" : "RESOLVED",
         input.value === "WAIVED" ? requireReason(input.reason) : null,
       );
-    case "projects.status":
-      return setProjectStatus(
-        context.actor,
-        input.recordId,
-        input.value as "PROPOSED" | "ACTIVE" | "COMPLETED" | "ARCHIVED",
+    case "projects.status": {
+      // Approval and rejection are decisions, not inline edits. Routing them
+      // through decideProject keeps the audit action, the rejection-reason
+      // requirement and the already-decided 409 in one place; letting the
+      // cell write them directly would skip all three. The value arrives as
+      // an unvalidated string, so it is checked here rather than asserted.
+      const value = String(input.value);
+      if (value === "ACTIVE" || value === "REJECTED") {
+        const outcome = await decideProject(
+          context.actor,
+          input.recordId,
+          value === "ACTIVE" ? "APPROVE" : "REJECT",
+          input.reason,
+        );
+        return outcome.ok
+          ? { ok: true, message: outcome.message }
+          : { ok: false, status: outcome.status, error: outcome.error };
+      }
+      if (value !== "PROPOSED" && value !== "COMPLETED" && value !== "ARCHIVED")
+        return { ok: false, status: 400, error: "Invalid project status" };
+      return setProjectStatus(context.actor, input.recordId, value,
         typeof input.reason === "string" ? input.reason : null,
       );
+    }
     case "projects.priority":
       return updateProjectPriority(context.actor, input.recordId, input.value);
     case "activity.status":

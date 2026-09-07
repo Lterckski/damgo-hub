@@ -318,7 +318,10 @@ export function AdminConsole({
     refresh();
   }
 
-  function onBulkAction(action: BulkActionDef, ids: string[]) {
+  // Returns the promise so DataTable's single-flight guard holds its key
+  // until the mutation actually finishes; returning void released it
+  // immediately and let a second click submit the same bulk action.
+  function onBulkAction(action: BulkActionDef, ids: string[]): Promise<void> {
     if (action.requiresReason) {
       setReasonRequest({
         title: `${action.label} ${ids.length} record${ids.length === 1 ? "" : "s"}?`,
@@ -328,9 +331,11 @@ export function AdminConsole({
         destructive: action.destructive,
         onConfirm: (reason) => runBulk(action, ids, reason),
       });
-      return;
+      // The reason dialog owns the rest of this flow, and its own confirm
+      // button is guarded separately.
+      return Promise.resolve();
     }
-    void runBulk(action, ids);
+    return runBulk(action, ids);
   }
 
   // -------------------------------------------------------------------------

@@ -19,7 +19,6 @@ import type { Prisma } from "@/app/generated/prisma/client";
 
 import { recordAuditEvent, requireReason } from "@/lib/audit-log";
 import type { AuditActor } from "@/lib/audit-log";
-import { entityVisibilityWhere } from "@/lib/hub/context";
 import { prisma } from "@/lib/prisma";
 
 export type ProjectDecision = "APPROVE" | "REJECT";
@@ -75,11 +74,15 @@ export async function decideProject(
     };
   }
 
+  // Deliberately NOT filtered by entityVisibilityWhere("project"). A project
+  // record carries only a `project` grant (its owner and collaborators) —
+  // unlike penalties and transactions, it gets no `role: org:admin` grant —
+  // so the visibility filter would 404 for any admin who is not on the
+  // project, which is precisely the reviewer this flow exists for. Callers
+  // prove `org:admin` before reaching here, and that role is the authority
+  // for deciding a proposal.
   const project = await prisma.project.findUnique({
-    where: {
-      ...{ id: projectId },
-      AND: [await entityVisibilityWhere("project")],
-    },
+    where: { id: projectId },
     select: { id: true, name: true, status: true, ownerId: true },
   });
   if (!project) {

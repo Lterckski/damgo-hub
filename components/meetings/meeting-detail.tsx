@@ -414,7 +414,7 @@ export function MeetingDetail({
           <Button
             type="button"
             disabled={isSubmittingProposal || proposalText.trim() === ""}
-            onClick={single(submitProposal)}
+            onClick={single(submitProposal, "submit-proposal")}
           >
             Propose
           </Button>
@@ -618,7 +618,7 @@ export function MeetingDetail({
             <Button
               type="button"
               disabled={isAddingItem || newItemText.trim() === ""}
-              onClick={single(addAgendaItem)}
+              onClick={single(addAgendaItem, "add-agenda-item")}
             >
               <Plus className="h-3.5 w-3.5" /> Add
             </Button>
@@ -649,7 +649,7 @@ export function MeetingDetail({
               type="button"
               variant="destructive"
               disabled={isSaving}
-              onClick={single(deleteMeeting)}
+              onClick={single(deleteMeeting, "delete-meeting")}
             >
               Delete
             </Button>

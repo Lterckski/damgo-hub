@@ -42,7 +42,11 @@ export function MeetingsList({ upcoming, past, members, currentMemberId, isAdmin
         <MeetingGrid
           meetings={upcoming}
           showJoinAction
-          emptyMessage="No upcoming meetings — schedule one to get started."
+          emptyMessage={
+            isAdmin
+              ? "No upcoming meetings — schedule one to get started."
+              : "No upcoming meetings yet."
+          }
         />
       </TabsContent>
       <TabsContent value="past" className="mt-6">

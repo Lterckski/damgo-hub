@@ -14,9 +14,6 @@ vi.mock("@/lib/prisma", () => ({
     $transaction: (fn: (tx: unknown) => unknown) => transaction(fn),
   },
 }));
-vi.mock("@/lib/hub/context", () => ({
-  entityVisibilityWhere: async () => ({}),
-}));
 vi.mock("@/lib/audit-log", async () => {
   const actual =
     await vi.importActual<typeof import("@/lib/audit-log")>("@/lib/audit-log");
@@ -145,7 +142,25 @@ describe("decideProject", () => {
     expect(outcome).toMatchObject({ ok: false, status: 409 });
   });
 
-  it("404s an unknown or invisible project", async () => {
+  it("looks a project up without the visibility filter", async () => {
+    // Projects carry only a `project` grant (owner + collaborators), so
+    // filtering by visibility here would 404 for any admin who is not on
+    // the project — exactly the reviewer this flow exists for.
+    findUnique.mockResolvedValue({
+      id: "p1",
+      name: "Someone else's proposal",
+      status: "PROPOSED",
+      ownerId: "not-the-actor",
+    });
+
+    const outcome = await decideProject(actor, "p1", "APPROVE", null);
+
+    expect(outcome).toMatchObject({ ok: true, status: "ACTIVE" });
+    expect(findUnique.mock.calls[0][0].where).toEqual({ id: "p1" });
+    expect(findUnique.mock.calls[0][0].where).not.toHaveProperty("AND");
+  });
+
+  it("404s an unknown project", async () => {
     findUnique.mockResolvedValue(null);
     const outcome = await decideProject(actor, "nope", "APPROVE", null);
     expect(outcome).toMatchObject({ ok: false, status: 404 });

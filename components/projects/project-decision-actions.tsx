@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Check, X } from "lucide-react";
 
 import { ActionButton } from "@/components/shared/action-button";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -33,6 +34,10 @@ export function ProjectDecisionActions({
   projectName,
 }: ProjectDecisionActionsProps) {
   const router = useRouter();
+  // One slot for both decisions: approving and rejecting the same proposal
+  // are mutually exclusive, and letting both start means the loser's 409
+  // can land after the winner's refresh and show a stale error.
+  const single = useSingleFlight();
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
@@ -63,14 +68,20 @@ export function ProjectDecisionActions({
   return (
     <div
       className="flex flex-wrap items-center gap-2"
-      // The card is a link; the decision controls are not part of it.
-      onClick={(event) => event.stopPropagation()}
+      // These controls sit inside the card's Link. stopPropagation alone
+      // does not stop the anchor's default navigation, which would push to
+      // the project page and unmount the reject dialog before a reason
+      // could be typed — so cancel the default too.
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }}
     >
       <ActionButton
         size="sm"
         variant="default"
         pendingLabel="Approving…"
-        onAction={() => decide("APPROVE")}
+        onAction={single(() => decide("APPROVE"))}
       >
         <Check className="h-3.5 w-3.5" /> Approve
       </ActionButton>
@@ -116,7 +127,7 @@ export function ProjectDecisionActions({
               variant="destructive"
               pendingLabel="Rejecting…"
               disabled={reason.trim().length < 3}
-              onAction={() => decide("REJECT")}
+              onAction={single(() => decide("REJECT"))}
             >
               Reject proposal
             </ActionButton>

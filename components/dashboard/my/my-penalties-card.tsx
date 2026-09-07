@@ -205,11 +205,11 @@ export function MyPenaltiesCard({ penalties }: MyPenaltiesCardProps) {
       <DisputeDialog
         penalty={disputing}
         onClose={() => setDisputing(null)}
-        onSubmit={async (reason) => {
+        onSubmit={single(async (reason: string) => {
           if (!disputing) return;
           const ok = await post({ action: "dispute", penaltyId: disputing.id, reason }, disputing.id);
           if (ok) setDisputing(null);
-        }}
+        }, disputing ? `dispute:${disputing.id}` : "dispute")}
       />
     </>
   );

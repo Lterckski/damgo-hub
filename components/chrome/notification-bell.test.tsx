@@ -89,6 +89,64 @@ describe("notification bell read state", () => {
     await waitFor(() => expect(screen.getByText("1")).toBeTruthy());
   });
 
+  it("reconciles after a stale in-flight poll instead of dropping the refresh", async () => {
+    // First poll hangs. The read write lands while it is still in flight, so
+    // the post-write refresh has nowhere to go unless it is queued.
+    let releaseStale!: (v: {
+      unread: number;
+      items: ReturnType<typeof notice>[];
+    }) => void;
+    const stale = new Promise<{
+      unread: number;
+      items: ReturnType<typeof notice>[];
+    }>((resolve) => {
+      releaseStale = resolve;
+    });
+    get.mockReturnValueOnce(stale).mockResolvedValue({
+      unread: 0,
+      items: [notice("a", true), notice("b", true)],
+    });
+    post.mockResolvedValue({});
+
+    render(<NotificationBell />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: /notifications/i }),
+    );
+
+    // Opening the bell asks for a refresh while the first poll is still in
+    // flight — that request is the one that used to be silently dropped.
+    // Resolving the stale poll now delivers the pre-read payload.
+    releaseStale({ unread: 2, items: [notice("a"), notice("b")] });
+
+    // The queued refresh then runs on its own and the server's count wins,
+    // without waiting for the 15-second timer.
+    await waitFor(() =>
+      expect(
+        screen.getByText(/0 unread notifications/i, { selector: "span" }),
+      ).toBeTruthy(),
+    );
+    expect(get.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it("sends only one read when a row is double-clicked", async () => {
+    let settle!: () => void;
+    post.mockReturnValue(
+      new Promise<void>((resolve) => {
+        settle = resolve;
+      }),
+    );
+    await openBell({ unread: 1, items: [notice("a")] });
+
+    const row = await screen.findByText("Notice a");
+    fireEvent.click(row);
+    fireEvent.click(row);
+
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(push).toHaveBeenCalledTimes(0);
+    settle();
+    await waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+  });
+
   it("clears every visible row on Mark all read", async () => {
     post.mockReturnValue(new Promise(() => {}));
     await openBell({ unread: 2, items: [notice("a"), notice("b")] });
