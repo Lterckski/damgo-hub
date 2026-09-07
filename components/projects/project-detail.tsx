@@ -29,9 +29,11 @@ import { BackButton } from "@/components/shared/back-button";
 import { ManageCollaboratorsDialog } from "@/components/projects/manage-collaborators-dialog";
 import { ProjectStatusBadge } from "@/components/projects/project-status-badge";
 import { formatPHP } from "@/lib/currency";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 import {
   PROJECT_CATEGORY_OPTIONS,
   PROJECT_PRIORITY_OPTIONS,
+  OWNER_SETTABLE_PROJECT_STATUSES,
   PROJECT_STATUS_OPTIONS,
   projectCategoryLabel,
   projectPriorityLabel,
@@ -83,6 +85,14 @@ const PRIORITY_VARIANT: Record<
 
 // See new-task-dialog.tsx's comment — <Select.Value> needs an `items` map
 // to show a label instead of the raw value before the popup has opened.
+// The owner's inline Status select deliberately does NOT offer Active or
+// Rejected: those are admin decisions on a proposal and move only through
+// POST /api/projects/[id]/decision, which the PATCH route also refuses.
+// The current status still renders when it is one of them — this list is
+// what the owner may *change it to*, not what it may currently be.
+const EDITABLE_STATUS_OPTIONS = PROJECT_STATUS_OPTIONS.filter((o) =>
+  (OWNER_SETTABLE_PROJECT_STATUSES as readonly string[]).includes(o.value),
+);
 const STATUS_ITEMS = Object.fromEntries(
   PROJECT_STATUS_OPTIONS.map((o) => [o.value, o.label]),
 );
@@ -154,6 +164,7 @@ export function ProjectDetail({
     setIsEditing(true);
   }
 
+  const single = useSingleFlight();
   async function save() {
     setIsSaving(true);
     try {
@@ -237,7 +248,7 @@ export function ProjectDetail({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {PROJECT_STATUS_OPTIONS.map((option) => (
+                  {EDITABLE_STATUS_OPTIONS.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
@@ -321,7 +332,7 @@ export function ProjectDetail({
                   type="button"
                   size="sm"
                   disabled={isSaving || name.trim() === ""}
-                  onClick={save}
+                  onClick={single(save)}
                 >
                   Save
                 </Button>
@@ -555,7 +566,7 @@ export function ProjectDetail({
               type="button"
               variant="destructive"
               disabled={isSaving}
-              onClick={deleteProject}
+              onClick={single(deleteProject)}
             >
               <Trash2 className="h-3.5 w-3.5" /> Delete
             </Button>

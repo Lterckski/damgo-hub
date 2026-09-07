@@ -1,8 +1,12 @@
 enum ProjectStatus {
   PROPOSED
+  // Approved by an admin. PROPOSED -> ACTIVE is the only way a proposal
+  // becomes a project the team works on.
   ACTIVE
   COMPLETED
   ARCHIVED
+  // Declined by an admin. Terminal, and never task-linkable.
+  REJECTED
 }
 
 enum ProjectPriority {

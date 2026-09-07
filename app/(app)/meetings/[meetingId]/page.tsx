@@ -64,7 +64,6 @@ export default async function MeetingDetailPage({
         meeting={serializeMeeting(meetingRecord)}
         members={memberOptions}
         currentMemberId={member.id}
-        isOrganizer={meetingRecord.organizerId === member.id}
         isAdmin={isAdmin}
       />
     </>

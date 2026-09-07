@@ -5,6 +5,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { formatPHP } from "@/lib/currency";
 import { recordAuditEvent, requireReason } from "@/lib/audit-log";
+import { decideProject } from "@/lib/project-decisions";
 import type { AuditActor } from "@/lib/audit-log";
 import { sendBroadcast } from "@/lib/admin/broadcasts";
 import { REASON_REQUIRED_ACTION_IDS } from "@/lib/admin/queue";
@@ -93,8 +94,20 @@ export async function applyQueueAction(
         reason,
       );
 
+    // Approve/reject share one implementation with the /projects controls
+    // (lib/project-decisions.ts) so the two surfaces cannot drift apart.
     case "project.approve":
-      return setProjectStatus(actor, entityId, "ACTIVE", reason);
+    case "project.reject": {
+      const outcome = await decideProject(
+        actor,
+        entityId,
+        actionId === "project.approve" ? "APPROVE" : "REJECT",
+        rawReason,
+      );
+      return outcome.ok
+        ? { ok: true, message: outcome.message }
+        : { ok: false, status: outcome.status, error: outcome.error };
+    }
     case "project.archive":
       return setProjectStatus(actor, entityId, "ARCHIVED", reason);
 
@@ -369,7 +382,7 @@ async function decideAgendaProposal(
 async function setProjectStatus(
   actor: AuditActor,
   projectId: string,
-  status: "PROPOSED" | "ACTIVE" | "COMPLETED" | "ARCHIVED",
+  status: "PROPOSED" | "ACTIVE" | "COMPLETED" | "ARCHIVED" | "REJECTED",
   reason: string | null,
 ): Promise<MutationOutcome> {
   const project = await prisma.project.findUnique({

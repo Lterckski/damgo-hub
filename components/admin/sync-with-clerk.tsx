@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { ReasonDialog, type ReasonRequest } from "@/components/admin/reason-dialog";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 
 /**
  * The reconciliation utility Part 0 called for.
@@ -37,6 +38,8 @@ export function SyncWithClerk({ report, error, members, onSynced }: SyncWithCler
   const { toast } = useToast();
   const [isSyncing, setIsSyncing] = React.useState(false);
   const [mergeRequest, setMergeRequest] = React.useState<ReasonRequest | null>(null);
+
+  const single = useSingleFlight();
 
   async function sync() {
     setIsSyncing(true);
@@ -74,7 +77,7 @@ export function SyncWithClerk({ report, error, members, onSynced }: SyncWithCler
     <div className="rounded-2xl bg-surface p-5 ring-1 ring-surface-border">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <Header />
-        <Button size="sm" variant="outline" onClick={sync} disabled={isSyncing}>
+        <Button size="sm" variant="outline" onClick={single(sync)} disabled={isSyncing}>
           <RefreshCw className={isSyncing ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
           {isSyncing ? "Syncing…" : "Sync with Clerk"}
         </Button>

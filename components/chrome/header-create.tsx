@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 import { hubGet, hubPost } from "./hub-client";
 import { createLabels, type CreateKind } from "./header-create-types";
 export function HeaderCreate({
@@ -45,6 +46,8 @@ export function HeaderCreate({
       });
     return () => controller.abort();
   }, []);
+  const single = useSingleFlight();
+
   async function submit() {
     if (locked.current) return;
     locked.current = true;
@@ -95,7 +98,6 @@ export function HeaderCreate({
       <MeetingFormDialog
         members={options.members}
         currentMemberId={options.currentMemberId}
-        isAdmin={options.isAdmin}
         open
         onOpenChange={(v) => !v && onClose()}
       />
@@ -121,7 +123,7 @@ export function HeaderCreate({
             className="grid gap-4"
             onSubmit={(e) => {
               e.preventDefault();
-              void submit();
+              void single(submit)();
             }}
           >
             {(kind === "doc" || kind === "announcement") && (

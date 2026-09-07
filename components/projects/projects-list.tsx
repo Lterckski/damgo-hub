@@ -7,23 +7,54 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NewProjectDialog } from "@/components/projects/new-project-dialog";
+import { ProjectDecisionActions } from "@/components/projects/project-decision-actions";
 import { ProjectStatusBadge } from "@/components/projects/project-status-badge";
 import type { ProjectMemberOption, SerializedProject } from "@/lib/projects";
 
 interface ProjectsListProps {
   myProjects: SerializedProject[];
+  proposedProjects: SerializedProject[];
   allProjects: SerializedProject[];
   members: ProjectMemberOption[];
   currentMemberId: string;
+  isAdmin: boolean;
 }
 
-export function ProjectsList({ myProjects, allProjects, members, currentMemberId }: ProjectsListProps) {
+/**
+ * Three distinct views, per 11-project-proposals.md — Proposal Approval
+ * Flow. They are separate destinations with their own contents, not one
+ * grid behind a status dropdown:
+ *
+ * - My Projects       — what the viewer owns or collaborates on
+ * - Proposed Projects — the org-wide queue of proposals awaiting a decision
+ * - All Proposals     — the existing open discovery list, every project
+ *
+ * Every member can see the pending queue (knowing what the team has put
+ * forward is not privileged); only an admin gets Approve/Reject in it, and
+ * the API refuses a member regardless of what the browser renders.
+ */
+export function ProjectsList({
+  myProjects,
+  proposedProjects,
+  allProjects,
+  members,
+  currentMemberId,
+  isAdmin,
+}: ProjectsListProps) {
   return (
     <Tabs defaultValue="mine">
-      <div className="flex items-center justify-between gap-3">
-        <TabsList>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <TabsList className="flex-wrap">
           <TabsTrigger value="mine" className="data-active:bg-elevated data-active:text-brand">
             My Projects
+          </TabsTrigger>
+          <TabsTrigger value="proposed" className="data-active:bg-elevated data-active:text-brand">
+            Proposed Projects
+            {proposedProjects.length > 0 && (
+              <span className="ml-1.5 rounded-full bg-accent-dim px-1.5 text-[10px] font-bold text-brand">
+                {proposedProjects.length}
+              </span>
+            )}
           </TabsTrigger>
           <TabsTrigger value="all" className="data-active:bg-elevated data-active:text-brand">
             All Proposals
@@ -35,6 +66,13 @@ export function ProjectsList({ myProjects, allProjects, members, currentMemberId
       <TabsContent value="mine" className="mt-6">
         <ProjectGrid projects={myProjects} emptyMessage="No projects yet — start the first proposal." />
       </TabsContent>
+      <TabsContent value="proposed" className="mt-6">
+        <ProjectGrid
+          projects={proposedProjects}
+          emptyMessage="Nothing awaiting a decision."
+          decidableByAdmin={isAdmin}
+        />
+      </TabsContent>
       <TabsContent value="all" className="mt-6">
         <ProjectGrid projects={allProjects} emptyMessage="No proposals visible to you yet." />
       </TabsContent>
@@ -45,7 +83,17 @@ export function ProjectsList({ myProjects, allProjects, members, currentMemberId
 // Exported so app/(app)/admin/projects/page.tsx's AdminProjectsView
 // (20-admin-dashboard.md) can reuse the exact same card rendering with its
 // own status-filtered project list, instead of a parallel copy.
-export function ProjectGrid({ projects, emptyMessage }: { projects: SerializedProject[]; emptyMessage: string }) {
+export function ProjectGrid({
+  projects,
+  emptyMessage,
+  decidableByAdmin = false,
+}: {
+  projects: SerializedProject[];
+  emptyMessage: string;
+  /** Render Approve/Reject on PROPOSED cards. Admin-only, and cosmetic —
+   *  the decision route enforces the role itself. */
+  decidableByAdmin?: boolean;
+}) {
   if (projects.length === 0) {
     return (
       <div className="flex flex-col items-center gap-2 py-10 text-center">
@@ -82,6 +130,14 @@ export function ProjectGrid({ projects, emptyMessage }: { projects: SerializedPr
                       </AvatarFallback>
                     </Avatar>
                   ))}
+                </div>
+              )}
+              {decidableByAdmin && project.status === "PROPOSED" && (
+                <div className="mt-4 border-t border-surface-border pt-3">
+                  <ProjectDecisionActions
+                    projectId={project.id}
+                    projectName={project.name}
+                  />
                 </div>
               )}
             </CardContent>

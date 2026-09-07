@@ -29,6 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { downloadCsv } from "@/lib/admin/client";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 
 /**
  * Zone 4's one table, shared by all five tabs.
@@ -200,6 +201,12 @@ export function DataTable<Row>({
     });
   }
 
+  // Export and bulk actions are the highest-risk repeat-activation surface
+  // in the app: both span the whole filtered dataset across pages, so a
+  // second activation would duplicate real work. See ui-context.md —
+  // Single-activation action buttons.
+  const single = useSingleFlight();
+
   async function exportCsv() {
     setExporting(true);
     setExportError(null);
@@ -311,7 +318,7 @@ export function DataTable<Row>({
         <Button
           size="sm"
           variant="outline"
-          onClick={exportCsv}
+          onClick={single(exportCsv, "export")}
           disabled={visibleRows.length === 0 || exporting}
         >
           <Download className="h-4 w-4" />
@@ -336,7 +343,7 @@ export function DataTable<Row>({
                 key={action.id}
                 size="sm"
                 variant={action.destructive ? "destructive" : "outline"}
-                onClick={() => onBulkAction(action, selectedIds)}
+                onClick={single(() => onBulkAction(action, selectedIds), `bulk:${action.id}`)}
               >
                 {action.label}
               </Button>

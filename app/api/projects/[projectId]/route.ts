@@ -8,6 +8,7 @@ import { getCurrentMember } from "@/lib/current-member";
 import { pesosToCentavos } from "@/lib/currency";
 import { requireProjectAccess } from "@/lib/project-access";
 import {
+  DECIDED_PROJECT_STATUSES,
   PROJECT_CATEGORY_OPTIONS,
   PROJECT_INCLUDE,
   PROJECT_PRIORITY_OPTIONS,
@@ -114,6 +115,25 @@ export async function PATCH(
     !VALID_STATUSES.includes(status as ProjectStatus)
   ) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+  }
+  // Approval and rejection are admin decisions, not owner edits. They move
+  // only through POST /api/projects/[projectId]/decision, which is what
+  // records the audit entry and refuses a second decision with a 409. An
+  // owner setting their own proposal ACTIVE here was how a member could
+  // self-approve before this rule existed.
+  if (
+    typeof status === "string" &&
+    DECIDED_PROJECT_STATUSES.includes(
+      status as (typeof DECIDED_PROJECT_STATUSES)[number],
+    )
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "A proposal is approved or rejected by an admin, not through this route",
+      },
+      { status: 403 },
+    );
   }
   if (
     priority !== undefined &&

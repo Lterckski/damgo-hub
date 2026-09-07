@@ -99,9 +99,9 @@ export function AppHeader({
     "task",
     "expense",
     "idea",
-    "meeting",
     "doc",
-    ...(isAdmin ? ["announcement" as const] : []),
+    // Scheduling a meeting is an admin action; the API refuses a member.
+    ...(isAdmin ? (["meeting", "announcement"] as const) : []),
   ];
   return (
     <>

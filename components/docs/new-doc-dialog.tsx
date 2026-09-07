@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { collapseDocImages, expandDocImages } from "@/lib/collapse-doc-images";
 import { SUPPORTED_EXTRACT_EXTENSIONS } from "@/lib/extract-document-text.constants";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 
 const FIELD_LABEL_CLASS = "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
 
@@ -41,6 +42,8 @@ export function NewDocDialog() {
   const imagesRef = useRef<Map<number, string>>(new Map());
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const single = useSingleFlight();
 
   function reset() {
     setTitle("");
@@ -215,7 +218,7 @@ export function NewDocDialog() {
               <Button
                 type="button"
                 disabled={isSubmitting || isExtracting || title.trim() === ""}
-                onClick={createDoc}
+                onClick={single(createDoc)}
               >
                 Create Doc
               </Button>

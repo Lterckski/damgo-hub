@@ -36,6 +36,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatPHP } from "@/lib/currency";
 import type { MemberPickerOption } from "@/lib/members";
 import type { SerializedPenalty } from "@/lib/penalties";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 
 const FIELD_LABEL_CLASS =
   "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
@@ -245,6 +246,8 @@ function IssuePenaltyDialog({ members }: { members: MemberPickerOption[] }) {
     setError(null);
   }
 
+  const single = useSingleFlight();
+
   async function submit() {
     if (isSubmitting) return;
     setIsSubmitting(true);
@@ -364,7 +367,7 @@ function IssuePenaltyDialog({ members }: { members: MemberPickerOption[] }) {
             >
               Cancel
             </Button>
-            <Button type="button" disabled={!canSubmit} onClick={submit}>
+            <Button type="button" disabled={!canSubmit} onClick={single(submit)}>
               {isSubmitting ? "Issuing…" : "Issue Penalty"}
             </Button>
           </DialogFooter>
@@ -385,6 +388,8 @@ function ResolvePenaltyDialog({
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const single = useSingleFlight();
 
   async function decide(status: "RESOLVED" | "WAIVED") {
     if (!penalty || isSubmitting) return;
@@ -446,14 +451,14 @@ function ResolvePenaltyDialog({
               type="button"
               variant="outline"
               disabled={isSubmitting}
-              onClick={() => decide("WAIVED")}
+              onClick={single(() => decide("WAIVED"), "WAIVED")}
             >
               Waive
             </Button>
             <Button
               type="button"
               disabled={isSubmitting}
-              onClick={() => decide("RESOLVED")}
+              onClick={single(() => decide("RESOLVED"), "RESOLVED")}
             >
               Resolve
             </Button>

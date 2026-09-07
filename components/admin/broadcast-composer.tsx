@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 
 /**
  * Part 2's broadcast composer — all members, one role, one project, or one
@@ -77,6 +78,8 @@ export function BroadcastComposer({
     !isSending &&
     (audience !== "PROJECT" || projectId !== "") &&
     (audience !== "MEMBER" || memberId !== "");
+
+  const single = useSingleFlight();
 
   async function send() {
     setIsSending(true);
@@ -184,7 +187,7 @@ export function BroadcastComposer({
           <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isSending}>
             Cancel
           </Button>
-          <Button onClick={send} disabled={!canSend}>
+          <Button onClick={single(send)} disabled={!canSend}>
             {isSending ? "Sending…" : "Send"}
           </Button>
         </DialogFooter>

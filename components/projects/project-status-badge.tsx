@@ -6,6 +6,7 @@ const STATUS_VARIANT: Record<string, "outline" | "secondary" | "default" | "dest
   ACTIVE: "default",
   COMPLETED: "secondary",
   ARCHIVED: "destructive",
+  REJECTED: "destructive",
 };
 
 /** Shared status badge for projects — same pattern as TaskStatusBadge. */

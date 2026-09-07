@@ -141,7 +141,10 @@ export function SearchPalette({
               ["task", "New task"],
               ["expense", "Log expense"],
               ["idea", "New idea"],
-              ["meeting", "New meeting"],
+              // Meetings are admin-only to schedule.
+              ...(isAdmin
+                ? ([["meeting", "New meeting"]] as [CreateKind, string][])
+                : []),
             ] as [CreateKind, string][]
           ).map(([create, title]) => ({ id: create, title, create })),
         },

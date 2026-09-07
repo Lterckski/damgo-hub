@@ -1,6 +1,6 @@
 # Notifications: read state and general audit
 
-Status: **Requirements recorded 2026-09-07; nothing implemented or investigated in a running session.** The header inbox itself shipped in [unit 23](../feature-specs/23-global-search-notifications-header.md) (PR #23, merged 2026-09-06). This file records one defect requirement — an opened notification must stop reading as unread — and the broader audit item it belongs to. Source references below come from reading the checked-in code on `feat/mobile-browser-usability`; no signed-in reproduction has been performed.
+Status: **Read-state fix implemented 2026-09-07 on `feat/scheduling-approval-buttons-notifications`; the general audit is NOT done.** The read-state requirement below is met and covered by `components/chrome/notification-bell.test.tsx`. No signed-in session, deployed worker, or real device was exercised. The header inbox itself shipped in [unit 23](../feature-specs/23-global-search-notifications-header.md) (PR #23, merged 2026-09-06). This file records one defect requirement — an opened notification must stop reading as unread — and the broader audit item it belongs to. Source references below come from reading the checked-in code on `feat/mobile-browser-usability`; no signed-in reproduction has been performed.
 
 ## Requirement: opening a notification clears its unread state
 
@@ -24,13 +24,17 @@ An unread notification stops being unread once the member opens it, and every co
 - Re-opening a read notification does not change its `readAt` value or the badge.
 - A failure to persist read state surfaces an error and does not leave the row visually read while the server still counts it unread.
 
-## Observed behavior
+## Observed behavior and the fix
 
-A lead, not a confirmed root cause — read from source, not reproduced.
+The lead below was read from source, never reproduced in a signed-in session. The fix addresses the client half; whether the server write was also at fault was never established, because the behaviour is correct either way once the client stops waiting for a poll.
 
 - The notification row's click handler in `components/chrome/notification-bell.tsx` posts `{ action: "read", id }`, then closes the popover and navigates. It does not call the component's own `refresh()` afterwards, unlike `act()` (the handler behind the inline and dismiss controls), which does. The badge therefore keeps its pre-open value until the next 15-second poll, a window focus, an `online` event, or a `hub:refresh` event.
 - The unread background is driven by `n.read` from the last fetched payload, so the row's appearance depends on that same refresh.
 - Whether the server write itself is correct has not been checked; the requirement above covers both halves regardless of which one turns out to be at fault.
+
+**Implemented 2026-09-07.** `markReadLocally` applies the read to the local payload in the same interaction — decrementing the count, clearing the row's unread treatment, and moving the `aria-live` announcement — then still posts to the server and refreshes so the authoritative value lands. It is idempotent (an already-read notice changes nothing, so re-opening never double-decrements) and floors the count at zero so a click racing a poll cannot go negative. Dismissing an unread row clears its unread contribution too, and Mark all read clears every visible row. A failed write surfaces the error and forces a refresh, so an optimistic update that turns out to be wrong is corrected rather than left standing. `act()` also moved from a `busy` state check to a ref, closing the same double-activation gap the [single-activation requirement](../ui-context.md#single-activation-action-buttons) describes.
+
+Not covered by that change: whether the server's own read/unread accounting is correct under two members, changed roles, or a stale grant. That belongs to the audit below and still needs a signed-in session.
 
 ## Requirement: general notifications audit
 
@@ -57,11 +61,11 @@ Areas the audit must cover:
 
 ## Open questions
 
-Recorded 2026-09-07 with the requirements above. These need a decision before the read-state fix is implemented.
+Recorded 2026-09-07 with the requirements above; the fix was then implemented the same day on the user's instruction to build without waiting for answers. Each entry records the assumption that was coded. **The user has not decided these.**
 
-- **What does "opened" mean?** Opening the individual notification (clicking the row), or opening the bell — should the panel mark everything currently visible as read the moment it is opened? The two produce very different unread counts in daily use.
-- **Does dismissing an unread notification count as reading it?** Dismiss removes the row from the list. Whether it also clears the unread state, or whether a dismissed-but-unread item keeps contributing to the badge, is currently undefined.
-- **Does reaching a record another way clear its notification?** If a member opens the task from search, the dashboard, or a direct URL rather than from the bell, should the related notification become read?
-- **What is "Mark all as read" scoped to?** Unit 23 limits bulk reads to the caller's currently visible notifications. Should it stay scoped to the active tab and current page of results, or clear everything the member could see?
-- **Is the 15-second poll acceptable as the refresh mechanism for the count?** The requirement above asks for the badge to update in the same interaction, which implies a local decrement or an immediate refetch on open. Confirm that an optimistic local update is acceptable, or that an extra request per open is preferred.
-- **How is the audit scheduled?** A blocking item before [PR #24](https://github.com/Lterckski/damgo-hub/pull/24) merges, or its own follow-up unit in `feature-specs/` after it?
+- **What does "opened" mean?** *Built as: opening the individual notification row. Opening the bell marks nothing read.* Opening the individual notification (clicking the row), or opening the bell — should the panel mark everything currently visible as read the moment it is opened? The two produce very different unread counts in daily use.
+- **Does dismissing an unread notification count as reading it?** *Built as yes — dismissing clears the unread contribution, so the badge cannot outlive a row that is gone from the list.* Dismiss removes the row from the list. Whether it also clears the unread state, or whether a dismissed-but-unread item keeps contributing to the badge, is currently undefined.
+- **Does reaching a record another way clear its notification?** *Not implemented — only the inbox row marks read.* If a member opens the task from search, the dashboard, or a direct URL rather than from the bell, should the related notification become read?
+- **What is "Mark all as read" scoped to?** *Left as it was — the caller's currently visible notifications; the local update now matches that same scope.* Unit 23 limits bulk reads to the caller's currently visible notifications. Should it stay scoped to the active tab and current page of results, or clear everything the member could see?
+- **Is the 15-second poll acceptable as the refresh mechanism for the count?** *Built as an optimistic local update plus the existing poll — no extra request per open beyond the write that already happened.* The requirement above asks for the badge to update in the same interaction, which implies a local decrement or an immediate refetch on open. Confirm that an optimistic local update is acceptable, or that an extra request per open is preferred.
+- **How is the audit scheduled?** *Still open — the audit has not been started.* A blocking item before [PR #24](https://github.com/Lterckski/damgo-hub/pull/24) merges, or its own follow-up unit in `feature-specs/` after it?

@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import type { CaptureKind } from "@/components/dashboard/my/quick-capture";
+import { useSingleFlight } from "@/hooks/use-action-guard";
 
 export function QuickCaptureDialog({
   kind,
@@ -38,6 +39,8 @@ function useCapture(onClose: () => void) {
   const router = useRouter();
   const { toast } = useToast();
   const [isSaving, setIsSaving] = React.useState(false);
+
+  const single = useSingleFlight();
 
   async function submit(url: string, body: Record<string, unknown>) {
     setIsSaving(true);
@@ -67,7 +70,9 @@ function useCapture(onClose: () => void) {
     onClose();
   }
 
-  return { submit, isSaving };
+  // Guarded here rather than at the three call sites, so every quick
+  // capture gets the single-activation rule from one place.
+  return { submit: single(submit), isSaving };
 }
 
 function Field({
