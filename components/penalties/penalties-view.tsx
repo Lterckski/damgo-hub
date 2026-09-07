@@ -37,6 +37,8 @@ import { formatPHP } from "@/lib/currency";
 import type { MemberPickerOption } from "@/lib/members";
 import type { SerializedPenalty } from "@/lib/penalties";
 import { useSingleFlight } from "@/hooks/use-action-guard";
+import { isOtherPenaltyReason, OTHER_PENALTY_REASON } from "@/lib/penalties";
+import type { PenaltyRule } from "@/lib/org-settings";
 
 const FIELD_LABEL_CLASS =
   "mb-1.5 block text-xs font-bold tracking-wide text-copy-primary uppercase";
@@ -45,6 +47,8 @@ interface PenaltiesViewProps {
   penalties: SerializedPenalty[];
   isAdmin: boolean;
   members: MemberPickerOption[];
+  /** Preset reasons from OrgSettings, each with its own fixed amount. */
+  penaltyRules: PenaltyRule[];
 }
 
 function statusBadge(status: string) {
@@ -58,11 +62,18 @@ export function PenaltiesView({
   penalties,
   isAdmin,
   members,
+  penaltyRules,
 }: PenaltiesViewProps) {
   if (!isAdmin) {
     return <MemberPenaltyList penalties={penalties} />;
   }
-  return <AdminPenaltiesView penalties={penalties} members={members} />;
+  return (
+    <AdminPenaltiesView
+      penalties={penalties}
+      members={members}
+      penaltyRules={penaltyRules}
+    />
+  );
 }
 
 function MemberPenaltyList({ penalties }: { penalties: SerializedPenalty[] }) {
@@ -107,9 +118,11 @@ function MemberPenaltyList({ penalties }: { penalties: SerializedPenalty[] }) {
 function AdminPenaltiesView({
   penalties,
   members,
+  penaltyRules,
 }: {
   penalties: SerializedPenalty[];
   members: MemberPickerOption[];
+  penaltyRules: PenaltyRule[];
 }) {
   const router = useRouter();
   const [decidingPenalty, setDecidingPenalty] =
@@ -126,7 +139,7 @@ function AdminPenaltiesView({
             All Penalties
           </TabsTrigger>
         </TabsList>
-        <IssuePenaltyDialog members={members} />
+        <IssuePenaltyDialog members={members} penaltyRules={penaltyRules} />
       </div>
 
       <TabsContent value="all" className="mt-6">
@@ -225,22 +238,43 @@ function AdminPenaltiesView({
   );
 }
 
-function IssuePenaltyDialog({ members }: { members: MemberPickerOption[] }) {
+function IssuePenaltyDialog({
+  members,
+  penaltyRules,
+}: {
+  members: MemberPickerOption[];
+  penaltyRules: PenaltyRule[];
+}) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [memberId, setMemberId] = useState("");
+  // Which entry in the reason dropdown is selected: a configured rule's
+  // label, or OTHER_PENALTY_REASON. The free-text reason and the amount
+  // below only apply to "Other" — a preset carries its own fixed amount,
+  // which the server takes from OrgSettings rather than from this form.
+  const [reasonChoice, setReasonChoice] = useState("");
   const [reason, setReason] = useState("");
   const [amountPesos, setAmountPesos] = useState("");
 
   const memberItems = Object.fromEntries(
     members.map((m) => [m.id, m.displayName]),
   );
+  const selectedRule = penaltyRules.find((r) => r.label === reasonChoice);
+  const isOther = isOtherPenaltyReason(reasonChoice);
+  const reasonItems = Object.fromEntries([
+    ...penaltyRules.map((r) => [
+      r.label,
+      `${r.label} — ${formatPHP(r.amountCents)}`,
+    ]),
+    [OTHER_PENALTY_REASON, OTHER_PENALTY_REASON],
+  ]);
 
   function reset() {
     setMemberId("");
+    setReasonChoice("");
     setReason("");
     setAmountPesos("");
     setError(null);
@@ -258,8 +292,15 @@ function IssuePenaltyDialog({ members }: { members: MemberPickerOption[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           memberId,
-          reason,
-          amountPesos: amountPesos.trim() === "" ? null : amountPesos,
+          reasonChoice,
+          // Only meaningful for "Other"; the server ignores both for a
+          // preset and uses the configured label and amount instead.
+          ...(isOther
+            ? {
+                reason,
+                amountPesos: amountPesos.trim() === "" ? null : amountPesos,
+              }
+            : {}),
         }),
       });
       if (!response.ok) {
@@ -277,7 +318,11 @@ function IssuePenaltyDialog({ members }: { members: MemberPickerOption[] }) {
     }
   }
 
-  const canSubmit = memberId !== "" && reason.trim() !== "" && !isSubmitting;
+  const canSubmit =
+    memberId !== "" &&
+    reasonChoice !== "" &&
+    (!isOther || reason.trim() !== "") &&
+    !isSubmitting;
 
   return (
     <>
@@ -323,34 +368,89 @@ function IssuePenaltyDialog({ members }: { members: MemberPickerOption[] }) {
             </div>
 
             <div>
-              <label htmlFor="penalty-reason" className={FIELD_LABEL_CLASS}>
+              <label htmlFor="penalty-reason-choice" className={FIELD_LABEL_CLASS}>
                 Reason
               </label>
-              <Textarea
-                id="penalty-reason"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                rows={3}
-                placeholder="What happened?"
-                className="text-copy-primary!"
-              />
+              <Select
+                items={reasonItems}
+                value={reasonChoice}
+                onValueChange={(v) => setReasonChoice(v ?? "")}
+              >
+                <SelectTrigger id="penalty-reason-choice" className="w-full">
+                  <SelectValue placeholder="Select a reason" />
+                </SelectTrigger>
+                <SelectContent>
+                  {penaltyRules.map((rule) => (
+                    <SelectItem key={rule.label} value={rule.label}>
+                      {rule.label} — {formatPHP(rule.amountCents)}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={OTHER_PENALTY_REASON}>
+                    {OTHER_PENALTY_REASON}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              {penaltyRules.length === 0 && (
+                <p className="mt-1.5 text-xs text-copy-secondary">
+                  No penalty rules are configured yet. Add them under{" "}
+                  <Link href="/admin" className="text-brand underline">
+                    Admin → Settings
+                  </Link>{" "}
+                  to offer preset reasons here.
+                </p>
+              )}
             </div>
 
-            <div>
-              <label htmlFor="penalty-amount" className={FIELD_LABEL_CLASS}>
-                Amount (₱) — optional
-              </label>
-              <Input
-                id="penalty-amount"
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={amountPesos}
-                onChange={(e) => setAmountPesos(e.target.value)}
-                placeholder="Leave blank for a non-monetary penalty"
-                className="text-copy-primary!"
-              />
-            </div>
+            {/* A preset's amount is fixed by the org setting — shown, not
+                editable, and the server reads it from the setting rather
+                than from this form. */}
+            {selectedRule && (
+              <div>
+                <span className={FIELD_LABEL_CLASS}>Amount (₱)</span>
+                <p className="mt-1 text-sm font-medium text-copy-primary">
+                  {selectedRule.amountCents > 0
+                    ? formatPHP(selectedRule.amountCents)
+                    : "Non-monetary penalty"}
+                </p>
+                <p className="mt-1 text-xs text-copy-secondary">
+                  Set by the penalty rule. Change it under Admin → Settings.
+                </p>
+              </div>
+            )}
+
+            {isOther && (
+              <>
+                <div>
+                  <label htmlFor="penalty-reason" className={FIELD_LABEL_CLASS}>
+                    What happened?
+                  </label>
+                  <Textarea
+                    id="penalty-reason"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    rows={3}
+                    placeholder="Describe the reason for this penalty"
+                    className="text-copy-primary!"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="penalty-amount" className={FIELD_LABEL_CLASS}>
+                    Amount (₱) — optional
+                  </label>
+                  <Input
+                    id="penalty-amount"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={amountPesos}
+                    onChange={(e) => setAmountPesos(e.target.value)}
+                    placeholder="Leave blank for a non-monetary penalty"
+                    className="text-copy-primary!"
+                  />
+                </div>
+              </>
+            )}
 
             {error && (
               <p className="text-sm font-medium text-error" role="alert">

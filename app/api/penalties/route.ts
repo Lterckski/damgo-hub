@@ -5,7 +5,12 @@ import { auth } from "@clerk/nextjs/server";
 
 import { getCurrentMember, isCurrentMemberAdmin } from "@/lib/current-member";
 import { pesosToCentavos } from "@/lib/currency";
-import { PENALTY_INCLUDE, serializePenalty } from "@/lib/penalties";
+import { getOrgSettings } from "@/lib/org-settings";
+import {
+  PENALTY_INCLUDE,
+  resolvePenaltyReason,
+  serializePenalty,
+} from "@/lib/penalties";
 import { prisma } from "@/lib/prisma";
 
 // GET /api/penalties — Admins see every penalty; a regular member sees
@@ -66,7 +71,7 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const { memberId, reason, amountPesos } = body;
+  const { memberId, reasonChoice, reason, amountPesos } = body;
 
   if (typeof memberId !== "string" || memberId.trim() === "") {
     return NextResponse.json(
@@ -74,8 +79,26 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  if (typeof reason !== "string" || reason.trim() === "") {
-    return NextResponse.json({ error: "reason is required" }, { status: 400 });
+  // The reason comes from the configured preset list (OrgSettings.penaltyRules)
+  // or is the "Other" escape hatch. A preset's amount is fixed by the setting,
+  // not by the request: the client sends only which rule was chosen, so a
+  // hand-crafted body cannot issue "Missed a meeting" for an arbitrary sum.
+  const { penaltyRules } = await getOrgSettings();
+  const choice = resolvePenaltyReason(reasonChoice ?? reason, penaltyRules);
+  if (!choice) {
+    return NextResponse.json(
+      {
+        error:
+          "reasonChoice must be one of the configured penalty rules, or \"Other\"",
+      },
+      { status: 400 },
+    );
+  }
+  if (choice.kind === "other" && (typeof reason !== "string" || reason.trim() === "")) {
+    return NextResponse.json(
+      { error: "reason is required when the reason is Other" },
+      { status: 400 },
+    );
   }
 
   const target = await prisma.member.findUnique({
@@ -97,7 +120,14 @@ export async function POST(request: Request) {
   const MAX_AMOUNT_CENTS = 2_147_483_647;
 
   let amountCents: number | null = null;
-  if (amountPesos !== undefined && amountPesos !== null && amountPesos !== "") {
+  if (choice.kind === "preset") {
+    // Taken from the setting, never from the request body.
+    amountCents = choice.rule.amountCents > 0 ? choice.rule.amountCents : null;
+  } else if (
+    amountPesos !== undefined &&
+    amountPesos !== null &&
+    amountPesos !== ""
+  ) {
     const parsed = Number(amountPesos);
     if (!Number.isFinite(parsed) || parsed <= 0) {
       return NextResponse.json(
@@ -123,7 +153,8 @@ export async function POST(request: Request) {
     data: {
       memberId: target.id,
       issuedById: issuer.id,
-      reason: reason.trim(),
+      reason:
+        choice.kind === "preset" ? choice.rule.label : String(reason).trim(),
       amountCents,
     },
     include: PENALTY_INCLUDE,
