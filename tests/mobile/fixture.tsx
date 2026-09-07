@@ -149,6 +149,10 @@ export function MobileLayoutFixture() {
             <PenaltiesView
               isAdmin
               members={members}
+              penaltyRules={[
+                { label: "Late to a meeting", amountCents: 5000 },
+                { label: "Missed a deadline", amountCents: 10000 },
+              ]}
               penalties={[
                 {
                   id: "penalty",

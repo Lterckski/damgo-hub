@@ -44,9 +44,44 @@ Create `app/(app)/penalties/page.tsx`.
 
 - for a regular member: a simple list of their own penalties — reason, amount (`formatPHP()`, if set), status badge, issued date
 - for an Admin: shadcn `Tabs` — "All Penalties" (table: member, reason, amount, status, issued date, issued by) and "Issue Penalty" action
-- "Issue Penalty" opens a `Dialog`: member picker, reason `Textarea`, optional amount `Input` (`₱` prefix, same pattern as `07-financial-tracker.md`'s amount input; leave blank for a non-monetary penalty)
+- "Issue Penalty" opens a `Dialog`: member picker, then a **reason `Select`** (see Preset Reasons below), and a free-text reason plus optional amount **only when "Other" is chosen**
 - Admins can resolve/waive an `OPEN` penalty via a row action, with a small confirmation `Dialog`; for a monetary penalty, the resolve confirmation says the amount will be logged to the ledger, so it isn't a silent side effect
 - a resolved monetary penalty's row links to its `Transaction` on `/finance` for traceability
+
+## Preset Reasons (2026-09-08)
+
+The reason is chosen from a dropdown, not typed. Options come from
+`OrgSettings.penaltyRules` — the `[{ label, amountCents }]` list the admin
+console's Settings block already edits — plus a fixed `"Other"` entry.
+
+- Each preset carries its own **fixed** amount, shown next to the label in
+  the dropdown (`Late to a meeting — ₱50.00`) and again, read-only, once
+  selected. It is not editable in this dialog; changing it means changing
+  the rule in Settings.
+- A preset whose `amountCents` is `0` is a non-monetary penalty and stores
+  `amountCents: null`, the same as leaving the amount blank always did.
+- **"Other" is the only option that accepts typed input** — a free-text
+  reason (required) and an optional amount, exactly the old behaviour.
+- The amount is **not** taken from the request for a preset. The client
+  sends `reasonChoice` only; the server looks the label up in
+  `OrgSettings` and uses that amount, so a hand-crafted request cannot
+  issue a preset reason for an arbitrary sum. A label that matches neither
+  a configured rule nor `"Other"` is a `400`, never a silent fall-through
+  to free text.
+- Labels are matched case-insensitively, so a rule literally named "Other"
+  cannot produce two identical-looking dropdown entries.
+- With no rules configured the dropdown offers only "Other", and the dialog
+  links to Admin → Settings to add some. **The list ships empty**: the
+  team's actual reasons and amounts are theirs to enter, not something this
+  spec invents.
+
+### Acceptance criteria
+
+- Selecting a preset hides the free-text reason and amount inputs entirely.
+- Selecting "Other" reveals both, and Issue stays disabled until a reason is typed.
+- A penalty issued from a preset stores the rule's label as its `reason` and the rule's amount, regardless of what the request body contains.
+- `POST /api/penalties` returns `400` for a `reasonChoice` that is not a configured rule or "Other", and for "Other" with an empty reason.
+- Editing a rule's amount in Settings changes what new penalties cost; already-issued penalties keep their original `reason`/`amountCents`, per the immutability rule above.
 
 ## Check When Done
 
@@ -55,4 +90,5 @@ Create `app/(app)/penalties/page.tsx`.
 - resolved/waived penalties keep their original `reason` and `amountCents` intact
 - resolving a monetary `OPEN` penalty creates exactly one `APPROVED` `Transaction` linked via `penaltyId`; waiving one, or resolving a non-monetary one, creates none
 - a penalty that isn't `OPEN` can't be resolved or waived again (`409`)
+- the reason dropdown offers every configured rule plus "Other"; only "Other" accepts a typed reason, and a preset's amount comes from `OrgSettings`, not the request
 - `npm run build` passes
