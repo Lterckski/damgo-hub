@@ -10,7 +10,7 @@ Update this file whenever the current phase, active feature, or implementation s
 
 - **Project-wide requirement (2026-09-06):** the entire project must be mobile-browser friendly, including existing features, admin screens, and collaborative boards. Requirements are now documented in the overview, architecture, UI/code standards, workflow, and app-chrome spec. Mobile UI changes are now implemented on `feat/mobile-browser-usability`; authenticated iOS Safari/Android Chrome verification remains pending in [mobile browser issues](current-issues/current-issues-mobile-browser.md). Future PWA/native packaging is separate work.
 
-- All 21 buildable units of the `01`–`22` sequence are implemented (`17-meeting-agenda-board.md` is retired). PR #23 merged [unit 23 — Global Search, Notifications, and Header](feature-specs/23-global-search-notifications-header.md) to `main` on 2026-09-06. Current work is the mobile-browser implementation, RUM instrumentation, and server-latency refactor in [PR #24](https://github.com/Lterckski/damgo-hub/pull/24).
+- All 21 buildable units of the `01`–`22` sequence are implemented (`17-meeting-agenda-board.md` is retired). PR #23 merged [unit 23 — Global Search, Notifications, and Header](feature-specs/23-global-search-notifications-header.md) to `main` on 2026-09-06. [PR #24](https://github.com/Lterckski/damgo-hub/pull/24) merged the mobile-browser implementation, RUM instrumentation, and server-latency refactor to `main` on 2026-09-07.
 
 ## Completed
 
@@ -202,7 +202,7 @@ Update this file whenever the current phase, active feature, or implementation s
 
 - Apply the [mobile browser requirements](ui-context.md#mobile-browser-requirements) to all subsequent UI work. The [remaining mobile backlog](current-issues/current-issues-mobile-browser.md) covers physical-device keyboards/safe areas and authenticated/integration flows; the implementation and isolated browser checks are recorded separately.
 
-- Review and merge [PR #24](https://github.com/Lterckski/damgo-hub/pull/24). After merge, enable and deploy the RUM collector/rollup, verify `sin1` function execution and the pending production migrations, deploy the notification workers, and run signed-in physical iOS/Android plus external delivery QA. Do not describe a local or preview build as production deployment.
+- [PR #24](https://github.com/Lterckski/damgo-hub/pull/24) is merged. Still outstanding from it: enable and deploy the RUM collector/rollup, verify `sin1` function execution and the pending production migrations, deploy the notification workers, and run signed-in physical iOS/Android plus external delivery QA. Do not describe a local or preview build as production deployment.
 
 - **Four requirements recorded 2026-09-07 (documentation only, nothing implemented).** Admin-only meeting scheduling in [16-meeting-scheduling.md](feature-specs/16-meeting-scheduling.md#scheduling-permission); the member-proposal/admin-approval flow and its three list views in [11-project-proposals.md](feature-specs/11-project-proposals.md#proposal-approval-flow); the project-wide [single-activation action button requirement](ui-context.md#single-activation-action-buttons), which must be verified together with this branch's pagination/export work; and the notification read-state defect plus the broader audit in [notification issues](current-issues/current-issues-notifications.md). Each file carries its own Open Questions section; those decisions are needed before any of the four is implemented.
 
