@@ -5,6 +5,7 @@ import { getMemberPickerOptions } from "@/lib/members";
 import { prisma } from "@/lib/prisma";
 import { BackButton } from "@/components/shared/back-button";
 import { PenaltiesView } from "@/components/penalties/penalties-view";
+import { getOrgSettings } from "@/lib/org-settings";
 
 // Deep link into the Admin view already built in 18-penalty-tracker.md —
 // see 20-admin-dashboard.md. Same PenaltiesView the /penalties page uses,
@@ -13,13 +14,14 @@ import { PenaltiesView } from "@/components/penalties/penalties-view";
 export default async function AdminPenaltiesPage() {
   await requireWorkspaceSession();
 
-  const [penaltyRecords, memberOptions] = await Promise.all([
+  const [penaltyRecords, memberOptions, orgSettings] = await Promise.all([
     prisma.penalty.findMany({
       where: await entityVisibilityWhere("penalty"),
       include: PENALTY_INCLUDE,
       orderBy: { createdAt: "desc" },
     }),
     getMemberPickerOptions(),
+    getOrgSettings(),
   ]);
 
   return (
@@ -37,6 +39,7 @@ export default async function AdminPenaltiesPage() {
           penalties={penaltyRecords.map(serializePenalty)}
           isAdmin
           members={memberOptions}
+          penaltyRules={orgSettings.penaltyRules}
         />
       </div>
     </div>

@@ -6,6 +6,7 @@ import { PENALTY_INCLUDE, serializePenalty } from "@/lib/penalties";
 import { prisma } from "@/lib/prisma";
 import { BackButton } from "@/components/shared/back-button";
 import { PenaltiesView } from "@/components/penalties/penalties-view";
+import { getOrgSettings } from "@/lib/org-settings";
 
 export default async function PenaltiesPage() {
   await requireWorkspaceSession();
@@ -15,7 +16,7 @@ export default async function PenaltiesPage() {
     isCurrentMemberAdmin(),
   ]);
 
-  const [penaltyRecords, memberOptions] = await Promise.all([
+  const [penaltyRecords, memberOptions, orgSettings] = await Promise.all([
     prisma.penalty.findMany({
       where: {
         ...(isAdmin ? undefined : { memberId: member.id }),
@@ -25,6 +26,7 @@ export default async function PenaltiesPage() {
       orderBy: { createdAt: "desc" },
     }),
     isAdmin ? getMemberPickerOptions() : Promise.resolve([]),
+    getOrgSettings(),
   ]);
 
   return (
@@ -44,6 +46,7 @@ export default async function PenaltiesPage() {
           penalties={penaltyRecords.map(serializePenalty)}
           isAdmin={isAdmin}
           members={memberOptions}
+          penaltyRules={orgSettings.penaltyRules}
         />
       </div>
     </div>

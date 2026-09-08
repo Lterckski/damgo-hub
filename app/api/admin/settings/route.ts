@@ -61,7 +61,17 @@ export async function PATCH(request: Request) {
   if ("penaltyRules" in input) {
     if (!Array.isArray(input.penaltyRules))
       errors.push("penaltyRules must be a list");
-    else data.penaltyRules = parsePenaltyRules(input.penaltyRules);
+    else {
+      const parsed = parsePenaltyRules(input.penaltyRules);
+      // parsePenaltyRules silently drops a reserved "Other" label and any
+      // case-insensitive duplicate. Saving is the one place to say so out
+      // loud, rather than letting a rule disappear without explanation.
+      if (parsed.length !== input.penaltyRules.length)
+        errors.push(
+          'penaltyRules must have unique labels and cannot use the reserved label "Other"',
+        );
+      else data.penaltyRules = parsed;
+    }
   }
   if ("penaltyDueDays" in input) {
     const days = positiveInt(input.penaltyDueDays, 365);

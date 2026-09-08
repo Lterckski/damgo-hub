@@ -6,6 +6,10 @@
 enum SyncedEventSourceType {
   TASK
   CALENDAR_EVENT
+  // Meetings sync to each participant's own Google Calendar. Deferred by
+  // 16-meeting-scheduling.md ("not part of this unit ... unless a later
+  // requirement explicitly adds meetings"); this is that requirement.
+  MEETING
 }
 
 model GoogleCalendarSyncedEvent {
@@ -13,8 +17,8 @@ model GoogleCalendarSyncedEvent {
   memberId      String
   member        Member                @relation(fields: [memberId], references: [id], onDelete: Cascade)
   sourceType    SyncedEventSourceType
-  // Task.id or CalendarEvent.id — not a formal relation since it points at
-  // either model depending on sourceType.
+  // Task.id, CalendarEvent.id or Meeting.id — not a formal relation since
+  // it points at a different model depending on sourceType.
   sourceId      String
   // The event id Google assigned in that member's own calendar; needed to
   // PATCH/DELETE the right remote event on later updates.
