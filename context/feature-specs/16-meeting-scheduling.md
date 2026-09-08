@@ -156,6 +156,7 @@ Meetings appear in the existing organization calendar without duplicating them i
   - The Google event's description carries the meeting description, then `Location:` and `Join:` lines when set, so the calendar entry alone says where to be.
   - Create, edit/reschedule and delete all re-enqueue the job: it re-upserts for current participants and deletes the copy belonging to anyone removed from the list. Deleting the meeting removes every copy.
   - Enqueued **after** the database commit, and a failure never fails the mutation — this is a background enhancement, the same rule `10-calendar.md` set for tasks and events. It is also enqueued outside the notification-outbox `try`, so a failed email enqueue cannot silently skip the calendar.
+  - Meetings scheduled **before** this change have no synced copy, since the job only runs on create/edit/delete. `scripts/backfill-meeting-calendar-sync.ts` enqueues it for existing meetings (upcoming only by default, `--all` for past ones, dry run unless `--apply`). It deliberately touches only the calendar job, so it sends no "meeting updated" email the way editing the meeting would. Safe to re-run: the job upserts by (member, sourceType, sourceId).
   - It depends on the same external setup as the rest of the sync (Google Cloud project, Clerk Google connection with `calendar.events`); a member who has not connected Google is skipped silently, never an error.
 
 ## Email Notifications
