@@ -262,10 +262,18 @@ function IssuePenaltyDialog({
   const memberItems = Object.fromEntries(
     members.map((m) => [m.id, m.displayName]),
   );
-  const selectedRule = penaltyRules.find((r) => r.label === reasonChoice);
+  // Defence in depth: parsePenaltyRules already drops a rule labelled
+  // "Other", but this component takes its rules as a prop, so it filters
+  // again rather than trusting the caller. A stray one would render a
+  // second option with the same value as the escape hatch — visibly
+  // duplicated, and silently enabling the custom fields when picked.
+  const presetRules = penaltyRules.filter(
+    (rule) => !isOtherPenaltyReason(rule.label),
+  );
+  const selectedRule = presetRules.find((r) => r.label === reasonChoice);
   const isOther = isOtherPenaltyReason(reasonChoice);
   const reasonItems = Object.fromEntries([
-    ...penaltyRules.map((r) => [
+    ...presetRules.map((r) => [
       r.label,
       `${r.label} — ${formatPHP(r.amountCents)}`,
     ]),
@@ -380,7 +388,7 @@ function IssuePenaltyDialog({
                   <SelectValue placeholder="Select a reason" />
                 </SelectTrigger>
                 <SelectContent>
-                  {penaltyRules.map((rule) => (
+                  {presetRules.map((rule) => (
                     <SelectItem key={rule.label} value={rule.label}>
                       {rule.label} — {formatPHP(rule.amountCents)}
                     </SelectItem>
@@ -390,7 +398,7 @@ function IssuePenaltyDialog({
                   </SelectItem>
                 </SelectContent>
               </Select>
-              {penaltyRules.length === 0 && (
+              {presetRules.length === 0 && (
                 <p className="mt-1.5 text-xs text-copy-secondary">
                   No penalty rules are configured yet. Add them under{" "}
                   <Link href="/admin" className="text-brand underline">

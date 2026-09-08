@@ -68,8 +68,15 @@ console's Settings block already edits — plus a fixed `"Other"` entry.
   issue a preset reason for an arbitrary sum. A label that matches neither
   a configured rule nor `"Other"` is a `400`, never a silent fall-through
   to free text.
-- Labels are matched case-insensitively, so a rule literally named "Other"
-  cannot produce two identical-looking dropdown entries.
+- `"Other"` is a **reserved label**. `parsePenaltyRules` drops any rule using
+  it (any casing), and any later rule whose label duplicates an earlier one
+  case-insensitively — applied on read as well as on save, so a configuration
+  written before this rule existed cannot break the dialog. Saving such a rule
+  is a visible `400` rather than a silent drop, so an admin is told why it did
+  not stick. The dialog filters its own props again rather than trusting the
+  caller, since a rule's label is the dropdown option's value: a stray "Other"
+  would render two options sharing one value, and picking the wrong one would
+  silently open the free-text fields.
 - With no rules configured the dropdown offers only "Other", and the dialog
   links to Admin → Settings to add some. **The list ships empty**: the
   team's actual reasons and amounts are theirs to enter, not something this
